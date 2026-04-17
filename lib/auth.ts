@@ -8,6 +8,14 @@ export const auth = betterAuth({
     provider: "pg",
     schema,
   }),
+  advanced: {
+    database: {
+      generateId: "uuid",
+    },
+  },
+  emailAndPassword: {
+    enabled: true,
+  },
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
   trustedOrigins: [process.env.BETTER_AUTH_URL || "http://localhost:3000"],

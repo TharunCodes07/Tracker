@@ -15,6 +15,13 @@
       "when": 1776405475331,
       "tag": "0001_odd_norman_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776419413775,
+      "tag": "0002_even_quasar",
+      "breakpoints": true
     }
   ]
 }
