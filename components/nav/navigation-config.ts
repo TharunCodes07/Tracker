@@ -16,6 +16,7 @@ export interface NavigationConfig {
 export const defaultNavigationConfig: NavigationConfig = {
     "/": { label: "Home" },
     "/dashboard": { label: "Dashboard" },
+    "/teams": { label: "Teams" },
     "/course": {
         label: "Courses",
         dynamicSegments: {

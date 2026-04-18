@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 
@@ -150,12 +151,11 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         </div>
       </CardHeader>
       <CardContent className="px-6 py-7">
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit}>
+          <FieldGroup>
           {isSignup ? (
-            <div className="space-y-2.5">
-              <label className="text-sm font-medium text-foreground" htmlFor="name">
-                Full name
-              </label>
+            <Field>
+              <FieldLabel htmlFor="name">Full name</FieldLabel>
               <Input
                 id="name"
                 autoComplete="name"
@@ -165,13 +165,11 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
                 value={values.name}
                 onChange={(event) => updateValue("name", event.target.value)}
               />
-            </div>
+            </Field>
           ) : null}
 
-          <div className="space-y-2.5">
-            <label className="text-sm font-medium text-foreground" htmlFor="email">
-              Email
-            </label>
+          <Field>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
             <Input
               id="email"
               autoComplete="email"
@@ -182,12 +180,10 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
               value={values.email}
               onChange={(event) => updateValue("email", event.target.value)}
             />
-          </div>
+          </Field>
 
-          <div className="space-y-2.5">
-            <label className="text-sm font-medium text-foreground" htmlFor="password">
-              Password
-            </label>
+          <Field>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
             <Input
               id="password"
               autoComplete={isSignup ? "new-password" : "current-password"}
@@ -199,16 +195,11 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
               value={values.password}
               onChange={(event) => updateValue("password", event.target.value)}
             />
-          </div>
+          </Field>
 
           {isSignup ? (
-            <div className="space-y-2.5">
-              <label
-                className="text-sm font-medium text-foreground"
-                htmlFor="confirm-password"
-              >
-                Confirm password
-              </label>
+            <Field>
+              <FieldLabel htmlFor="confirm-password">Confirm password</FieldLabel>
               <Input
                 id="confirm-password"
                 autoComplete="new-password"
@@ -220,7 +211,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
               />
-            </div>
+            </Field>
           ) : null}
 
           {error ? (
@@ -242,6 +233,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
               <ArrowRight className="size-4" />
             )}
           </Button>
+          </FieldGroup>
         </form>
 
         <p className="mt-6 text-sm text-muted-foreground">

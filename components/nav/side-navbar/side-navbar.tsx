@@ -25,6 +25,7 @@ import {
     LogIn,
     ArrowLeft,
     ArrowRight,
+    UsersRound,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -53,6 +54,12 @@ const navGroups = [
                 url: "/dashboard",
                 icon: LayoutDashboard,
                 color: "text-blue-500",
+            },
+            {
+                title: "Teams",
+                url: "/teams",
+                icon: UsersRound,
+                color: "text-emerald-500",
             },
         ],
     },

@@ -96,7 +96,16 @@ export const teams = pgTable('teams', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
-});
+  joinCode: varchar('join_code', { length: 12 }).notNull(),
+  createdBy: uuid('created_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+},
+  (table) => [
+    uniqueIndex('teams_join_code_unique').on(table.joinCode),
+    index('teams_created_by_idx').on(table.createdBy),
+  ]
+);
 
 export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),

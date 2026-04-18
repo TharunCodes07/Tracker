@@ -17,24 +17,35 @@ export function DataTableColumnHeader<TData, TValue>({
     className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
     if (!column.getCanSort()) {
-        return <div className={cn(className)}>{title}</div>;
+        return (
+            <div
+                className={cn(
+                    "line-clamp-2 max-w-full break-words text-center leading-5",
+                    className
+                )}
+                title={title}
+            >
+                {title}
+            </div>
+        );
     }
 
     return (
-        <div className={cn("flex items-center space-x-2", className)}>
+        <div className={cn("flex min-w-0 max-w-full items-center justify-center", className)}>
             <Button
                 variant="ghost"
                 size="sm"
-                className="-ml-3 h-8 data-[state=open]:bg-accent"
+                className="h-auto max-w-full px-2 py-1.5 whitespace-normal data-[state=open]:bg-accent"
                 onClick={() => column.toggleSorting()}
+                title={title}
             >
-                <span>{title}</span>
+                <span className="line-clamp-2 break-words text-center leading-5">{title}</span>
                 {column.getIsSorted() === "desc" ? (
-                    <ArrowDown className="ml-2 h-4 w-4" />
+                    <ArrowDown className="h-4 w-4 shrink-0" />
                 ) : column.getIsSorted() === "asc" ? (
-                    <ArrowUp className="ml-2 h-4 w-4" />
+                    <ArrowUp className="h-4 w-4 shrink-0" />
                 ) : (
-                    <ChevronsUpDown className="ml-2 h-4 w-4" />
+                    <ChevronsUpDown className="h-4 w-4 shrink-0" />
                 )}
             </Button>
         </div>

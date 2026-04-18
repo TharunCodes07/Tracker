@@ -350,12 +350,12 @@ export function DataTable<TData, TValue>({
                                     {hg.headers.map((header) => (
                                         <TableHead
                                             key={header.id}
-                                            className="text-center relative group/th"
+                                            className="relative group/th whitespace-normal text-center"
                                             style={{
                                                 width: header.getSize(),
                                             }}
                                         >
-                                            <div className="flex items-center justify-center truncate px-2">
+                                            <div className="flex min-w-0 items-center justify-center px-2">
                                                 {header.isPlaceholder
                                                     ? null
                                                     : flexRender(
@@ -384,15 +384,12 @@ export function DataTable<TData, TValue>({
                                         {row.getVisibleCells().map((cell) => (
                                             <TableCell
                                                 key={cell.id}
-                                                className="text-center"
+                                                className="whitespace-normal text-center align-top"
                                                 style={{
                                                     width: cell.column.getSize(),
                                                 }}
                                             >
-                                                <div
-                                                    className="truncate px-2"
-                                                    title={String(cell.getValue() ?? "")}
-                                                >
+                                                <div className="min-w-0 px-2">
                                                     {flexRender(
                                                         cell.column.columnDef.cell,
                                                         cell.getContext()
