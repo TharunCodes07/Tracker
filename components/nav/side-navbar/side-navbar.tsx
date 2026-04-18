@@ -62,65 +62,7 @@ const navGroups = [
                 color: "text-emerald-500",
             },
         ],
-    },
-    // {
-    //     label: "Academics",
-    //     items: [
-    //         {
-    //             title: "Courses",
-    //             url: "/course",
-    //             icon: BookMarked,
-    //             color: "text-emerald-500",
-    //         },
-    //         {
-    //             title: "Question Bank",
-    //             url: "/question-bank",
-    //             icon: BookOpen,
-    //             color: "text-orange-500",
-    //         },
-    //         {
-    //             title: "Quiz",
-    //             url: "/student/quiz",
-    //             icon: PenTool,
-    //             color: "text-amber-500",
-    //         },
-    //     ],
-    // },
-    // {
-    //     label: "Management",
-    //     items: [
-    //         {
-    //             title: "Users",
-    //             url: "/admin/user",
-    //             icon: Users,
-    //             color: "text-purple-500",
-    //         },
-    //         {
-    //             title: "Batches",
-    //             url: "/admin/batch",
-    //             icon: GraduationCap,
-    //             color: "text-indigo-500",
-    //         },
-    //         {
-    //             title: "Semester",
-    //             url: "/admin/semester",
-    //             icon: Calendar,
-    //             color: "text-rose-500",
-    //         },
-    //         {
-    //             title: "Departments",
-    //             url: "/admin/department",
-    //             icon: Building2,
-    //             color: "text-cyan-500",
-    //         },
-    //         {
-    //             title: "Labs",
-    //             url: "/admin/lab",
-    //             icon: Beaker,
-    //             color: "text-teal-500",
-    //         },
-    //     ],
-    // },
+    },  
     {
         label: "System",
         items: [
@@ -188,17 +130,48 @@ export function AppSidebar() {
                 <Link href="/" className="block">
                     <div className="flex items-center p-2 min-h-16 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-3">
                         {/* <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-primary to-primary/80 text-primary-foreground shadow-lg ring-2 ring-primary/20 transition-all duration-200 hover:scale-105 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 p-1.5"> */}
-                        <Zap
-                            size={40}
-                            strokeWidth={2.5}
+                        <div
                             className="
-                                text-emerald-400
+                                relative flex shrink-0 items-center justify-center
+                                h-10 w-10 rounded-2xl overflow-hidden
+                                bg-gradient-to-br from-zinc-900 via-zinc-950 to-black
+                                border border-emerald-400/20
+                                shadow-[0_10px_35px_rgba(0,0,0,0.45)]
+                                transition-all duration-200
 
-                                drop-shadow-[0_0_6px_rgba(16,185,129,0.9)]
-                                drop-shadow-[0_0_12px_rgba(16,185,129,0.7)]
-                                drop-shadow-[0_0_20px_rgba(16,185,129,0.6)]
+                                group-data-[collapsible=icon]:h-9
+                                group-data-[collapsible=icon]:w-9
+                                group-data-[collapsible=icon]:rounded-xl
+                                group-data-[collapsible=icon]:border border-emerald-400/15
+                                group-data-[collapsible=icon]:shadow-[0_6px_20px_rgba(0,0,0,0.28)]
                             "
+                        >
+                            <div
+                                className="
+                                    absolute inset-0
+                                    bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.22),transparent_38%)]
+                                "
                             />
+                            <div
+                                className="
+                                    absolute inset-[1px] rounded-[inherit]
+                                    border border-white/6
+                                "
+                            />
+                            <Zap
+                                size={24}
+                                strokeWidth={2.7}
+                                className="
+                                    relative z-10 text-emerald-400
+                                    drop-shadow-[0_0_8px_rgba(16,185,129,0.9)]
+                                    drop-shadow-[0_0_18px_rgba(16,185,129,0.65)]
+                                    transition-all duration-200
+
+                                    group-data-[collapsible=icon]:h-5
+                                    group-data-[collapsible=icon]:w-5
+                                "
+                            />
+                        </div>
                         {/* </div> */}
                         <div className="ml-3 flex flex-col min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
                             <span className="font-bold text-xl bg-linear-to-r from-primary to-primary/70 bg-clip-text text-transparent truncate">
