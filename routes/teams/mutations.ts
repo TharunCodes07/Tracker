@@ -9,8 +9,14 @@ import { teams, usersToTeams } from "@/db/schema";
 
 import { RouteError } from "@/routes/errors";
 
-import type { CreateTeamInput, JoinTeamInput, UpdateTeamInput } from "./types";
-import { getTeamForUser } from "./queries";
+import type {
+  CreateTeamInput,
+  JoinTeamInput,
+  TeamAccessLevel,
+  UpdateTeamInput,
+  UpdateTeamMemberAccessInput,
+} from "./types";
+import { getTeamForUser, getTeamMemberForUser } from "./queries";
 
 const TEAM_CODE_LENGTH = 8;
 const TEAM_NAME_MAX_LENGTH = 80;
@@ -64,6 +70,14 @@ function normalizeJoinCode(code: string) {
   return value;
 }
 
+function normalizeTeamAccessLevel(value: string): TeamAccessLevel {
+  if (value === "edit" || value === "read") {
+    return value;
+  }
+
+  throw new RouteError("Access must be either edit or read.");
+}
+
 async function generateUniqueJoinCode() {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const joinCode = randomUUID().replace(/-/g, "").slice(0, TEAM_CODE_LENGTH).toUpperCase();
@@ -115,6 +129,7 @@ export async function createTeamForUser(actor: TeamActor, input: CreateTeamInput
     await tx.insert(usersToTeams).values({
       userId: actor.id,
       teamId: team.id,
+      accessLevel: "edit",
     });
 
     return team;
@@ -155,6 +170,7 @@ export async function joinTeamForUser(actor: TeamActor, input: JoinTeamInput) {
   await db.insert(usersToTeams).values({
     userId: actor.id,
     teamId: team.id,
+    accessLevel: "edit",
   });
 
   const joinedTeam = await getTeamForUser(actor.id, team.id);
@@ -200,4 +216,58 @@ export async function deleteTeamForUser(actor: TeamActor, teamId: string) {
   await db.delete(teams).where(eq(teams.id, teamId));
 
   return team;
+}
+
+export async function updateTeamMemberAccessForUser(
+  actor: TeamActor,
+  teamId: string,
+  memberUserId: string,
+  input: UpdateTeamMemberAccessInput
+) {
+  await requireOwnedTeamForUser(actor, teamId);
+
+  const [teamRecord] = await db
+    .select({
+      createdBy: teams.createdBy,
+    })
+    .from(teams)
+    .where(eq(teams.id, teamId))
+    .limit(1);
+
+  if (!teamRecord) {
+    throw new RouteError("Team not found.", 404);
+  }
+
+  if (teamRecord.createdBy === memberUserId) {
+    throw new RouteError("The owner's access cannot be changed.");
+  }
+
+  const [membership] = await db
+    .select({
+      userId: usersToTeams.userId,
+    })
+    .from(usersToTeams)
+    .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)))
+    .limit(1);
+
+  if (!membership) {
+    throw new RouteError("Member not found.", 404);
+  }
+
+  const accessLevel = normalizeTeamAccessLevel(input.accessLevel);
+
+  await db
+    .update(usersToTeams)
+    .set({
+      accessLevel,
+    })
+    .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)));
+
+  const member = await getTeamMemberForUser(actor.id, teamId, memberUserId);
+
+  if (!member) {
+    throw new RouteError("Member was updated but could not be loaded.", 500);
+  }
+
+  return member;
 }

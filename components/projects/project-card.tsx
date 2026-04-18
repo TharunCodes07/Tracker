@@ -1,24 +1,26 @@
+"use client";
+
 import type { MouseEvent } from "react";
 
 import { format } from "date-fns";
-import { CalendarDays, Copy, PencilLine, ShieldCheck, Trash2, UsersRound } from "lucide-react";
+import { CalendarDays, PencilLine, Trash2, UsersRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { ProjectListItem } from "@/routes/projects/types";
 import type { TeamListItem } from "@/routes/teams/types";
 
-interface TeamCardProps {
+interface ProjectCardProps {
+  project: ProjectListItem;
   team: TeamListItem;
-  onEdit: (team: TeamListItem) => void;
-  onDelete: (team: TeamListItem) => void;
-  onCopyCode: (code: string) => void;
+  onEdit: (project: ProjectListItem) => void;
+  onDelete: (project: ProjectListItem) => void;
   actionPending?: boolean;
 }
 
@@ -26,52 +28,42 @@ function stopCardClick(event: MouseEvent<HTMLButtonElement>) {
   event.stopPropagation();
 }
 
-export function TeamCard({
+export function ProjectCard({
+  project,
   team,
   onEdit,
   onDelete,
-  onCopyCode,
   actionPending = false,
-}: TeamCardProps) {
+}: ProjectCardProps) {
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-emerald-400/70 to-cyan-400/70" />
 
       <CardHeader className="gap-4 pb-3">
         <div className="flex items-start justify-between gap-4">
-          <div className="space-y-3 pr-12 min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                variant={team.isOwner ? "default" : "secondary"}
-                className={team.isOwner ? "shadow-[0_0_12px_rgba(16,185,129,0.18)]" : undefined}
-              >
-                {team.isOwner ? "Owner" : "Member"}
-              </Badge>
-              {!team.isOwner ? (
-                <Badge variant={team.canEdit ? "outline" : "secondary"}>
-                  {team.canEdit ? "Edit access" : "Read access"}
-                </Badge>
-              ) : null}
-            </div>
+          <div className="min-w-0 flex-1 space-y-3 pr-12">
+            <Badge variant="secondary">
+              {project.issueCount} {project.issueCount === 1 ? "issue" : "issues"}
+            </Badge>
 
             <div className="min-w-0 w-full max-w-full space-y-1.5 overflow-hidden">
               <CardTitle
                 className="line-clamp-2 w-full min-w-0 max-w-full overflow-hidden text-lg leading-tight [overflow-wrap:anywhere]"
-                title={team.name}
+                title={project.name}
               >
-                {team.name}
+                {project.name}
               </CardTitle>
 
               <CardDescription
                 className="line-clamp-2 w-full min-w-0 max-w-full overflow-hidden [overflow-wrap:anywhere]"
-                title={team.description ?? "No description added for this team yet."}
+                title={project.description ?? "No description added for this project yet."}
               >
-                {team.description ?? "No description added for this team yet."}
+                {project.description ?? "No description added for this project yet."}
               </CardDescription>
             </div>
           </div>
 
-          {team.isOwner ? (
+          {team.canEdit ? (
             <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 translate-y-1 transition duration-200 group-hover/card:translate-y-0 group-hover/card:opacity-100 group-focus-within/card:translate-y-0 group-focus-within/card:opacity-100">
               <Button
                 type="button"
@@ -80,10 +72,10 @@ export function TeamCard({
                 className="rounded-xl bg-background/80 backdrop-blur"
                 onClick={(event) => {
                   stopCardClick(event);
-                  onEdit(team);
+                  onEdit(project);
                 }}
                 disabled={actionPending}
-                aria-label={`Edit ${team.name}`}
+                aria-label={`Edit ${project.name}`}
               >
                 <PencilLine className="h-3.5 w-3.5" />
               </Button>
@@ -95,10 +87,10 @@ export function TeamCard({
                 className="rounded-xl bg-background/80 text-destructive backdrop-blur hover:text-destructive"
                 onClick={(event) => {
                   stopCardClick(event);
-                  onDelete(team);
+                  onDelete(project);
                 }}
                 disabled={actionPending}
-                aria-label={`Delete ${team.name}`}
+                aria-label={`Delete ${project.name}`}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
@@ -110,48 +102,22 @@ export function TeamCard({
       <CardContent className="grid gap-4 border-t border-border/60 pt-4 pb-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <ShieldCheck className="h-4 w-4 text-emerald-400" />
-            Created by
+            <UsersRound className="h-4 w-4 text-cyan-400" />
+            Team
           </div>
-          <div className="text-sm font-medium text-foreground">{team.createdByName}</div>
+          <div className="text-sm font-medium text-foreground">{team.name}</div>
         </div>
 
         <div className="space-y-1.5 sm:text-right">
           <div className="flex items-center gap-2 text-sm text-muted-foreground sm:justify-end">
-            <UsersRound className="h-4 w-4 text-cyan-400" />
-            Members
+            <CalendarDays className="h-4 w-4 text-emerald-400" />
+            Created
           </div>
           <div className="text-sm font-medium text-foreground">
-            {team.memberCount} {team.memberCount === 1 ? "member" : "members"}
+            {format(new Date(project.createdAt), "MMM d, yyyy")}
           </div>
         </div>
       </CardContent>
-
-      <CardFooter className="mt-auto justify-between border-border/60 bg-transparent pt-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <CalendarDays className="h-4 w-4 text-emerald-400" />
-          Created {format(new Date(team.createdAt), "MMM d, yyyy")}
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <Badge variant="outline" className="gap-1.5 font-mono">
-            Code {team.joinCode}
-          </Badge>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="rounded-lg"
-            onClick={(event) => {
-              stopCardClick(event);
-              onCopyCode(team.joinCode);
-            }}
-            aria-label={`Copy code for ${team.name}`}
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </CardFooter>
     </>
   );
 }

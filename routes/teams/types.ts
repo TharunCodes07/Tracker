@@ -1,3 +1,5 @@
+export type TeamAccessLevel = "edit" | "read";
+
 export interface TeamListItem {
   id: string;
   name: string;
@@ -7,6 +9,27 @@ export interface TeamListItem {
   createdByName: string;
   memberCount: number;
   isOwner: boolean;
+  accessLevel: TeamAccessLevel;
+  canEdit: boolean;
+}
+
+export interface TeamMemberListItem {
+  userId: string;
+  name: string;
+  email: string;
+  isOwner: boolean;
+  isCurrentUser: boolean;
+  accessLevel: TeamAccessLevel;
+}
+
+export interface TeamMembersResponse {
+  team: TeamListItem;
+  members: TeamMemberListItem[];
+}
+
+export interface TeamMemberMutationResponse {
+  member: TeamMemberListItem;
+  message: string;
 }
 
 export interface TeamsListResponse {
@@ -35,4 +58,8 @@ export interface UpdateTeamInput {
 
 export interface JoinTeamInput {
   code: string;
+}
+
+export interface UpdateTeamMemberAccessInput {
+  accessLevel: TeamAccessLevel;
 }

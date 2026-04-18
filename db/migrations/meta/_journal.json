@@ -36,6 +36,20 @@
       "when": 1776501912069,
       "tag": "0004_sloppy_zaladane",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1776512502065,
+      "tag": "0005_misty_mariko_yashida",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776513560615,
+      "tag": "0006_red_mimic",
+      "breakpoints": true
     }
   ]
 }

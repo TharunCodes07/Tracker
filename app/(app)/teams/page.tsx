@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 
 import type { SortingState } from "@tanstack/react-table";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Grid2x2,
@@ -41,6 +42,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { GridView } from "@/components/ui/grid-view";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePersistedViewMode } from "@/hooks/use-persisted-view-mode";
 import type {
   CreateTeamInput,
   JoinTeamInput,
@@ -51,61 +53,9 @@ import type {
   UpdateTeamInput,
 } from "@/routes/teams/types";
 
-type ViewMode = "grid" | "table";
-
 const DEFAULT_SORTING: SortingState = [{ id: "createdAt", desc: true }];
 const DEFAULT_PAGE_SIZE = 10;
 const TEAMS_VIEW_STORAGE_KEY = "teams:view-mode";
-const teamsViewModeListeners = new Set<() => void>();
-
-function getStoredTeamsViewMode(): ViewMode {
-  if (typeof window === "undefined") {
-    return "grid";
-  }
-
-  try {
-    const storedViewMode = window.localStorage.getItem(TEAMS_VIEW_STORAGE_KEY);
-
-    return storedViewMode === "table" ? "table" : "grid";
-  } catch {
-    return "grid";
-  }
-}
-
-function subscribeToTeamsViewMode(onStoreChange: () => void) {
-  teamsViewModeListeners.add(onStoreChange);
-
-  if (typeof window === "undefined") {
-    return () => {
-      teamsViewModeListeners.delete(onStoreChange);
-    };
-  }
-
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === TEAMS_VIEW_STORAGE_KEY) {
-      onStoreChange();
-    }
-  };
-
-  window.addEventListener("storage", handleStorage);
-
-  return () => {
-    teamsViewModeListeners.delete(onStoreChange);
-    window.removeEventListener("storage", handleStorage);
-  };
-}
-
-function setStoredTeamsViewMode(nextViewMode: ViewMode) {
-  try {
-    window.localStorage.setItem(TEAMS_VIEW_STORAGE_KEY, nextViewMode);
-  } catch {
-    // Ignore storage access errors to avoid blocking the UI.
-  }
-
-  for (const listener of teamsViewModeListeners) {
-    listener();
-  }
-}
 
 function filterTeams(teams: TeamListItem[], searchValue: string) {
   const normalizedQuery = searchValue.trim().toLowerCase();
@@ -115,7 +65,14 @@ function filterTeams(teams: TeamListItem[], searchValue: string) {
   }
 
   return teams.filter((team) =>
-    [team.name, team.description ?? "", team.createdByName, team.joinCode].some((value) =>
+    [
+      team.name,
+      team.description ?? "",
+      team.createdByName,
+      team.joinCode,
+      team.isOwner ? "owner" : "member",
+      team.accessLevel,
+    ].some((value) =>
       value.toLowerCase().includes(normalizedQuery)
     )
   );
@@ -140,6 +97,8 @@ function sortTeams(teams: TeamListItem[], sorting: SortingState) {
         return compareText(left.createdByName, right.createdByName);
       case "memberCount":
         return left.memberCount - right.memberCount;
+      case "accessLevel":
+        return compareText(left.accessLevel, right.accessLevel);
       case "joinCode":
         return compareText(left.joinCode, right.joinCode);
       case "createdAt":
@@ -174,13 +133,10 @@ async function requestJson<TResponse>(input: RequestInfo, init?: RequestInit) {
 }
 
 export default function TeamsPage() {
+  const router = useRouter();
   const [teams, setTeams] = useState<TeamListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const viewMode = useSyncExternalStore(
-    subscribeToTeamsViewMode,
-    getStoredTeamsViewMode,
-    () => "grid"
-  );
+  const { viewMode, setViewMode } = usePersistedViewMode(TEAMS_VIEW_STORAGE_KEY);
   const [searchValue, setSearchValue] = useState("");
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [pageIndex, setPageIndex] = useState(0);
@@ -260,6 +216,10 @@ export default function TeamsPage() {
   function handlePageSizeChange(size: number) {
     setPageSize(size);
     setPageIndex(0);
+  }
+
+  function openTeam(team: TeamListItem) {
+    router.push(`/teams/${team.id}`);
   }
 
   function openEditDialog(team: TeamListItem) {
@@ -467,7 +427,7 @@ export default function TeamsPage() {
                   type="button"
                   variant={viewMode === "grid" ? "secondary" : "ghost"}
                   className="flex-1 rounded-xl sm:flex-none"
-                  onClick={() => setStoredTeamsViewMode("grid")}
+                  onClick={() => setViewMode("grid")}
                 >
                   <Grid2x2 className="h-4 w-4" />
                   Grid
@@ -476,7 +436,7 @@ export default function TeamsPage() {
                   type="button"
                   variant={viewMode === "table" ? "secondary" : "ghost"}
                   className="flex-1 rounded-xl sm:flex-none"
-                  onClick={() => setStoredTeamsViewMode("table")}
+                  onClick={() => setViewMode("table")}
                 >
                   <List className="h-4 w-4" />
                   Table
@@ -509,6 +469,8 @@ export default function TeamsPage() {
           <GridView
             items={sortedTeams}
             getKey={(team) => team.id}
+            onItemClick={openTeam}
+            getItemAriaLabel={(team) => `Open ${team.name}`}
             itemClassName="to-emerald-400/[0.03]"
             renderItem={(team) => (
               <TeamCard
@@ -576,7 +538,8 @@ export default function TeamsPage() {
             pageCount={pageCount}
             onPageIndexChange={setPageIndex}
             onPageSizeChange={handlePageSizeChange}
-          />
+            onRowClick={openTeam}
+            />
         </section>
       )}
 

@@ -87,7 +87,7 @@ export function DynamicBreadcrumb({
                         ) && <BreadcrumbSeparator />}
 
                     <BreadcrumbItem>
-                        {segment.isCurrentPage && !segment.isDynamicSegment ? (
+                        {segment.isCurrentPage ? (
                             <BreadcrumbPage className="max-w-[150px] truncate sm:max-w-none">
                                 {segment.label}
                             </BreadcrumbPage>

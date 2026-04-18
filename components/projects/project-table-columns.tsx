@@ -4,17 +4,18 @@ import type { MouseEvent } from "react";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { Copy, PencilLine, Trash2 } from "lucide-react";
+import { PencilLine, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import type { ProjectListItem } from "@/routes/projects/types";
 import type { TeamListItem } from "@/routes/teams/types";
 
-interface TeamTableColumnOptions {
-  onEdit: (team: TeamListItem) => void;
-  onDelete: (team: TeamListItem) => void;
-  onCopyCode: (code: string) => void;
+interface ProjectTableColumnOptions {
+  team: TeamListItem;
+  onEdit: (project: ProjectListItem) => void;
+  onDelete: (project: ProjectListItem) => void;
   actionPending?: boolean;
 }
 
@@ -22,16 +23,16 @@ function stopRowClick(event: MouseEvent<HTMLButtonElement>) {
   event.stopPropagation();
 }
 
-export function getTeamTableColumns({
+export function getProjectTableColumns({
+  team,
   onEdit,
   onDelete,
-  onCopyCode,
   actionPending = false,
-}: TeamTableColumnOptions): ColumnDef<TeamListItem>[] {
+}: ProjectTableColumnOptions): ColumnDef<ProjectListItem>[] {
   return [
     {
       accessorKey: "name",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Team" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Project" />,
       cell: ({ row }) => (
         <div className="mx-auto min-w-0 max-w-[320px] space-y-1 text-center">
           <div
@@ -48,71 +49,30 @@ export function getTeamTableColumns({
           </div>
         </div>
       ),
-      size: 300,
+      size: 320,
     },
     {
-      accessorKey: "createdByName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Created By" />,
-      cell: ({ row }) => (
-        <div className="mx-auto flex min-w-0 max-w-[220px] items-center justify-center gap-2">
-          <span
-            className="line-clamp-2 break-words text-center"
-            title={row.original.createdByName}
-          >
-            {row.original.createdByName}
+      id: "teamName",
+      header: () => <div className="text-center">Team</div>,
+      cell: () => (
+        <div className="mx-auto min-w-0 max-w-[220px] text-center">
+          <span className="line-clamp-2 break-words" title={team.name}>
+            {team.name}
           </span>
-          {row.original.isOwner ? <Badge variant="outline">You</Badge> : null}
         </div>
       ),
+      enableSorting: false,
       size: 180,
     },
     {
-      accessorKey: "memberCount",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Members" />,
+      accessorKey: "issueCount",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Issues" />,
       cell: ({ row }) => (
         <Badge variant="secondary">
-          {row.original.memberCount} {row.original.memberCount === 1 ? "member" : "members"}
+          {row.original.issueCount} {row.original.issueCount === 1 ? "issue" : "issues"}
         </Badge>
       ),
       size: 140,
-    },
-    {
-      accessorKey: "accessLevel",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Access" />,
-      cell: ({ row }) =>
-        row.original.isOwner ? (
-          <Badge>Owner</Badge>
-        ) : (
-          <Badge variant={row.original.canEdit ? "outline" : "secondary"}>
-            {row.original.canEdit ? "Edit" : "Read"}
-          </Badge>
-        ),
-      size: 120,
-    },
-    {
-      accessorKey: "joinCode",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Join Code" />,
-      cell: ({ row }) => (
-        <div className="flex items-center justify-center gap-1.5">
-          <Badge variant="outline" className="gap-1.5 font-mono">
-            Code {row.original.joinCode}
-          </Badge>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="rounded-lg"
-            onClick={(event) => {
-              stopRowClick(event);
-              onCopyCode(row.original.joinCode);
-            }}
-            aria-label={`Copy code for ${row.original.name}`}
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ),
-      size: 220,
     },
     {
       accessorKey: "createdAt",
@@ -128,7 +88,7 @@ export function getTeamTableColumns({
         </div>
       ),
       cell: ({ row }) =>
-        row.original.isOwner ? (
+        team.canEdit ? (
           <div className="flex items-center justify-center gap-1">
             <Button
               type="button"
@@ -163,7 +123,7 @@ export function getTeamTableColumns({
           <span className="text-muted-foreground">-</span>
         ),
       enableSorting: false,
-      size: 120,
+      size: 140,
     },
   ];
 }

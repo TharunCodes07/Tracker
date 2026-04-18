@@ -379,7 +379,11 @@ export function DataTable<TData, TValue>({
                                         key={row.id}
                                         data-state={row.getIsSelected() && "selected"}
                                         onClick={() => onRowClick?.(row.original)}
-                                        className={onRowClick ? "cursor-pointer" : undefined}
+                                        className={
+                                            onRowClick
+                                                ? "cursor-pointer transition-colors hover:bg-muted/30"
+                                                : undefined
+                                        }
                                     >
                                         {row.getVisibleCells().map((cell) => (
                                             <TableCell

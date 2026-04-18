@@ -111,6 +111,7 @@ export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const usersToTeams = pgTable(
@@ -122,6 +123,7 @@ export const usersToTeams = pgTable(
     teamId: uuid('team_id')
       .notNull()
       .references(() => teams.id, { onDelete: 'cascade' }),
+    accessLevel: varchar('access_level', { length: 16 }).notNull().default('edit'),
   },
   (t) => [
     primaryKey({ columns: [t.userId, t.teamId] }),

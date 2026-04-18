@@ -1,0 +1,1 @@
+ALTER TABLE "users_to_teams" ADD COLUMN "access_level" varchar(16) DEFAULT 'edit' NOT NULL;

@@ -4,7 +4,7 @@ import type * as React from "react";
 
 import { EntityDialog } from "@/components/ui/entity-dialog";
 
-interface TeamDialogProps {
+interface ProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   name: string;
@@ -18,19 +18,19 @@ interface TeamDialogProps {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
-export function TeamDialog({
+export function ProjectDialog({
   open,
   onOpenChange,
   name,
   description,
   pending,
-  title = "Create Team",
-  descriptionText = "Set up a team workspace and get a join code you can share immediately.",
-  submitLabel = "Create team",
+  title = "Create Project",
+  descriptionText = "Add a project under this team so work, issues, and ownership stay grouped together.",
+  submitLabel = "Create project",
   onNameChange,
   onDescriptionChange,
   onSubmit,
-}: TeamDialogProps) {
+}: ProjectDialogProps) {
   return (
     <EntityDialog
       open={open}
@@ -41,12 +41,12 @@ export function TeamDialog({
       title={title}
       descriptionText={descriptionText}
       submitLabel={submitLabel}
-      nameLabel="Team name"
-      nameInputId="team-name"
-      namePlaceholder="Product Design"
-      descriptionInputId="team-description"
-      descriptionPlaceholder="What this team owns, ships, or collaborates on."
-      descriptionHelpText="Keep it short and practical so teammates can recognize the workspace quickly."
+      nameLabel="Project name"
+      nameInputId="project-name"
+      namePlaceholder="Mobile App QA"
+      descriptionInputId="project-description"
+      descriptionPlaceholder="What this project covers, ships, or tracks."
+      descriptionHelpText="Use a short description so the project is easy to distinguish in both grid and table views."
       onNameChange={onNameChange}
       onDescriptionChange={onDescriptionChange}
       onSubmit={onSubmit}
