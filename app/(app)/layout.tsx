@@ -2,13 +2,16 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/nav/side-navbar/side-navbar";
 import { NavigationControls } from "@/components/nav/controls/navigation-controls";
 import { DynamicBreadcrumb } from "@/components/nav/dynamic-breadcrumb";
-import { TooltipProvider } from "@/components/ui/tooltip"
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { requireServerSession } from "@/lib/auth-session";
 
-export default function AppModuleLayout({
+export default async function AppModuleLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await requireServerSession();
+
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full">

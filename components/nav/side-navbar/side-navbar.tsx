@@ -26,7 +26,7 @@ import {
     ArrowLeft,
     ArrowRight,
 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { authClient } from "@/lib/auth-client";
 import { useEffect, useState } from "react";
@@ -158,6 +158,7 @@ function ThemeToggle({ mounted }: { mounted: boolean }) {
 
 export function AppSidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const { data: session, isPending } = authClient.useSession();
     const { open } = useSidebar();
     const [mounted, setMounted] = useState(false);
@@ -167,6 +168,12 @@ export function AppSidebar() {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setMounted(true);
     }, []);
+
+    async function handleSignOut() {
+        await authClient.signOut();
+        router.replace("/");
+        router.refresh();
+    }
 
     return (
         <Sidebar collapsible="icon" side="left" className="group relative">
@@ -240,12 +247,12 @@ export function AppSidebar() {
                         </SidebarGroup>
 
                         {groupIndex !== navGroups.length - 1 && (
-                            <SidebarSeparator className="bg-linear-to-r from-transparent via-sidebar-border to-transparent mx-2" />
+                            <SidebarSeparator className="self-center w-[calc(100%-1rem)] bg-linear-to-r from-transparent via-sidebar-border to-transparent" />
                         )}
                     </div>
                 ))}
 
-                <SidebarSeparator className="bg-linear-to-r from-transparent via-sidebar-border to-transparent mx-2" />
+                <SidebarSeparator className="self-center w-[calc(100%-1rem)] bg-linear-to-r from-transparent via-sidebar-border to-transparent" />
 
                 <SidebarGroup className="px-2 py-4">
                     <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/70 px-2 group-data-[collapsible=icon]:sr-only">
@@ -320,7 +327,7 @@ export function AppSidebar() {
 
                                                 <AlertDialogFooter>
                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction onClick={() => authClient.signOut()}>
+                                                <AlertDialogAction onClick={handleSignOut}>
                                                     Logout
                                                 </AlertDialogAction>
                                                 </AlertDialogFooter>
@@ -368,7 +375,7 @@ export function AppSidebar() {
 
                                                 <AlertDialogFooter>
                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction onClick={() => authClient.signOut()}>
+                                                <AlertDialogAction onClick={handleSignOut}>
                                                     Logout
                                                 </AlertDialogAction>
                                                 </AlertDialogFooter>
