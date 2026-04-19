@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 
-import type { SortingState } from "@tanstack/react-table";
-import { useParams } from "next/navigation";
+import type { OnChangeFn, SortingState } from "@tanstack/react-table";
+import { useParams, useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Grid2x2,
@@ -39,14 +39,26 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { GridView } from "@/components/ui/grid-view";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { usePersistedViewMode } from "@/hooks/use-persisted-view-mode";
 import type {
   CreateProjectInput,
   ProjectDeleteResponse,
   ProjectListItem,
+  ProjectListPagination,
+  ProjectListSortDirection,
+  ProjectListSortField,
   ProjectMutationResponse,
   TeamProjectsResponse,
+  TeamProjectsSummary,
   UpdateProjectInput,
 } from "@/routes/projects/types";
 import type {
@@ -59,50 +71,102 @@ import type {
 
 const DEFAULT_SORTING: SortingState = [{ id: "createdAt", desc: true }];
 const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50, 100];
+const SEARCH_DEBOUNCE_MS = 300;
 const TEAM_PROJECTS_VIEW_STORAGE_KEY = "team-projects:view-mode";
+const EMPTY_PAGINATION: ProjectListPagination = {
+  page: 1,
+  pageSize: DEFAULT_PAGE_SIZE,
+  totalItems: 0,
+  totalPages: 1,
+  hasPreviousPage: false,
+  hasNextPage: false,
+};
+const EMPTY_SUMMARY: TeamProjectsSummary = {
+  totalProjects: 0,
+};
+const PROJECT_GRID_SORT_OPTIONS: Array<{
+  value: string;
+  label: string;
+  sorting: SortingState;
+}> = [
+  { value: "createdAt-desc", label: "Newest first", sorting: [{ id: "createdAt", desc: true }] },
+  { value: "createdAt-asc", label: "Oldest first", sorting: [{ id: "createdAt", desc: false }] },
+  { value: "name-asc", label: "Name A-Z", sorting: [{ id: "name", desc: false }] },
+  { value: "name-desc", label: "Name Z-A", sorting: [{ id: "name", desc: true }] },
+  { value: "issueCount-desc", label: "Most issues", sorting: [{ id: "issueCount", desc: true }] },
+  { value: "issueCount-asc", label: "Least issues", sorting: [{ id: "issueCount", desc: false }] },
+];
 
-function filterProjects(projects: ProjectListItem[], searchValue: string) {
-  const normalizedQuery = searchValue.trim().toLowerCase();
+function sortingEquals(left: SortingState, right: SortingState) {
+  const normalizedLeft = normalizeSorting(left);
+  const normalizedRight = normalizeSorting(right);
+  const [leftSort] = normalizedLeft;
+  const [rightSort] = normalizedRight;
 
-  if (!normalizedQuery) {
-    return projects;
-  }
+  return leftSort?.id === rightSort?.id && leftSort?.desc === rightSort?.desc;
+}
 
-  return projects.filter((project) =>
-    [project.name, project.description ?? ""].some((value) =>
-      value.toLowerCase().includes(normalizedQuery)
-    )
+function findGridSortOptionValue(sorting: SortingState) {
+  return (
+    PROJECT_GRID_SORT_OPTIONS.find((option) => sortingEquals(option.sorting, sorting))?.value ??
+    PROJECT_GRID_SORT_OPTIONS[0].value
   );
 }
 
-function compareText(left: string, right: string) {
-  return left.localeCompare(right, undefined, { sensitivity: "base" });
+function getGridSortingFromValue(value: string) {
+  return (
+    PROJECT_GRID_SORT_OPTIONS.find((option) => option.value === value)?.sorting ?? DEFAULT_SORTING
+  );
 }
 
-function sortProjects(projects: ProjectListItem[], sorting: SortingState) {
+function normalizeSorting(sorting: SortingState) {
   const [activeSort] = sorting;
 
   if (!activeSort) {
-    return [...projects];
+    return DEFAULT_SORTING;
   }
 
-  const sortedProjects = [...projects].sort((left, right) => {
-    switch (activeSort.id) {
-      case "issueCount":
-        return left.issueCount - right.issueCount;
-      case "createdAt":
-        return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
-      case "name":
-      default:
-        return compareText(left.name, right.name);
-    }
-  });
-
-  return activeSort.desc ? sortedProjects.reverse() : sortedProjects;
+  return [
+    {
+      id: activeSort.id,
+      desc: activeSort.desc ?? false,
+    },
+  ] satisfies SortingState;
 }
 
-function upsertProject(projects: ProjectListItem[], nextProject: ProjectListItem) {
-  return [nextProject, ...projects.filter((project) => project.id !== nextProject.id)];
+function getSortValues(sorting: SortingState): {
+  sortBy: ProjectListSortField;
+  sortDirection: ProjectListSortDirection;
+} {
+  const [activeSort] = normalizeSorting(sorting);
+
+  return {
+    sortBy: activeSort.id as ProjectListSortField,
+    sortDirection: activeSort.desc ? "desc" : "asc",
+  };
+}
+
+function buildProjectsRequestUrl(options: {
+  teamId: string;
+  pageIndex: number;
+  pageSize: number;
+  search: string;
+  sorting: SortingState;
+}) {
+  const { sortBy, sortDirection } = getSortValues(options.sorting);
+  const searchParams = new URLSearchParams({
+    page: String(options.pageIndex + 1),
+    pageSize: String(options.pageSize),
+    sortBy,
+    sortDirection,
+  });
+
+  if (options.search) {
+    searchParams.set("search", options.search);
+  }
+
+  return `/api/teams/${options.teamId}/projects?${searchParams.toString()}`;
 }
 
 async function requestJson<TResponse>(input: RequestInfo, init?: RequestInit) {
@@ -123,20 +187,133 @@ async function requestJson<TResponse>(input: RequestInfo, init?: RequestInit) {
   return data as TResponse;
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+interface ProjectsPaginationControlsProps {
+  pageIndex: number;
+  pageSize: number;
+  pagination: ProjectListPagination;
+  disabled?: boolean;
+  onPageIndexChange: (index: number) => void;
+  onPageSizeChange: (size: number) => void;
+}
+
+function ProjectsPaginationControls({
+  pageIndex,
+  pageSize,
+  pagination,
+  disabled = false,
+  onPageIndexChange,
+  onPageSizeChange,
+}: ProjectsPaginationControlsProps) {
+  const firstItem = pagination.totalItems === 0 ? 0 : pageIndex * pageSize + 1;
+  const lastItem =
+    pagination.totalItems === 0
+      ? 0
+      : Math.min((pageIndex + 1) * pageSize, pagination.totalItems);
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-sm text-muted-foreground">
+        {pagination.totalItems === 0
+          ? "No projects to display"
+          : `Showing ${firstItem}-${lastItem} of ${pagination.totalItems} projects`}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Select
+          value={String(pageSize)}
+          onValueChange={(value) => onPageSizeChange(Number(value))}
+          disabled={disabled}
+        >
+          <SelectTrigger className="h-9 w-[120px]">
+            <SelectValue>{pageSize} / page</SelectValue>
+          </SelectTrigger>
+          <SelectContent align="end">
+            {PAGE_SIZE_OPTIONS.map((option) => (
+              <SelectItem key={option} value={String(option)}>
+                {option} / page
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onPageIndexChange(0)}
+            disabled={disabled || !pagination.hasPreviousPage}
+            aria-label="First page"
+          >
+            {"<<"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onPageIndexChange(Math.max(0, pageIndex - 1))}
+            disabled={disabled || !pagination.hasPreviousPage}
+            aria-label="Previous page"
+          >
+            {"<"}
+          </Button>
+
+          <span className="min-w-[7.5rem] text-center text-sm tabular-nums text-muted-foreground">
+            Page {pagination.page} of {pagination.totalPages}
+          </span>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onPageIndexChange(pageIndex + 1)}
+            disabled={disabled || !pagination.hasNextPage}
+            aria-label="Next page"
+          >
+            {">"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onPageIndexChange(Math.max(0, pagination.totalPages - 1))}
+            disabled={disabled || !pagination.hasNextPage}
+            aria-label="Last page"
+          >
+            {">>"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TeamProjectsRoute() {
+  const router = useRouter();
   const params = useParams<{ teamId?: string | string[] }>();
   const teamId = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
   const hasTeamId = Boolean(teamId);
+  const hasAttemptedLoadRef = useRef(false);
+  const { viewMode, setViewMode } = usePersistedViewMode(TEAM_PROJECTS_VIEW_STORAGE_KEY);
 
   const [team, setTeam] = useState<TeamListItem | null>(null);
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
+  const [pagination, setPagination] = useState<ProjectListPagination>(EMPTY_PAGINATION);
+  const [summary, setSummary] = useState<TeamProjectsSummary>(EMPTY_SUMMARY);
   const [isLoading, setIsLoading] = useState(hasTeamId);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const { viewMode, setViewMode } = usePersistedViewMode(TEAM_PROJECTS_VIEW_STORAGE_KEY);
+
   const [searchValue, setSearchValue] = useState("");
+  const debouncedSearchValue = useDebouncedValue(searchValue.trim(), SEARCH_DEBOUNCE_MS);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
@@ -157,19 +334,38 @@ export default function TeamProjectsRoute() {
 
   useEffect(() => {
     let isActive = true;
+    const abortController = new AbortController();
+    const activeTeamId = teamId;
 
-    if (!teamId) {
+    if (!activeTeamId) {
       return () => {
         isActive = false;
       };
     }
 
-    async function loadTeamProjects() {
-      setIsLoading(true);
-      setLoadError(null);
+    const resolvedTeamId = activeTeamId;
 
+    if (hasAttemptedLoadRef.current) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+
+    async function loadTeamProjects() {
       try {
-        const data = await requestJson<TeamProjectsResponse>(`/api/teams/${teamId}/projects`);
+        const data = await requestJson<TeamProjectsResponse>(
+          buildProjectsRequestUrl({
+            teamId: resolvedTeamId,
+            pageIndex,
+            pageSize,
+            search: debouncedSearchValue,
+            sorting,
+          }),
+          {
+            cache: "no-store",
+            signal: abortController.signal,
+          }
+        );
 
         if (!isActive) {
           return;
@@ -177,21 +373,32 @@ export default function TeamProjectsRoute() {
 
         setTeam(data.team);
         setProjects(data.projects);
+        setPagination(data.pagination);
+        setSummary(data.summary);
+        setLoadError(null);
       } catch (error) {
-        if (!isActive) {
+        if (!isActive || isAbortError(error)) {
           return;
         }
 
         const message =
           error instanceof Error ? error.message : "Could not load the team projects.";
 
-        setTeam(null);
-        setProjects([]);
         setLoadError(message);
+
+        if (!hasAttemptedLoadRef.current) {
+          setTeam(null);
+          setProjects([]);
+          setPagination({ ...EMPTY_PAGINATION, pageSize });
+          setSummary(EMPTY_SUMMARY);
+        }
+
         toast.error(message);
       } finally {
         if (isActive) {
+          hasAttemptedLoadRef.current = true;
           setIsLoading(false);
+          setIsRefreshing(false);
         }
       }
     }
@@ -200,8 +407,9 @@ export default function TeamProjectsRoute() {
 
     return () => {
       isActive = false;
+      abortController.abort();
     };
-  }, [teamId]);
+  }, [debouncedSearchValue, pageIndex, pageSize, sorting, reloadKey, teamId]);
 
   if (!hasTeamId) {
     return (
@@ -217,25 +425,24 @@ export default function TeamProjectsRoute() {
     );
   }
 
-  const filteredProjects = filterProjects(projects, searchValue);
-  const sortedProjects = sortProjects(filteredProjects, sorting);
-  const projectTableColumns = team
-    ? getProjectTableColumns({
-        team,
-        onEdit: openEditDialog,
-        onDelete: openDeleteDialog,
-        actionPending: isUpdating || isDeleting,
-      })
-    : [];
-  const pageCount = Math.max(1, Math.ceil(sortedProjects.length / pageSize));
-  const currentPageIndex = Math.min(pageIndex, Math.max(0, pageCount - 1));
-  const paginatedProjects = sortedProjects.slice(
-    currentPageIndex * pageSize,
-    (currentPageIndex + 1) * pageSize
-  );
+  const currentPageIndex = Math.max(0, pagination.page - 1);
   const isGridView = viewMode === "grid";
+  const hasAnyProjects = summary.totalProjects > 0;
+  const hasVisibleProjects = projects.length > 0;
   const canEditProjects = team?.canEdit ?? false;
   const canManageMembers = team?.isOwner ?? false;
+  const isActionPending = isUpdating || isDeleting;
+  const isSearchPending = searchValue.trim() !== debouncedSearchValue;
+  const currentGridSortValue = findGridSortOptionValue(sorting);
+
+  function refreshProjects(nextPageIndex?: number) {
+    if (typeof nextPageIndex === "number" && nextPageIndex !== pageIndex) {
+      setPageIndex(nextPageIndex);
+      return;
+    }
+
+    setReloadKey((currentValue) => currentValue + 1);
+  }
 
   function handleSearchChange(value: string) {
     setSearchValue(value);
@@ -245,6 +452,28 @@ export default function TeamProjectsRoute() {
   function handlePageSizeChange(size: number) {
     setPageSize(size);
     setPageIndex(0);
+  }
+
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    const nextSorting = normalizeSorting(
+      typeof updater === "function" ? updater(sorting) : updater
+    );
+
+    setSorting(nextSorting);
+    setPageIndex(0);
+  };
+
+  function handleGridSortChange(value: string) {
+    setSorting(getGridSortingFromValue(value));
+    setPageIndex(0);
+  }
+
+  function openProject(project: ProjectListItem) {
+    if (!team) {
+      return;
+    }
+
+    router.push(`/teams/${team.id}/projects/${project.id}`);
   }
 
   function openEditDialog(project: ProjectListItem) {
@@ -342,11 +571,10 @@ export default function TeamProjectsRoute() {
           body: JSON.stringify(payload),
         });
 
-        setProjects((currentProjects) => upsertProject(currentProjects, data.project));
-        setPageIndex(0);
         setIsCreateOpen(false);
         setProjectName("");
         setProjectDescription("");
+        refreshProjects(0);
         toast.success(data.message);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not create the project.");
@@ -376,8 +604,8 @@ export default function TeamProjectsRoute() {
           }
         );
 
-        setProjects((currentProjects) => upsertProject(currentProjects, data.project));
         closeEditDialog(false);
+        refreshProjects();
         toast.success(data.message);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not update the project.");
@@ -399,15 +627,14 @@ export default function TeamProjectsRoute() {
           }
         );
 
-        setProjects((currentProjects) =>
-          currentProjects.filter((project) => project.id !== data.deletedProjectId)
-        );
         if (editingProject?.id === data.deletedProjectId) {
           setEditingProject(null);
           setEditProjectName("");
           setEditProjectDescription("");
         }
+
         setProjectToDelete(null);
+        refreshProjects();
         toast.success(data.message);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not delete the project.");
@@ -425,6 +652,66 @@ export default function TeamProjectsRoute() {
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
           {loadError ?? "The requested team could not be loaded from this workspace."}
         </p>
+      </div>
+    );
+  }
+
+  const projectTableColumns = team
+    ? getProjectTableColumns({
+        team,
+        onEdit: openEditDialog,
+        onDelete: openDeleteDialog,
+        actionPending: isActionPending,
+      })
+    : [];
+
+  function renderEmptyState() {
+    const title = loadError && !hasAnyProjects
+      ? "Could not load projects"
+      : hasAnyProjects
+        ? "No matching projects"
+        : "No projects yet";
+    const description = loadError && !hasAnyProjects
+      ? loadError
+      : hasAnyProjects
+        ? "Adjust the current search or switch views if you want a different scan of this team."
+        : "Start a project under this team so work stays grouped with the right members.";
+
+    return (
+      <div className="rounded-[28px] border border-dashed border-border/70 bg-card/70 px-6 py-12 text-center shadow-sm">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-400/20 to-cyan-400/20 text-emerald-500">
+          <Sparkles className="h-6 w-6" />
+        </div>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">{title}</h2>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+          {description}
+        </p>
+
+        {loadError && !hasAnyProjects ? (
+          <div className="mt-5 flex justify-center">
+            <Button type="button" variant="outline" onClick={() => refreshProjects()}>
+              Retry
+            </Button>
+          </div>
+        ) : hasAnyProjects ? (
+          searchValue.trim() ? (
+            <div className="mt-5 flex justify-center">
+              <Button type="button" variant="outline" onClick={() => handleSearchChange("")}>
+                Clear search
+              </Button>
+            </div>
+          ) : null
+        ) : canEditProjects ? (
+          <div className="mt-5 flex justify-center">
+            <Button
+              type="button"
+              onClick={() => setIsCreateOpen(true)}
+              className="bg-linear-to-r from-emerald-400 to-cyan-400 text-black hover:opacity-90"
+            >
+              Create your first project
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -481,12 +768,12 @@ export default function TeamProjectsRoute() {
 
             <div className="inline-flex flex-wrap overflow-hidden rounded-2xl border border-border/60 bg-background/65 shadow-sm backdrop-blur">
               <div className="min-w-[9.5rem] px-4 py-3">
-                <div className="text-sm text-muted-foreground">Projects</div>
+                <div className="text-sm text-muted-foreground">Total projects</div>
                 {isLoading ? (
                   <Skeleton className="mt-2 h-8 w-14" />
                 ) : (
                   <div className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-                    {projects.length}
+                    {summary.totalProjects}
                   </div>
                 )}
               </div>
@@ -519,30 +806,46 @@ export default function TeamProjectsRoute() {
                 onChange={(event) => handleSearchChange(event.target.value)}
                 placeholder="Search by project name or description"
                 className="h-10 rounded-2xl border-border/60 bg-background/80 pl-10 shadow-sm backdrop-blur"
-                disabled={isLoading}
               />
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <div className="inline-flex w-full items-center rounded-2xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur sm:w-auto">
-                <Button
-                  type="button"
-                  variant={viewMode === "grid" ? "secondary" : "ghost"}
-                  className="flex-1 rounded-xl sm:flex-none"
-                  onClick={() => setViewMode("grid")}
-                >
-                  <Grid2x2 className="h-4 w-4" />
-                  Grid
-                </Button>
-                <Button
-                  type="button"
-                  variant={viewMode === "table" ? "secondary" : "ghost"}
-                  className="flex-1 rounded-xl sm:flex-none"
-                  onClick={() => setViewMode("table")}
-                >
-                  <List className="h-4 w-4" />
-                  Table
-                </Button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="inline-flex w-full items-center rounded-2xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur sm:w-auto">
+                  <Button
+                    type="button"
+                    variant={viewMode === "grid" ? "secondary" : "ghost"}
+                    className="flex-1 rounded-xl sm:flex-none"
+                    onClick={() => setViewMode("grid")}
+                  >
+                    <Grid2x2 className="h-4 w-4" />
+                    Grid
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={viewMode === "table" ? "secondary" : "ghost"}
+                    className="flex-1 rounded-xl sm:flex-none"
+                    onClick={() => setViewMode("table")}
+                  >
+                    <List className="h-4 w-4" />
+                    Table
+                  </Button>
+                </div>
+
+                {isGridView ? (
+                  <Select value={currentGridSortValue} onValueChange={handleGridSortChange}>
+                    <SelectTrigger className="h-10 w-full rounded-2xl border-border/60 bg-background/80 shadow-sm sm:w-[180px]">
+                      <SelectValue placeholder="Sort projects" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {PROJECT_GRID_SORT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
               </div>
 
               {isLoading ? (
@@ -552,7 +855,11 @@ export default function TeamProjectsRoute() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button type="button" variant="outline" onClick={() => handleMembersOpenChange(true)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleMembersOpenChange(true)}
+                  >
                     <UsersRound className="h-4 w-4" />
                     View members
                   </Button>
@@ -573,6 +880,12 @@ export default function TeamProjectsRoute() {
                 </div>
               )}
             </div>
+
+            {!isLoading && (isRefreshing || isSearchPending) ? (
+              <div className="text-xs text-muted-foreground">
+                {isSearchPending ? "Waiting for search..." : "Updating projects..."}
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -580,77 +893,75 @@ export default function TeamProjectsRoute() {
       {isGridView ? (
         isLoading ? (
           <ProjectsGridSkeleton />
-        ) : team ? (
-          <GridView
-            items={sortedProjects}
-            getKey={(project) => project.id}
-            itemClassName="to-emerald-400/[0.03]"
-            renderItem={(project) => (
-              <ProjectCard
-                project={project}
-                team={team}
-                onEdit={openEditDialog}
-                onDelete={openDeleteDialog}
-                actionPending={isUpdating || isDeleting}
-              />
-            )}
-            emptyState={
-              <div className="rounded-[28px] border border-dashed border-border/70 bg-card/70 px-6 py-12 text-center shadow-sm">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-400/20 to-cyan-400/20 text-emerald-500">
-                  <Sparkles className="h-6 w-6" />
-                </div>
-                <h2 className="mt-4 text-xl font-semibold text-foreground">
-                  {projects.length === 0 ? "No projects yet" : "No matching projects"}
-                </h2>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                  {projects.length === 0
-                    ? "Start a project under this team so work stays grouped with the right members."
-                    : "Adjust the current search or switch to table view if you want a denser scan."}
-                </p>
-                {projects.length === 0 && canEditProjects ? (
-                  <div className="mt-5 flex justify-center">
-                    <Button
-                      onClick={() => setIsCreateOpen(true)}
-                      className="bg-linear-to-r from-emerald-400 to-cyan-400 text-black hover:opacity-90"
-                    >
-                      Create your first project
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            }
-          />
-        ) : null
+        ) : (
+          <div className="space-y-4">
+            <GridView
+              items={projects}
+              getKey={(project) => project.id}
+              onItemClick={openProject}
+              getItemAriaLabel={(project) => `Open ${project.name}`}
+              itemClassName="to-emerald-400/[0.03]"
+              renderItem={(project) => (
+                <ProjectCard
+                  project={project}
+                  team={team as TeamListItem}
+                  onEdit={openEditDialog}
+                  onDelete={openDeleteDialog}
+                  actionPending={isActionPending}
+                />
+              )}
+              emptyState={renderEmptyState()}
+            />
+
+            {pagination.totalItems > 0 ? (
+              <section className="rounded-[24px] border border-border/60 bg-card/80 px-4 py-3 shadow-sm">
+                <ProjectsPaginationControls
+                  pageIndex={currentPageIndex}
+                  pageSize={pageSize}
+                  pagination={pagination}
+                  disabled={isRefreshing}
+                  onPageIndexChange={setPageIndex}
+                  onPageSizeChange={handlePageSizeChange}
+                />
+              </section>
+            ) : null}
+          </div>
+        )
       ) : isLoading ? (
         <ProjectsTableSkeleton rows={Math.min(pageSize, 8)} />
-      ) : team ? (
+      ) : (
         <section className="rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-sm">
           <div className="mb-4 flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Project table</h2>
               <p className="text-sm text-muted-foreground">
-                Dense view for scanning project names, ownership, and team members.
+                Dense view for sorting by issue count, name, or creation date.
               </p>
             </div>
 
             <Badge variant="outline" className="w-fit">
-              {sortedProjects.length} {sortedProjects.length === 1 ? "project" : "projects"}
+              {pagination.totalItems} {pagination.totalItems === 1 ? "project" : "projects"}
             </Badge>
           </div>
 
-          <DataTable
-            columns={projectTableColumns}
-            data={paginatedProjects}
-            sorting={sorting}
-            onSortingChange={setSorting}
-            pageIndex={currentPageIndex}
-            pageSize={pageSize}
-            pageCount={pageCount}
-            onPageIndexChange={setPageIndex}
-            onPageSizeChange={handlePageSizeChange}
-          />
+          {hasVisibleProjects ? (
+            <DataTable
+              columns={projectTableColumns}
+              data={projects}
+              sorting={sorting}
+              onSortingChange={handleSortingChange}
+              pageIndex={currentPageIndex}
+              pageSize={pageSize}
+              pageCount={pagination.totalPages}
+              onPageIndexChange={setPageIndex}
+              onPageSizeChange={handlePageSizeChange}
+              onRowClick={openProject}
+            />
+          ) : (
+            renderEmptyState()
+          )}
         </section>
-      ) : null}
+      )}
 
       <ProjectDialog
         open={isCreateOpen}

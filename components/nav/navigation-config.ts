@@ -19,7 +19,7 @@ export const defaultNavigationConfig: NavigationConfig = {
     "/teams": {
         label: "Teams",
         dynamicSegments: {
-            uuid: "Projects",
+            uuid: "Team",
         },
     },
     "/course": {

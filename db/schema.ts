@@ -114,6 +114,43 @@ export const projects = pgTable('projects', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const projectModules = pgTable(
+  'project_modules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 80 }).notNull(),
+    description: text('description'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('project_modules_project_id_idx').on(table.projectId),
+    uniqueIndex('project_modules_project_name_unique').on(table.projectId, table.name),
+  ]
+);
+
+export const issueClasses = pgTable(
+  'issue_classes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 50 }).notNull(),
+    description: text('description'),
+    isSystem: boolean('is_system').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('issue_classes_project_id_idx').on(table.projectId),
+    uniqueIndex('issue_classes_project_name_unique').on(table.projectId, table.name),
+  ]
+);
+
 export const usersToTeams = pgTable(
   'users_to_teams',
   {
@@ -156,15 +193,22 @@ export const issues = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
+    moduleId: uuid('module_id').references(() => projectModules.id, { onDelete: 'set null' }),
+    issueClassId: uuid('issue_class_id').references(() => issueClasses.id, {
+      onDelete: 'set null',
+    }),
     no: serial('no'),
     navigation: varchar('navigation', { length: 255 }),
     title: varchar('title', { length: 255 }).notNull(),
+    description: text('description'),
     priority: varchar('priority', { length: 50 }).notNull(), // Low, Medium, High, Critical
     status: varchar('status', { length: 50 }).notNull(), // Open, In Progress, Resolved, Closed
     assignedTo: uuid('assigned_to').references(() => user.id, { onDelete: 'set null' }),
+    reviewedBy: uuid('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
     comments: text('comments'),
     remark: text('remark'),
     testedBy: uuid('tested_by').references(() => user.id, { onDelete: 'set null' }),
+    createdBy: uuid('created_by').references(() => user.id, { onDelete: 'set null' }),
     fixedDate: timestamp('fixed_date', { withTimezone: true }),
     development: text('development'),
     deployment: text('deployment'),
@@ -173,8 +217,12 @@ export const issues = pgTable(
   },
   (table) => [
     index('issues_project_id_idx').on(table.projectId),
+    index('issues_module_id_idx').on(table.moduleId),
+    index('issues_issue_class_id_idx').on(table.issueClassId),
     index('issues_assigned_to_idx').on(table.assignedTo),
+    index('issues_reviewed_by_idx').on(table.reviewedBy),
     index('issues_tested_by_idx').on(table.testedBy),
+    index('issues_created_by_idx').on(table.createdBy),
     index('issues_status_idx').on(table.status),
     index('issues_priority_idx').on(table.priority),
   ]

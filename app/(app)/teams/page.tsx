@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 
-import type { SortingState } from "@tanstack/react-table";
+import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -41,77 +41,146 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { GridView } from "@/components/ui/grid-view";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { usePersistedViewMode } from "@/hooks/use-persisted-view-mode";
 import type {
   CreateTeamInput,
   JoinTeamInput,
   TeamDeleteResponse,
   TeamListItem,
-  TeamMutationResponse,
+  TeamListPagination,
+  TeamListSortDirection,
+  TeamListSortField,
   TeamsListResponse,
+  TeamsListSummary,
+  TeamMutationResponse,
   UpdateTeamInput,
 } from "@/routes/teams/types";
 
 const DEFAULT_SORTING: SortingState = [{ id: "createdAt", desc: true }];
 const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50, 100];
+const SEARCH_DEBOUNCE_MS = 300;
 const TEAMS_VIEW_STORAGE_KEY = "teams:view-mode";
+const EMPTY_PAGINATION: TeamListPagination = {
+  page: 1,
+  pageSize: DEFAULT_PAGE_SIZE,
+  totalItems: 0,
+  totalPages: 1,
+  hasPreviousPage: false,
+  hasNextPage: false,
+};
+const EMPTY_SUMMARY: TeamsListSummary = {
+  totalTeams: 0,
+  ownedTeams: 0,
+};
+const TEAM_GRID_SORT_OPTIONS: Array<{
+  value: string;
+  label: string;
+  sorting: SortingState;
+}> = [
+  { value: "createdAt-desc", label: "Newest first", sorting: [{ id: "createdAt", desc: true }] },
+  { value: "createdAt-asc", label: "Oldest first", sorting: [{ id: "createdAt", desc: false }] },
+  { value: "name-asc", label: "Name A-Z", sorting: [{ id: "name", desc: false }] },
+  { value: "name-desc", label: "Name Z-A", sorting: [{ id: "name", desc: true }] },
+  {
+    value: "createdByName-asc",
+    label: "Owner A-Z",
+    sorting: [{ id: "createdByName", desc: false }],
+  },
+  {
+    value: "createdByName-desc",
+    label: "Owner Z-A",
+    sorting: [{ id: "createdByName", desc: true }],
+  },
+  {
+    value: "memberCount-desc",
+    label: "Most members",
+    sorting: [{ id: "memberCount", desc: true }],
+  },
+  {
+    value: "memberCount-asc",
+    label: "Least members",
+    sorting: [{ id: "memberCount", desc: false }],
+  },
+];
 
-function filterTeams(teams: TeamListItem[], searchValue: string) {
-  const normalizedQuery = searchValue.trim().toLowerCase();
+function sortingEquals(left: SortingState, right: SortingState) {
+  const normalizedLeft = normalizeSorting(left);
+  const normalizedRight = normalizeSorting(right);
+  const [leftSort] = normalizedLeft;
+  const [rightSort] = normalizedRight;
 
-  if (!normalizedQuery) {
-    return teams;
-  }
+  return leftSort?.id === rightSort?.id && leftSort?.desc === rightSort?.desc;
+}
 
-  return teams.filter((team) =>
-    [
-      team.name,
-      team.description ?? "",
-      team.createdByName,
-      team.joinCode,
-      team.isOwner ? "owner" : "member",
-      team.accessLevel,
-    ].some((value) =>
-      value.toLowerCase().includes(normalizedQuery)
-    )
+function findGridSortOptionValue(sorting: SortingState) {
+  return (
+    TEAM_GRID_SORT_OPTIONS.find((option) => sortingEquals(option.sorting, sorting))?.value ??
+    TEAM_GRID_SORT_OPTIONS[0].value
   );
 }
 
-function compareText(left: string, right: string) {
-  return left.localeCompare(right, undefined, { sensitivity: "base" });
+function getGridSortingFromValue(value: string) {
+  return (
+    TEAM_GRID_SORT_OPTIONS.find((option) => option.value === value)?.sorting ?? DEFAULT_SORTING
+  );
 }
 
-function sortTeams(teams: TeamListItem[], sorting: SortingState) {
+function normalizeSorting(sorting: SortingState) {
   const [activeSort] = sorting;
 
   if (!activeSort) {
-    return [...teams];
+    return DEFAULT_SORTING;
   }
 
-  const sortedTeams = [...teams].sort((left, right) => {
-    switch (activeSort.id) {
-      case "name":
-        return compareText(left.name, right.name);
-      case "createdByName":
-        return compareText(left.createdByName, right.createdByName);
-      case "memberCount":
-        return left.memberCount - right.memberCount;
-      case "accessLevel":
-        return compareText(left.accessLevel, right.accessLevel);
-      case "joinCode":
-        return compareText(left.joinCode, right.joinCode);
-      case "createdAt":
-      default:
-        return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
-    }
-  });
-
-  return activeSort.desc ? sortedTeams.reverse() : sortedTeams;
+  return [
+    {
+      id: activeSort.id,
+      desc: activeSort.desc ?? false,
+    },
+  ] satisfies SortingState;
 }
 
-function upsertTeam(teams: TeamListItem[], nextTeam: TeamListItem) {
-  return [nextTeam, ...teams.filter((team) => team.id !== nextTeam.id)];
+function getSortValues(sorting: SortingState): {
+  sortBy: TeamListSortField;
+  sortDirection: TeamListSortDirection;
+} {
+  const [activeSort] = normalizeSorting(sorting);
+
+  return {
+    sortBy: activeSort.id as TeamListSortField,
+    sortDirection: activeSort.desc ? "desc" : "asc",
+  };
+}
+
+function buildTeamsRequestUrl(options: {
+  pageIndex: number;
+  pageSize: number;
+  search: string;
+  sorting: SortingState;
+}) {
+  const { sortBy, sortDirection } = getSortValues(options.sorting);
+  const searchParams = new URLSearchParams({
+    page: String(options.pageIndex + 1),
+    pageSize: String(options.pageSize),
+    sortBy,
+    sortDirection,
+  });
+
+  if (options.search) {
+    searchParams.set("search", options.search);
+  }
+
+  return `/api/teams?${searchParams.toString()}`;
 }
 
 async function requestJson<TResponse>(input: RequestInfo, init?: RequestInit) {
@@ -132,15 +201,126 @@ async function requestJson<TResponse>(input: RequestInfo, init?: RequestInit) {
   return data as TResponse;
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+interface TeamsPaginationControlsProps {
+  pageIndex: number;
+  pageSize: number;
+  pagination: TeamListPagination;
+  disabled?: boolean;
+  onPageIndexChange: (index: number) => void;
+  onPageSizeChange: (size: number) => void;
+}
+
+function TeamsPaginationControls({
+  pageIndex,
+  pageSize,
+  pagination,
+  disabled = false,
+  onPageIndexChange,
+  onPageSizeChange,
+}: TeamsPaginationControlsProps) {
+  const firstItem = pagination.totalItems === 0 ? 0 : pageIndex * pageSize + 1;
+  const lastItem =
+    pagination.totalItems === 0 ? 0 : Math.min((pageIndex + 1) * pageSize, pagination.totalItems);
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-sm text-muted-foreground">
+        {pagination.totalItems === 0
+          ? "No teams to display"
+          : `Showing ${firstItem}-${lastItem} of ${pagination.totalItems} teams`}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Select
+          value={String(pageSize)}
+          onValueChange={(value) => onPageSizeChange(Number(value))}
+          disabled={disabled}
+        >
+          <SelectTrigger className="h-9 w-[120px]">
+            <SelectValue>{pageSize} / page</SelectValue>
+          </SelectTrigger>
+          <SelectContent align="end">
+            {PAGE_SIZE_OPTIONS.map((option) => (
+              <SelectItem key={option} value={String(option)}>
+                {option} / page
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onPageIndexChange(0)}
+            disabled={disabled || !pagination.hasPreviousPage}
+            aria-label="First page"
+          >
+            {"<<"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onPageIndexChange(Math.max(0, pageIndex - 1))}
+            disabled={disabled || !pagination.hasPreviousPage}
+            aria-label="Previous page"
+          >
+            {"<"}
+          </Button>
+
+          <span className="min-w-[7.5rem] text-center text-sm tabular-nums text-muted-foreground">
+            Page {pagination.page} of {pagination.totalPages}
+          </span>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onPageIndexChange(pageIndex + 1)}
+            disabled={disabled || !pagination.hasNextPage}
+            aria-label="Next page"
+          >
+            {">"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onPageIndexChange(Math.max(0, pagination.totalPages - 1))}
+            disabled={disabled || !pagination.hasNextPage}
+            aria-label="Last page"
+          >
+            {">>"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TeamsPage() {
   const router = useRouter();
   const [teams, setTeams] = useState<TeamListItem[]>([]);
+  const [pagination, setPagination] = useState<TeamListPagination>(EMPTY_PAGINATION);
+  const [summary, setSummary] = useState<TeamsListSummary>(EMPTY_SUMMARY);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const hasAttemptedLoadRef = useRef(false);
   const { viewMode, setViewMode } = usePersistedViewMode(TEAMS_VIEW_STORAGE_KEY);
+
   const [searchValue, setSearchValue] = useState("");
+  const debouncedSearchValue = useDebouncedValue(searchValue.trim(), SEARCH_DEBOUNCE_MS);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [teamName, setTeamName] = useState("");
@@ -161,25 +341,58 @@ export default function TeamsPage() {
 
   useEffect(() => {
     let isActive = true;
+    const abortController = new AbortController();
+
+    if (hasAttemptedLoadRef.current) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
 
     async function loadTeams() {
       try {
-        const data = await requestJson<TeamsListResponse>("/api/teams");
+        const data = await requestJson<TeamsListResponse>(
+          buildTeamsRequestUrl({
+            pageIndex,
+            pageSize,
+            search: debouncedSearchValue,
+            sorting,
+          }),
+          {
+            cache: "no-store",
+            signal: abortController.signal,
+          }
+        );
 
         if (!isActive) {
           return;
         }
 
         setTeams(data.teams);
+        setPagination(data.pagination);
+        setSummary(data.summary);
+        setLoadError(null);
       } catch (error) {
-        if (!isActive) {
+        if (!isActive || isAbortError(error)) {
           return;
         }
 
-        toast.error(error instanceof Error ? error.message : "Could not load teams.");
+        const message = error instanceof Error ? error.message : "Could not load teams.";
+
+        setLoadError(message);
+
+        if (!hasAttemptedLoadRef.current) {
+          setTeams([]);
+          setPagination({ ...EMPTY_PAGINATION, pageSize });
+          setSummary(EMPTY_SUMMARY);
+        }
+
+        toast.error(message);
       } finally {
         if (isActive) {
+          hasAttemptedLoadRef.current = true;
           setIsLoading(false);
+          setIsRefreshing(false);
         }
       }
     }
@@ -188,25 +401,26 @@ export default function TeamsPage() {
 
     return () => {
       isActive = false;
+      abortController.abort();
     };
-  }, []);
+  }, [debouncedSearchValue, pageIndex, pageSize, sorting, reloadKey]);
 
-  const filteredTeams = filterTeams(teams, searchValue);
-  const sortedTeams = sortTeams(filteredTeams, sorting);
-  const teamTableColumns = getTeamTableColumns({
-    onEdit: openEditDialog,
-    onDelete: openDeleteDialog,
-    onCopyCode: copyJoinCode,
-    actionPending: isUpdating || isDeleting,
-  });
-  const pageCount = Math.max(1, Math.ceil(sortedTeams.length / pageSize));
-  const currentPageIndex = Math.min(pageIndex, Math.max(0, pageCount - 1));
-  const paginatedTeams = sortedTeams.slice(
-    currentPageIndex * pageSize,
-    (currentPageIndex + 1) * pageSize
-  );
-  const ownedTeamCount = teams.filter((team) => team.isOwner).length;
+  const currentPageIndex = Math.max(0, pagination.page - 1);
   const isGridView = viewMode === "grid";
+  const hasAnyTeams = summary.totalTeams > 0;
+  const hasVisibleTeams = teams.length > 0;
+  const isActionPending = isUpdating || isDeleting;
+  const isSearchPending = searchValue.trim() !== debouncedSearchValue;
+  const currentGridSortValue = findGridSortOptionValue(sorting);
+
+  function refreshTeams(nextPageIndex?: number) {
+    if (typeof nextPageIndex === "number" && nextPageIndex !== pageIndex) {
+      setPageIndex(nextPageIndex);
+      return;
+    }
+
+    setReloadKey((currentValue) => currentValue + 1);
+  }
 
   function handleSearchChange(value: string) {
     setSearchValue(value);
@@ -215,6 +429,20 @@ export default function TeamsPage() {
 
   function handlePageSizeChange(size: number) {
     setPageSize(size);
+    setPageIndex(0);
+  }
+
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    const nextSorting = normalizeSorting(
+      typeof updater === "function" ? updater(sorting) : updater
+    );
+
+    setSorting(nextSorting);
+    setPageIndex(0);
+  };
+
+  function handleGridSortChange(value: string) {
+    setSorting(getGridSortingFromValue(value));
     setPageIndex(0);
   }
 
@@ -264,11 +492,10 @@ export default function TeamsPage() {
           body: JSON.stringify(payload),
         });
 
-        setTeams((currentTeams) => upsertTeam(currentTeams, data.team));
-        setPageIndex(0);
         setIsCreateOpen(false);
         setTeamName("");
         setTeamDescription("");
+        refreshTeams(0);
         toast.success(data.message);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not create the team.");
@@ -290,10 +517,9 @@ export default function TeamsPage() {
           body: JSON.stringify(payload),
         });
 
-        setTeams((currentTeams) => upsertTeam(currentTeams, data.team));
-        setPageIndex(0);
         setIsJoinOpen(false);
         setJoinCode("");
+        refreshTeams(0);
         toast.success(data.message);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not join the team.");
@@ -320,8 +546,8 @@ export default function TeamsPage() {
           body: JSON.stringify(payload),
         });
 
-        setTeams((currentTeams) => upsertTeam(currentTeams, data.team));
         closeEditDialog(false);
+        refreshTeams();
         toast.success(data.message);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not update the team.");
@@ -340,20 +566,80 @@ export default function TeamsPage() {
           method: "DELETE",
         });
 
-        setTeams((currentTeams) =>
-          currentTeams.filter((team) => team.id !== data.deletedTeamId)
-        );
         if (editingTeam?.id === data.deletedTeamId) {
           setEditingTeam(null);
           setEditTeamName("");
           setEditTeamDescription("");
         }
+
         setTeamToDelete(null);
+        refreshTeams();
         toast.success(data.message);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not delete the team.");
       }
     });
+  }
+
+  const teamTableColumns = getTeamTableColumns({
+    onEdit: openEditDialog,
+    onDelete: openDeleteDialog,
+    onCopyCode: copyJoinCode,
+    actionPending: isActionPending,
+  });
+
+  function renderEmptyState() {
+    const title = loadError && !hasAnyTeams
+      ? "Could not load teams"
+      : hasAnyTeams
+        ? "No matching teams"
+        : "No teams yet";
+    const description = loadError && !hasAnyTeams
+      ? loadError
+      : hasAnyTeams
+        ? "Adjust the current search or switch views if you want a different scan of the same workspace."
+        : "Create a new team or join an existing one to start collaborating from this workspace.";
+
+    return (
+      <div className="rounded-[28px] border border-dashed border-border/70 bg-card/70 px-6 py-12 text-center shadow-sm">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-400/20 to-cyan-400/20 text-emerald-500">
+          <UsersRound className="h-6 w-6" />
+        </div>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">{title}</h2>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+          {description}
+        </p>
+
+        {loadError && !hasAnyTeams ? (
+          <div className="mt-5 flex justify-center">
+            <Button type="button" variant="outline" onClick={() => refreshTeams()}>
+              Retry
+            </Button>
+          </div>
+        ) : hasAnyTeams ? (
+          searchValue.trim() ? (
+            <div className="mt-5 flex justify-center">
+              <Button type="button" variant="outline" onClick={() => handleSearchChange("")}>
+                Clear search
+              </Button>
+            </div>
+          ) : null
+        ) : (
+          <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
+            <Button type="button" variant="outline" onClick={() => setIsJoinOpen(true)}>
+              Join team
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setIsCreateOpen(true)}
+              className="bg-linear-to-r from-emerald-400 to-cyan-400 text-black hover:opacity-90"
+            >
+              Create your first team
+            </Button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -385,7 +671,7 @@ export default function TeamsPage() {
                   <Skeleton className="mt-2 h-8 w-14" />
                 ) : (
                   <div className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-                    {teams.length}
+                    {summary.totalTeams}
                   </div>
                 )}
               </div>
@@ -401,7 +687,7 @@ export default function TeamsPage() {
                   <Skeleton className="mt-2 h-8 w-14" />
                 ) : (
                   <div className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-                    {ownedTeamCount}
+                    {summary.ownedTeams}
                   </div>
                 )}
               </div>
@@ -422,25 +708,42 @@ export default function TeamsPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <div className="inline-flex w-full items-center rounded-2xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur sm:w-auto">
-                <Button
-                  type="button"
-                  variant={viewMode === "grid" ? "secondary" : "ghost"}
-                  className="flex-1 rounded-xl sm:flex-none"
-                  onClick={() => setViewMode("grid")}
-                >
-                  <Grid2x2 className="h-4 w-4" />
-                  Grid
-                </Button>
-                <Button
-                  type="button"
-                  variant={viewMode === "table" ? "secondary" : "ghost"}
-                  className="flex-1 rounded-xl sm:flex-none"
-                  onClick={() => setViewMode("table")}
-                >
-                  <List className="h-4 w-4" />
-                  Table
-                </Button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="inline-flex w-full items-center rounded-2xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur sm:w-auto">
+                  <Button
+                    type="button"
+                    variant={viewMode === "grid" ? "secondary" : "ghost"}
+                    className="flex-1 rounded-xl sm:flex-none"
+                    onClick={() => setViewMode("grid")}
+                  >
+                    <Grid2x2 className="h-4 w-4" />
+                    Grid
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={viewMode === "table" ? "secondary" : "ghost"}
+                    className="flex-1 rounded-xl sm:flex-none"
+                    onClick={() => setViewMode("table")}
+                  >
+                    <List className="h-4 w-4" />
+                    Table
+                  </Button>
+                </div>
+
+                {isGridView ? (
+                  <Select value={currentGridSortValue} onValueChange={handleGridSortChange}>
+                    <SelectTrigger className="h-10 w-full rounded-2xl border-border/60 bg-background/80 shadow-sm sm:w-[180px]">
+                      <SelectValue placeholder="Sort teams" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {TEAM_GRID_SORT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row">
@@ -458,6 +761,12 @@ export default function TeamsPage() {
                 </Button>
               </div>
             </div>
+
+            {!isLoading && (isRefreshing || isSearchPending) ? (
+              <div className="text-xs text-muted-foreground">
+                {isSearchPending ? "Waiting for search..." : "Updating teams..."}
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -466,50 +775,38 @@ export default function TeamsPage() {
         isLoading ? (
           <TeamsGridSkeleton />
         ) : (
-          <GridView
-            items={sortedTeams}
-            getKey={(team) => team.id}
-            onItemClick={openTeam}
-            getItemAriaLabel={(team) => `Open ${team.name}`}
-            itemClassName="to-emerald-400/[0.03]"
-            renderItem={(team) => (
-              <TeamCard
-                team={team}
-                onEdit={openEditDialog}
-                onDelete={openDeleteDialog}
-                onCopyCode={copyJoinCode}
-                actionPending={isUpdating || isDeleting}
-              />
-            )}
-            emptyState={
-              <div className="rounded-[28px] border border-dashed border-border/70 bg-card/70 px-6 py-12 text-center shadow-sm">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-400/20 to-cyan-400/20 text-emerald-500">
-                  <UsersRound className="h-6 w-6" />
-                </div>
-                <h2 className="mt-4 text-xl font-semibold text-foreground">
-                  {teams.length === 0 ? "No teams yet" : "No matching teams"}
-                </h2>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                  {teams.length === 0
-                    ? "Create a new team or join an existing one to start collaborating from this workspace."
-                    : "Adjust the current search or switch to table view if you want a denser scan."}
-                </p>
-                {teams.length === 0 ? (
-                  <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
-                    <Button variant="outline" onClick={() => setIsJoinOpen(true)}>
-                      Join team
-                    </Button>
-                    <Button
-                      onClick={() => setIsCreateOpen(true)}
-                      className="bg-linear-to-r from-emerald-400 to-cyan-400 text-black hover:opacity-90"
-                    >
-                      Create your first team
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            }
-          />
+          <div className="space-y-4">
+            <GridView
+              items={teams}
+              getKey={(team) => team.id}
+              onItemClick={openTeam}
+              getItemAriaLabel={(team) => `Open ${team.name}`}
+              itemClassName="to-emerald-400/[0.03]"
+              renderItem={(team) => (
+                <TeamCard
+                  team={team}
+                  onEdit={openEditDialog}
+                  onDelete={openDeleteDialog}
+                  onCopyCode={copyJoinCode}
+                  actionPending={isActionPending}
+                />
+              )}
+              emptyState={renderEmptyState()}
+            />
+
+            {pagination.totalItems > 0 ? (
+              <section className="rounded-[24px] border border-border/60 bg-card/80 px-4 py-3 shadow-sm">
+                <TeamsPaginationControls
+                  pageIndex={currentPageIndex}
+                  pageSize={pageSize}
+                  pagination={pagination}
+                  disabled={isRefreshing}
+                  onPageIndexChange={setPageIndex}
+                  onPageSizeChange={handlePageSizeChange}
+                />
+              </section>
+            ) : null}
+          </div>
         )
       ) : isLoading ? (
         <TeamsTableSkeleton rows={Math.min(pageSize, 8)} />
@@ -524,22 +821,26 @@ export default function TeamsPage() {
             </div>
 
             <Badge variant="outline" className="w-fit">
-              {sortedTeams.length} {sortedTeams.length === 1 ? "team" : "teams"}
+              {pagination.totalItems} {pagination.totalItems === 1 ? "team" : "teams"}
             </Badge>
           </div>
 
-          <DataTable
-            columns={teamTableColumns}
-            data={paginatedTeams}
-            sorting={sorting}
-            onSortingChange={setSorting}
-            pageIndex={currentPageIndex}
-            pageSize={pageSize}
-            pageCount={pageCount}
-            onPageIndexChange={setPageIndex}
-            onPageSizeChange={handlePageSizeChange}
-            onRowClick={openTeam}
+          {hasVisibleTeams ? (
+            <DataTable
+              columns={teamTableColumns}
+              data={teams}
+              sorting={sorting}
+              onSortingChange={handleSortingChange}
+              pageIndex={currentPageIndex}
+              pageSize={pageSize}
+              pageCount={pagination.totalPages}
+              onPageIndexChange={setPageIndex}
+              onPageSizeChange={handlePageSizeChange}
+              onRowClick={openTeam}
             />
+          ) : (
+            renderEmptyState()
+          )}
         </section>
       )}
 

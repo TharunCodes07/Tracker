@@ -25,7 +25,11 @@ function readStoredViewMode(storageKey: string, fallback: ViewMode) {
   try {
     const storedViewMode = window.localStorage.getItem(storageKey);
 
-    return storedViewMode === "table" ? "table" : fallback;
+    if (storedViewMode === "grid" || storedViewMode === "table") {
+      return storedViewMode;
+    }
+
+    return fallback;
   } catch {
     return fallback;
   }

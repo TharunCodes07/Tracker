@@ -91,7 +91,7 @@ export function DynamicBreadcrumb({
                             <BreadcrumbPage className="max-w-[150px] truncate sm:max-w-none">
                                 {segment.label}
                             </BreadcrumbPage>
-                        ) : (
+                        ) : segment.href ? (
                             <BreadcrumbLink asChild>
                                 <Link
                                     href={segment.href}
@@ -100,15 +100,15 @@ export function DynamicBreadcrumb({
                                         segment.isDynamicSegment &&
                                             "hover:text-primary transition-colors"
                                     )}
-                                    title={
-                                        segment.isDynamicSegment
-                                            ? `Go back to ${segment.href.split("/").pop() || "previous page"} list`
-                                            : `Go to ${segment.label}`
-                                    }
+                                    title={`Go to ${segment.label}`}
                                 >
                                     {segment.label}
                                 </Link>
                             </BreadcrumbLink>
+                        ) : (
+                            <span className="max-w-[150px] truncate text-muted-foreground sm:max-w-none">
+                                {segment.label}
+                            </span>
                         )}
                     </BreadcrumbItem>
                 </React.Fragment>

@@ -76,6 +76,9 @@ const navGroups = [
     },
 ];
 
+const sidebarSectionSeparatorClassName =
+    "self-center w-[calc(100%-1rem)] bg-linear-to-r from-transparent via-sidebar-border to-transparent";
+
 function capitalizeWord(word: string) {
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
 }
@@ -122,6 +125,10 @@ export function AppSidebar() {
         await authClient.signOut();
         router.replace("/");
         router.refresh();
+    }
+
+    function isItemActive(url: string) {
+        return pathname === url || pathname.startsWith(`${url}/`);
     }
 
     return (
@@ -205,14 +212,14 @@ export function AppSidebar() {
                                         <SidebarMenuItem key={item.title}>
                                             <SidebarMenuButton
                                                 asChild
-                                                isActive={pathname === item.url}
+                                                isActive={isItemActive(item.url)}
                                                 tooltip={item.title}
                                                 className="group/item transition-all duration-200 hover:bg-sidebar-accent/80"
                                             >
                                                 <Link href={item.url} className="flex items-center">
                                                     <item.icon
                                                         className={`h-4 w-4 transition-colors ${
-                                                            pathname === item.url
+                                                            isItemActive(item.url)
                                                                 ? "text-sidebar-accent-foreground"
                                                                 : `${item.color} group-hover/item:text-sidebar-accent-foreground`
                                                         }`}
@@ -227,12 +234,12 @@ export function AppSidebar() {
                         </SidebarGroup>
 
                         {groupIndex !== navGroups.length - 1 && (
-                            <SidebarSeparator className="self-center w-[calc(100%-1rem)] bg-linear-to-r from-transparent via-sidebar-border to-transparent" />
+                            <SidebarSeparator className={sidebarSectionSeparatorClassName} />
                         )}
                     </div>
                 ))}
 
-                <SidebarSeparator className="self-center w-[calc(100%-1rem)] bg-linear-to-r from-transparent via-sidebar-border to-transparent" />
+                <SidebarSeparator className={sidebarSectionSeparatorClassName} />
 
                 <SidebarGroup className="px-2 py-4">
                     <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/70 px-2 group-data-[collapsible=icon]:sr-only">

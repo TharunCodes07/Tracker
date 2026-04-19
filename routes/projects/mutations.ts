@@ -3,8 +3,9 @@ import "server-only";
 import { and, count, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { projects, teamsToProjects } from "@/db/schema";
+import { issueClasses, projects, teamsToProjects } from "@/db/schema";
 import { RouteError } from "@/routes/errors";
+import { DEFAULT_ISSUE_CLASS_DEFINITIONS } from "@/routes/issues/types";
 import { getTeamForUser } from "@/routes/teams/queries";
 
 import type { CreateProjectInput, UpdateProjectInput } from "./types";
@@ -102,6 +103,20 @@ export async function createProjectForTeam(
       teamId,
       projectId: project.id,
     });
+
+    await tx
+      .insert(issueClasses)
+      .values(
+        DEFAULT_ISSUE_CLASS_DEFINITIONS.map((issueClassDefinition) => ({
+          projectId: project.id,
+          name: issueClassDefinition.name,
+          description: issueClassDefinition.description,
+          isSystem: true,
+        }))
+      )
+      .onConflictDoNothing({
+        target: [issueClasses.projectId, issueClasses.name],
+      });
 
     return project;
   });
