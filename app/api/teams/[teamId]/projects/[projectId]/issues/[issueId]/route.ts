@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
 import { deleteIssue, updateIssue } from "@/routes/issues/mutations";
+import { dispatchNotificationEvents } from "@/routes/notifications/service";
+import type { NotificationEvent } from "@/routes/notifications/types";
 import type {
   IssueDeleteResponse,
   IssueMutationResponse,
@@ -16,7 +18,32 @@ export async function PATCH(
     const actor = await requireRouteUser(request);
     const { teamId, projectId, issueId } = await context.params;
     const body = await readJsonBody<UpdateIssueInput>(request);
-    const issue = await updateIssue(actor, teamId, projectId, issueId, body);
+    const { issue, previousAssignedTo } = await updateIssue(
+      actor,
+      teamId,
+      projectId,
+      issueId,
+      body
+    );
+    const notificationEvents: NotificationEvent[] = [];
+
+    if (issue.assignedTo && issue.assignedTo !== previousAssignedTo) {
+      notificationEvents.push({
+        type: "issue.assigned",
+        actorId: actor.id,
+        actorName: actor.name ?? "",
+        teamId,
+        projectId,
+        issueId: issue.id,
+        issueNo: issue.no,
+        issueTitle: issue.title,
+        assigneeId: issue.assignedTo,
+      });
+    }
+
+    if (notificationEvents.length > 0) {
+      after(() => dispatchNotificationEvents(notificationEvents));
+    }
 
     return NextResponse.json<IssueMutationResponse>({
       issue,

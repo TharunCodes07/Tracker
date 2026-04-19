@@ -132,3 +132,37 @@
     @apply font-sans;
   } */
 }
+
+@keyframes notification-heartbeat {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.85);
+  }
+
+  18% {
+    opacity: 0.4;
+    transform: scale(1.25);
+  }
+
+  32% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+
+  48% {
+    opacity: 0.35;
+    transform: scale(1.2);
+  }
+
+  72% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+@layer utilities {
+  .tracker-notification-heartbeat {
+    animation: notification-heartbeat 1.8s ease-out infinite;
+  }
+}

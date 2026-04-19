@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
 import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
 import { createIssue } from "@/routes/issues/mutations";
 import { listProjectIssuesForUser } from "@/routes/issues/queries";
+import { dispatchNotificationEvents } from "@/routes/notifications/service";
+import type { NotificationEvent } from "@/routes/notifications/types";
 import type {
   CreateIssueInput,
   IssueAssigneeFilterValue,
@@ -159,6 +161,35 @@ export async function POST(
     const { teamId, projectId } = await context.params;
     const body = await readJsonBody<CreateIssueInput>(request);
     const issue = await createIssue(actor, teamId, projectId, body);
+    const notificationEvents: NotificationEvent[] = [
+      {
+        type: "issue.created",
+        actorId: actor.id,
+        actorName: actor.name ?? "",
+        teamId,
+        projectId,
+        issueId: issue.id,
+        issueNo: issue.no,
+        issueTitle: issue.title,
+        assignedTo: issue.assignedTo,
+      },
+    ];
+
+    if (issue.assignedTo) {
+      notificationEvents.push({
+        type: "issue.assigned",
+        actorId: actor.id,
+        actorName: actor.name ?? "",
+        teamId,
+        projectId,
+        issueId: issue.id,
+        issueNo: issue.no,
+        issueTitle: issue.title,
+        assigneeId: issue.assignedTo,
+      });
+    }
+
+    after(() => dispatchNotificationEvents(notificationEvents));
 
     return NextResponse.json<IssueMutationResponse>(
       {

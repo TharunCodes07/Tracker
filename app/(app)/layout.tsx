@@ -2,6 +2,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { AppSidebar } from "@/components/nav/side-navbar/side-navbar";
 import { NavigationControls } from "@/components/nav/controls/navigation-controls";
 import { DynamicBreadcrumb } from "@/components/nav/dynamic-breadcrumb";
+import { NotificationsMenu } from "@/components/nav/notifications-menu";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { requireServerSession } from "@/lib/auth-session";
 
@@ -22,6 +23,9 @@ export default async function AppModuleLayout({
               <SidebarTrigger className="sm:hidden" />
               <NavigationControls className="hidden sm:flex" />
               <DynamicBreadcrumb className="flex-1 min-w-0" />
+              <div className="flex items-center gap-2">
+                <NotificationsMenu />
+              </div>
             </div>
           </header>
           <div className="flex-1 overflow-auto">

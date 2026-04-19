@@ -33,6 +33,11 @@ export interface IssueActor {
   id: string;
 }
 
+export interface UpdateIssueResult {
+  issue: IssueListItem;
+  previousAssignedTo: string | null;
+}
+
 function toIsoString(value: Date | string) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -478,8 +483,8 @@ export async function updateIssue(
   projectId: string,
   issueId: string,
   input: UpdateIssueInput
-) {
-  await requireIssueInEditableProject(actor, teamId, projectId, issueId);
+): Promise<UpdateIssueResult> {
+  const existingIssue = await requireIssueInEditableProject(actor, teamId, projectId, issueId);
   const validatedIssue = await validateIssueFields(teamId, projectId, input);
 
   await db
@@ -496,7 +501,10 @@ export async function updateIssue(
     throw new RouteError("Issue was updated but could not be loaded.", 500);
   }
 
-  return issue;
+  return {
+    issue,
+    previousAssignedTo: existingIssue.assignedTo,
+  };
 }
 
 export async function deleteIssue(

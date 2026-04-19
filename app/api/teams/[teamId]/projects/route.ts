@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
 import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
+import { dispatchNotificationEvents } from "@/routes/notifications/service";
+import type { NotificationEvent } from "@/routes/notifications/types";
 import { createProjectForTeam } from "@/routes/projects/mutations";
 import { PROJECT_LIST_SORT_FIELDS } from "@/routes/projects/types";
 import type {
@@ -86,6 +88,18 @@ export async function POST(
     const { teamId } = await context.params;
     const body = await readJsonBody<CreateProjectInput>(request);
     const project = await createProjectForTeam(actor, teamId, body);
+    const notificationEvents: NotificationEvent[] = [
+      {
+        type: "project.created",
+        actorId: actor.id,
+        actorName: actor.name ?? "",
+        teamId,
+        projectId: project.id,
+        projectName: project.name,
+      },
+    ];
+
+    after(() => dispatchNotificationEvents(notificationEvents));
 
     return NextResponse.json<ProjectMutationResponse>(
       {

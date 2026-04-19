@@ -57,6 +57,13 @@
       "when": 1776583460045,
       "tag": "0007_shallow_polaris",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776612280517,
+      "tag": "0008_true_terrax",
+      "breakpoints": true
     }
   ]
 }

@@ -227,3 +227,30 @@ export const issues = pgTable(
     index('issues_priority_idx').on(table.priority),
   ]
 );
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    issueId: uuid('issue_id').references(() => issues.id, { onDelete: 'set null' }),
+    trigger: varchar('trigger', { length: 64 }).notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    message: text('message').notNull(),
+    href: text('href').notNull(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('notifications_user_id_idx').on(table.userId),
+    index('notifications_user_id_read_at_idx').on(table.userId, table.readAt),
+    index('notifications_user_id_created_at_idx').on(table.userId, table.createdAt),
+    index('notifications_team_id_idx').on(table.teamId),
+    index('notifications_project_id_idx').on(table.projectId),
+    index('notifications_issue_id_idx').on(table.issueId),
+  ]
+);
