@@ -6,10 +6,8 @@ import {
   BellRing,
   BriefcaseBusiness,
   Bug,
-  FolderKanban,
   ShieldCheck,
   Siren,
-  UsersRound,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -148,9 +146,10 @@ export default async function DashboardPage() {
           ) : (
             <div className="divide-y divide-border/60">
               {overview.topProjects.map((project) => (
-                <div
+                <Link
                   key={project.id}
-                  className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto]"
+                  href={`/teams/${project.teamId}/projects/${project.id}`}
+                  className="grid gap-4 px-5 py-4 transition-colors hover:bg-accent/35 lg:grid-cols-[minmax(0,1fr)_auto]"
                 >
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -203,7 +202,7 @@ export default async function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -321,58 +320,6 @@ export default async function DashboardPage() {
             )}
           </section>
         </div>
-      </section>
-
-      <section className="rounded-[30px] border border-border/60 bg-card/80 shadow-sm">
-        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Teams at a glance</h2>
-            <p className="text-sm text-muted-foreground">
-              Your most populated teams and current access level.
-            </p>
-          </div>
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/teams">
-              Browse teams
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
-
-        {overview.teamHighlights.length === 0 ? (
-          <div className="px-5 py-12 text-sm text-muted-foreground">You are not in any teams yet.</div>
-        ) : (
-          <div className="grid gap-0 divide-y divide-border/60 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-            {overview.teamHighlights.map((team) => (
-              <div key={team.id} className="flex items-start justify-between gap-4 px-5 py-5">
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="truncate text-base font-semibold text-foreground">
-                      {team.name}
-                    </h3>
-                    <Badge variant={team.canEdit ? "outline" : "secondary"}>
-                      {team.canEdit ? "Edit" : "Read"}
-                    </Badge>
-                  </div>
-                  <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
-                    {team.description ?? "No team description yet."}
-                  </p>
-                </div>
-
-                <div className="grid shrink-0 gap-2 text-right">
-                  <div className="inline-flex items-center justify-end gap-2 text-sm text-muted-foreground">
-                    <UsersRound className="h-4 w-4" />
-                    {team.memberCount} members
-                  </div>
-                  <div className="inline-flex items-center justify-end gap-2 text-sm text-muted-foreground">
-                    <FolderKanban className="h-4 w-4" />
-                    Join code {team.joinCode}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">

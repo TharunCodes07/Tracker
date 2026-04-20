@@ -14,11 +14,10 @@ import {
 } from "@/db/schema";
 import { listNotificationsForUser } from "@/routes/notifications/queries";
 import type { NotificationListItem } from "@/routes/notifications/types";
-import { listTeamsForUser } from "@/routes/teams/queries";
-import type { TeamListItem } from "@/routes/teams/types";
 
 export interface DashboardProjectHealthItem {
   id: string;
+  teamId: string;
   name: string;
   teamNames: string;
   totalIssues: number;
@@ -40,7 +39,6 @@ export interface DashboardOverview {
   testerRoleCount: number;
   recentNotifications: NotificationListItem[];
   topProjects: DashboardProjectHealthItem[];
-  teamHighlights: TeamListItem[];
 }
 
 export async function getDashboardOverviewForUser(userId: string): Promise<DashboardOverview> {
@@ -53,6 +51,19 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
     .where(eq(usersToTeams.userId, userId))
     .groupBy(teamsToProjects.projectId)
     .as("dashboard_accessible_project_ids");
+
+  const accessibleProjectRouting = db
+    .select({
+      projectId: teamsToProjects.projectId,
+      teamId: sql<string>`(array_agg(${teamsToProjects.teamId} order by ${teamsToProjects.teamId}))[1]`.as(
+        "team_id_for_route"
+      ),
+    })
+    .from(usersToTeams)
+    .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
+    .where(eq(usersToTeams.userId, userId))
+    .groupBy(teamsToProjects.projectId)
+    .as("dashboard_accessible_project_routing");
 
   const accessibleProjectTeams = db
     .select({
@@ -77,7 +88,6 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
     developerRoleRow,
     testerRoleRow,
     topProjectRows,
-    teamHighlightsResponse,
     recentNotificationsResponse,
   ] = await Promise.all([
     db
@@ -145,6 +155,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
     db
       .select({
         id: projects.id,
+        teamId: accessibleProjectRouting.teamId,
         name: projects.name,
         teamNames: sql<string>`coalesce(${accessibleProjectTeams.teamNames}, 'Unassigned')`,
         totalIssues: sql<number>`cast(count(${issues.id}) as integer)`,
@@ -160,9 +171,10 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
       })
       .from(accessibleProjectIds)
       .innerJoin(projects, eq(accessibleProjectIds.projectId, projects.id))
+      .innerJoin(accessibleProjectRouting, eq(accessibleProjectRouting.projectId, projects.id))
       .leftJoin(accessibleProjectTeams, eq(accessibleProjectTeams.projectId, projects.id))
       .leftJoin(issues, eq(projects.id, issues.projectId))
-      .groupBy(projects.id, projects.name, accessibleProjectTeams.teamNames)
+      .groupBy(projects.id, projects.name, accessibleProjectRouting.teamId, accessibleProjectTeams.teamNames)
       .orderBy(
         desc(
           sql`count(${issues.id}) filter (where ${issues.status} <> 'done')`
@@ -174,13 +186,6 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
         projects.name
       )
       .limit(6),
-    listTeamsForUser(userId, {
-      page: 1,
-      pageSize: 4,
-      search: "",
-      sortBy: "memberCount",
-      sortDirection: "desc",
-    }),
     listNotificationsForUser(userId, {
       page: 1,
       pageSize: 5,
@@ -202,6 +207,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
     recentNotifications: recentNotificationsResponse.notifications,
     topProjects: topProjectRows.map((row) => ({
       id: row.id,
+      teamId: row.teamId,
       name: row.name,
       teamNames: row.teamNames,
       totalIssues: Number(row.totalIssues ?? 0),
@@ -209,6 +215,5 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
       pendingTestIssues: Number(row.pendingTestIssues ?? 0),
       criticalIssues: Number(row.criticalIssues ?? 0),
     })),
-    teamHighlights: teamHighlightsResponse.teams,
   };
 }
