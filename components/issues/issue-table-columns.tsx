@@ -26,6 +26,14 @@ function stopRowClick(event: MouseEvent<HTMLButtonElement>) {
   event.stopPropagation();
 }
 
+function getBooleanBadgeVariant(value: boolean): "secondary" | "outline" {
+  return value ? "secondary" : "outline";
+}
+
+function getBooleanLabel(value: boolean) {
+  return value ? "Yes" : "No";
+}
+
 export function getIssueTableColumns({
   canEdit,
   onEdit,
@@ -46,6 +54,12 @@ export function getIssueTableColumns({
             >
               {row.original.title}
             </span>
+          </div>
+          <div
+            className="line-clamp-1 break-words text-xs uppercase tracking-[0.16em] text-muted-foreground"
+            title={row.original.navigation ?? "No navigation"}
+          >
+            {row.original.navigation ?? "No navigation"}
           </div>
           <div
             className="line-clamp-2 break-words text-sm text-muted-foreground"
@@ -98,6 +112,26 @@ export function getIssueTableColumns({
         </div>
       ),
       size: 180,
+    },
+    {
+      accessorKey: "development",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Development" />,
+      cell: ({ row }) => (
+        <Badge variant={getBooleanBadgeVariant(row.original.development)}>
+          {getBooleanLabel(row.original.development)}
+        </Badge>
+      ),
+      size: 150,
+    },
+    {
+      accessorKey: "deployment",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Deployement" />,
+      cell: ({ row }) => (
+        <Badge variant={getBooleanBadgeVariant(row.original.deployment)}>
+          {getBooleanLabel(row.original.deployment)}
+        </Badge>
+      ),
+      size: 150,
     },
     {
       accessorKey: "updatedAt",

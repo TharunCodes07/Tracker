@@ -7,10 +7,13 @@ import {
   CalendarClock,
   CheckCheck,
   Layers3,
+  MapPinned,
   PencilLine,
+  Rocket,
   ShieldCheck,
   Trash2,
   UserRound,
+  Wrench,
 } from "lucide-react";
 
 import {
@@ -33,6 +36,10 @@ interface IssueCardProps {
 
 function stopCardClick(event: MouseEvent<HTMLButtonElement>) {
   event.stopPropagation();
+}
+
+function getBooleanLabel(value: boolean) {
+  return value ? "Yes" : "No";
 }
 
 function DetailItem({
@@ -148,6 +155,21 @@ export function IssueCard({
           label="Tested"
           value={issue.testedByName ?? "No tester"}
           icon={CheckCheck}
+        />
+        <DetailItem
+          label="Navigation"
+          value={issue.navigation ?? "No navigation"}
+          icon={MapPinned}
+        />
+        <DetailItem
+          label="Development"
+          value={getBooleanLabel(issue.development)}
+          icon={Wrench}
+        />
+        <DetailItem
+          label="Deployement"
+          value={getBooleanLabel(issue.deployment)}
+          icon={Rocket}
         />
         <DetailItem
           label="Module"

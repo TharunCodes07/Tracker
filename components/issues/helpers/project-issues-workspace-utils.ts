@@ -34,6 +34,10 @@ export interface IssueWorkspaceFilterChip {
   onRemove: () => void;
 }
 
+function toDateInputValue(value: string | null) {
+  return value ? value.slice(0, 10) : "";
+}
+
 export function requestJson<TResponse>(input: RequestInfo, init?: RequestInit) {
   return fetch(input, {
     ...init,
@@ -54,6 +58,7 @@ export function requestJson<TResponse>(input: RequestInfo, init?: RequestInit) {
 
 export function createEmptyIssueForm(defaultIssueClassId = ""): IssueFormValues {
   return {
+    navigation: "",
     title: "",
     description: "",
     moduleId: "",
@@ -62,7 +67,12 @@ export function createEmptyIssueForm(defaultIssueClassId = ""): IssueFormValues 
     status: "open",
     assignedTo: "",
     reviewedBy: "",
+    comments: "",
+    remark: "",
     testedBy: "",
+    fixedDate: "",
+    development: false,
+    deployment: false,
   };
 }
 
@@ -71,6 +81,7 @@ export function createIssueFormFromIssue(
   defaultIssueClassId = ""
 ): IssueFormValues {
   return {
+    navigation: issue.navigation ?? "",
     title: issue.title,
     description: issue.description ?? "",
     moduleId: issue.moduleId ?? "",
@@ -79,12 +90,18 @@ export function createIssueFormFromIssue(
     status: issue.status,
     assignedTo: issue.assignedTo ?? "",
     reviewedBy: issue.reviewedBy ?? "",
+    comments: issue.comments ?? "",
+    remark: issue.remark ?? "",
     testedBy: issue.testedBy ?? "",
+    fixedDate: toDateInputValue(issue.fixedDate),
+    development: issue.development,
+    deployment: issue.deployment,
   };
 }
 
 export function createIssuePayload(values: IssueFormValues): CreateIssueInput {
   return {
+    navigation: values.navigation || null,
     title: values.title,
     description: values.description || null,
     moduleId: values.moduleId || null,
@@ -93,7 +110,12 @@ export function createIssuePayload(values: IssueFormValues): CreateIssueInput {
     status: values.status,
     assignedTo: values.assignedTo || null,
     reviewedBy: values.reviewedBy || null,
+    comments: values.comments || null,
+    remark: values.remark || null,
     testedBy: values.testedBy || null,
+    fixedDate: values.fixedDate || null,
+    development: values.development,
+    deployment: values.deployment,
   };
 }
 
@@ -148,7 +170,7 @@ function getSortValues(sorting: SortingState): {
   };
 }
 
-export function buildIssuesRequestUrl(options: {
+export function buildIssuesSearchParams(options: {
   teamId: string;
   projectId: string;
   pageIndex: number;
@@ -192,6 +214,24 @@ export function buildIssuesRequestUrl(options: {
   for (const value of options.assigneeFilters) {
     searchParams.append("assigneeFilter", value);
   }
+
+  return searchParams;
+}
+
+export function buildIssuesRequestUrl(options: {
+  teamId: string;
+  projectId: string;
+  pageIndex: number;
+  pageSize: number;
+  search: string;
+  resolutionFilter: IssueResolutionFilter;
+  moduleFilters: string[];
+  issueTypeFilters: string[];
+  priorityFilters: IssuePriority[];
+  assigneeFilters: IssueAssigneeFilterValue[];
+  sorting: SortingState;
+}) {
+  const searchParams = buildIssuesSearchParams(options);
 
   return `/api/teams/${options.teamId}/projects/${options.projectId}/issues?${searchParams.toString()}`;
 }

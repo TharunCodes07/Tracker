@@ -1,13 +1,17 @@
 "use client";
 
+import { useRef } from "react";
+
 import {
   AlertTriangle,
+  Download,
   Grid2x2,
   List,
   Plus,
   Search,
   Shapes,
   Sparkles,
+  Upload,
   UserRound,
 } from "lucide-react";
 
@@ -43,6 +47,7 @@ import { Input } from "@/components/ui/input";
 
 export default function ProjectIssuesPage() {
   const workspace = useProjectIssuesWorkspace();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!workspace.hasRequiredParams) {
     return (
@@ -97,6 +102,21 @@ export default function ProjectIssuesPage() {
   return (
     <div className="space-y-4">
       <IssuePageSidebarController />
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".xlsx,.xlsm"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+
+          if (file) {
+            workspace.handleImportIssuesFromFile(file);
+          }
+
+          event.target.value = "";
+        }}
+      />
 
       <section className="rounded-[28px] border border-border/60 bg-card/80 px-5 py-4 shadow-sm sm:px-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -163,8 +183,26 @@ export default function ProjectIssuesPage() {
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={workspace.handleExportIssuesToExcel}
+                disabled={workspace.isExportingIssues}
+              >
+                <Download className="h-4 w-4" />
+                {workspace.isExportingIssues ? "Exporting..." : "Export Excel"}
+              </Button>
               {workspace.canEditProject ? (
                 <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => importInputRef.current?.click()}
+                    disabled={workspace.isImportingIssues}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {workspace.isImportingIssues ? "Importing..." : "Import Excel"}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -233,7 +271,7 @@ export default function ProjectIssuesPage() {
                   <Input
                     value={workspace.searchValue}
                     onChange={(event) => workspace.handleSearchChange(event.target.value)}
-                    placeholder="Search by title, issue number, module, assignee, or description"
+                    placeholder="Search by issue, number, navigation, assignee, or comments"
                     className="h-10 rounded-2xl border-border/60 bg-background/80 pl-10 shadow-sm backdrop-blur"
                   />
                 </div>
@@ -369,6 +407,10 @@ export default function ProjectIssuesPage() {
               <GridView
                 items={workspace.issues}
                 getKey={(issue) => issue.id}
+                onItemClick={
+                  workspace.canEditProject ? workspace.openEditIssueDialog : undefined
+                }
+                getItemAriaLabel={(issue) => `Edit issue ${issue.title}`}
                 renderItem={(issue) => (
                   <IssueCard
                     issue={issue}
@@ -409,6 +451,9 @@ export default function ProjectIssuesPage() {
               <DataTable
                 columns={issueTableColumns}
                 data={workspace.issues}
+                onRowClick={
+                  workspace.canEditProject ? workspace.openEditIssueDialog : undefined
+                }
                 sorting={workspace.sorting}
                 onSortingChange={workspace.handleSortingChange}
                 pageIndex={workspace.currentPageIndex}

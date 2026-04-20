@@ -25,8 +25,11 @@ import { listTeamMembersForUser } from "@/routes/teams/queries";
 import {
   DEFAULT_ISSUE_CLASS_DEFINITIONS,
   GENERAL_MODULE_FILTER_VALUE,
+  ISSUE_PRIORITY_OPTIONS,
+  ISSUE_STATUS_OPTIONS,
   UNCLASSIFIED_ISSUE_TYPE_FILTER_VALUE,
   type IssueClassListItem,
+  type IssueExcelRow,
   type IssueListItem,
   type IssueListSummary,
   type IssueModuleCount,
@@ -103,6 +106,7 @@ function toIssueClassListItem(row: {
 function toIssueListItem(row: {
   id: string;
   no: number | string | null;
+  navigation: string | null;
   title: string;
   description: string | null;
   priority: string | null;
@@ -115,8 +119,13 @@ function toIssueListItem(row: {
   assignedToName: string | null;
   reviewedBy: string | null;
   reviewedByName: string | null;
+  comments: string | null;
+  remark: string | null;
   testedBy: string | null;
   testedByName: string | null;
+  fixedDate: Date | string | null;
+  development: boolean | null;
+  deployment: boolean | null;
   createdBy: string | null;
   createdByName: string | null;
   createdAt: Date | string;
@@ -125,6 +134,7 @@ function toIssueListItem(row: {
   return {
     id: row.id,
     no: Number(row.no ?? 0),
+    navigation: row.navigation,
     title: row.title,
     description: row.description,
     priority: normalizeIssuePriority(row.priority),
@@ -137,8 +147,13 @@ function toIssueListItem(row: {
     assignedToName: row.assignedToName,
     reviewedBy: row.reviewedBy,
     reviewedByName: row.reviewedByName,
+    comments: row.comments,
+    remark: row.remark,
     testedBy: row.testedBy,
     testedByName: row.testedByName,
+    fixedDate: row.fixedDate ? toIsoString(row.fixedDate) : null,
+    development: Boolean(row.development),
+    deployment: Boolean(row.deployment),
     createdBy: row.createdBy,
     createdByName: row.createdByName,
     createdAt: toIsoString(row.createdAt),
@@ -299,14 +314,19 @@ function buildProjectIssuesWhereClause(
     conditions.push(
       or(
         sql<boolean>`cast(${issues.no} as text) ilike ${issueNumberPattern}`,
+        ilike(issues.navigation, pattern),
         ilike(issues.title, pattern),
         ilike(issues.description, pattern),
+        ilike(issues.comments, pattern),
+        ilike(issues.remark, pattern),
         sql<boolean>`coalesce(${projectModules.name}, 'General') ilike ${pattern}`,
         sql<boolean>`coalesce(${issueClasses.name}, 'Unclassified') ilike ${pattern}`,
         sql<boolean>`coalesce(${aliases.assignedUserName}, '') ilike ${pattern}`,
         sql<boolean>`coalesce(${aliases.reviewedUserName}, '') ilike ${pattern}`,
         sql<boolean>`coalesce(${aliases.testedUserName}, '') ilike ${pattern}`,
         sql<boolean>`coalesce(${aliases.createdUserName}, '') ilike ${pattern}`,
+        sql<boolean>`case when ${issues.development} then 'yes' else 'no' end ilike ${pattern}`,
+        sql<boolean>`case when ${issues.deployment} then 'yes' else 'no' end ilike ${pattern}`,
         ilike(issues.priority, pattern),
         ilike(issues.status, pattern)
       ) as SQL
@@ -462,6 +482,7 @@ async function getProjectIssueRows(
     .select({
       id: issues.id,
       no: issues.no,
+      navigation: issues.navigation,
       title: issues.title,
       description: issues.description,
       priority: issues.priority,
@@ -474,8 +495,13 @@ async function getProjectIssueRows(
       assignedToName: assignedUser.name,
       reviewedBy: issues.reviewedBy,
       reviewedByName: reviewedUser.name,
+      comments: issues.comments,
+      remark: issues.remark,
       testedBy: issues.testedBy,
       testedByName: testedUser.name,
+      fixedDate: issues.fixedDate,
+      development: issues.development,
+      deployment: issues.deployment,
       createdBy: issues.createdBy,
       createdByName: createdUser.name,
       createdAt: issues.createdAt,
@@ -499,6 +525,46 @@ async function getProjectIssueRows(
     .orderBy(...buildProjectIssuesOrderBy(input, { assignedUserName: assignedUser.name }))
     .limit(input.pageSize)
     .offset((input.page - 1) * input.pageSize);
+}
+
+function toIssueExcelRow(issue: IssueListItem): IssueExcelRow {
+  return {
+    no: issue.no,
+    navigation: issue.navigation,
+    title: issue.title,
+    priority:
+      ISSUE_PRIORITY_OPTIONS.find((option) => option.value === issue.priority)?.label ?? "Medium",
+    assignedToName: issue.assignedToName,
+    status:
+      ISSUE_STATUS_OPTIONS.find((option) => option.value === issue.status)?.label ?? "Open",
+    comments: issue.comments,
+    remark: issue.remark,
+    testedByName: issue.testedByName,
+    fixedDate: issue.fixedDate ? issue.fixedDate.slice(0, 10) : null,
+    development: issue.development,
+    deployment: issue.deployment,
+  };
+}
+
+export async function listProjectIssuesForExcelForUser(
+  userId: string,
+  teamId: string,
+  projectId: string,
+  input: ListProjectIssuesInput
+) {
+  const projectIssues = await listProjectIssuesForUser(userId, teamId, projectId, {
+    ...input,
+    page: 1,
+    pageSize: 2147483647,
+    sortBy: "no",
+    sortDirection: "asc",
+  });
+
+  if (!projectIssues) {
+    return null;
+  }
+
+  return projectIssues.issues.map(toIssueExcelRow);
 }
 
 export async function listProjectIssuesForUser(

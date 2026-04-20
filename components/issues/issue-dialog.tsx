@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   ISSUE_PRIORITY_OPTIONS,
   ISSUE_STATUS_OPTIONS,
@@ -34,6 +35,7 @@ import type { TeamMemberListItem } from "@/routes/teams/types";
 const NONE_VALUE = "__none__";
 
 export interface IssueFormValues {
+  navigation: string;
   title: string;
   description: string;
   moduleId: string;
@@ -42,7 +44,12 @@ export interface IssueFormValues {
   status: IssueStatus;
   assignedTo: string;
   reviewedBy: string;
+  comments: string;
+  remark: string;
   testedBy: string;
+  fixedDate: string;
+  development: boolean;
+  deployment: boolean;
 }
 
 interface IssueDialogProps {
@@ -84,7 +91,7 @@ export function IssueDialog({
 }: IssueDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-2xl">
+      <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-4xl">
         <DialogHeader className="min-w-0 pr-8">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{descriptionText}</DialogDescription>
@@ -92,18 +99,32 @@ export function IssueDialog({
 
         <form className="min-w-0" onSubmit={onSubmit}>
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="issue-title">Issue title</FieldLabel>
-              <Input
-                id="issue-title"
-                value={values.title}
-                onChange={(event) => onChange({ title: event.target.value })}
-                placeholder="Login button breaks after redirect"
-                autoComplete="off"
-                disabled={pending}
-                required
-              />
-            </Field>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="issue-navigation">Navigation</FieldLabel>
+                <Input
+                  id="issue-navigation"
+                  value={values.navigation}
+                  onChange={(event) => onChange({ navigation: event.target.value })}
+                  placeholder="/settings/profile"
+                  autoComplete="off"
+                  disabled={pending}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="issue-title">Issue</FieldLabel>
+                <Input
+                  id="issue-title"
+                  value={values.title}
+                  onChange={(event) => onChange({ title: event.target.value })}
+                  placeholder="Login button breaks after redirect"
+                  autoComplete="off"
+                  disabled={pending}
+                  required
+                />
+              </Field>
+            </div>
 
             <Field>
               <FieldLabel htmlFor="issue-description">Description</FieldLabel>
@@ -203,6 +224,17 @@ export function IssueDialog({
                   </SelectContent>
                 </Select>
               </Field>
+
+              <Field>
+                <FieldLabel htmlFor="issue-fixed-date">Fixed date</FieldLabel>
+                <Input
+                  id="issue-fixed-date"
+                  type="date"
+                  value={values.fixedDate}
+                  onChange={(event) => onChange({ fixedDate: event.target.value })}
+                  disabled={pending}
+                />
+              </Field>
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
@@ -271,6 +303,60 @@ export function IssueDialog({
                     ))}
                   </SelectContent>
                 </Select>
+              </Field>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="issue-comments">Comments</FieldLabel>
+                <Textarea
+                  id="issue-comments"
+                  value={values.comments}
+                  onChange={(event) => onChange({ comments: event.target.value })}
+                  placeholder="Client comments or follow-up notes."
+                  rows={4}
+                  disabled={pending}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="issue-remark">Remark</FieldLabel>
+                <Textarea
+                  id="issue-remark"
+                  value={values.remark}
+                  onChange={(event) => onChange({ remark: event.target.value })}
+                  placeholder="Internal remark or resolution summary."
+                  rows={4}
+                  disabled={pending}
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field orientation="horizontal" className="justify-between rounded-2xl border border-border/60 bg-background/55 px-4 py-3">
+                <div className="space-y-1">
+                  <FieldLabel htmlFor="issue-development">Development</FieldLabel>
+                  <FieldDescription>Mark whether the fix is completed in development.</FieldDescription>
+                </div>
+                <Switch
+                  id="issue-development"
+                  checked={values.development}
+                  onCheckedChange={(checked) => onChange({ development: checked })}
+                  disabled={pending}
+                />
+              </Field>
+
+              <Field orientation="horizontal" className="justify-between rounded-2xl border border-border/60 bg-background/55 px-4 py-3">
+                <div className="space-y-1">
+                  <FieldLabel htmlFor="issue-deployment">Deployement</FieldLabel>
+                  <FieldDescription>Mark whether the fix has been deployed.</FieldDescription>
+                </div>
+                <Switch
+                  id="issue-deployment"
+                  checked={values.deployment}
+                  onCheckedChange={(checked) => onChange({ deployment: checked })}
+                  disabled={pending}
+                />
               </Field>
             </div>
 

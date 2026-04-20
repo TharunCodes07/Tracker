@@ -13,6 +13,7 @@ import {
 } from "@/components/issues/issue-display";
 import type { IssueFormValues } from "@/components/issues/issue-dialog";
 import {
+  buildIssuesSearchParams,
   DEFAULT_PAGE_SIZE,
   DEFAULT_SORTING,
   PROJECT_ISSUES_VIEW_STORAGE_KEY,
@@ -43,6 +44,7 @@ import {
   type IssueClassListItem,
   type IssueClassMutationResponse,
   type IssueDeleteResponse,
+  type IssueExcelImportResponse,
   type IssueListItem,
   type IssueListPagination,
   type IssueListSummary,
@@ -135,6 +137,8 @@ export function useProjectIssuesWorkspace() {
   const [isCreatingIssue, startCreateIssueTransition] = useTransition();
   const [isUpdatingIssue, startUpdateIssueTransition] = useTransition();
   const [isDeletingIssue, startDeleteIssueTransition] = useTransition();
+  const [isExportingIssues, startExportIssuesTransition] = useTransition();
+  const [isImportingIssues, startImportIssuesTransition] = useTransition();
 
   useEffect(() => {
     let isActive = true;
@@ -800,6 +804,110 @@ export function useProjectIssuesWorkspace() {
     });
   }
 
+  function buildIssueFiltersSearchParams() {
+    return buildIssuesSearchParams({
+      teamId: team?.id ?? "",
+      projectId: project?.id ?? "",
+      pageIndex,
+      pageSize,
+      search: debouncedSearchValue,
+      resolutionFilter,
+      moduleFilters: selectedModuleFilters,
+      issueTypeFilters: selectedIssueTypeFilters,
+      priorityFilters: selectedPriorityFilters,
+      assigneeFilters: selectedAssigneeFilters,
+      sorting,
+    });
+  }
+
+  function handleExportIssuesToExcel() {
+    if (!team || !project) {
+      return;
+    }
+
+    startExportIssuesTransition(async () => {
+      try {
+        const searchParams = buildIssueFiltersSearchParams();
+        searchParams.set("project", project.name);
+        const response = await fetch(
+          `/api/teams/${team.id}/projects/${project.id}/issues/excel?${searchParams.toString()}`,
+          {
+            cache: "no-store",
+          }
+        );
+        const errorPayload = !response.ok
+          ? ((await response.json().catch(() => null)) as { message?: string } | null)
+          : null;
+
+        if (!response.ok) {
+          throw new Error(errorPayload?.message ?? "Could not export the issues.");
+        }
+
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get("content-disposition") ?? "";
+        const fileNameMatch = /filename=\"([^\"]+)\"/i.exec(contentDisposition);
+        const fileName = fileNameMatch?.[1] ?? `${project.name}-issues.xlsx`;
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = objectUrl;
+        link.download = fileName;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+        toast.success("Issues exported to Excel.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not export the issues.");
+      }
+    });
+  }
+
+  function handleImportIssuesFromFile(file: File) {
+    if (!team || !project) {
+      return;
+    }
+
+    startImportIssuesTransition(async () => {
+      try {
+        const formData = new FormData();
+
+        formData.set("file", file);
+
+        const response = await fetch(`/api/teams/${team.id}/projects/${project.id}/issues/excel`, {
+          method: "POST",
+          body: formData,
+        });
+        const data = (await response.json().catch(() => null)) as
+          | IssueExcelImportResponse
+          | { message?: string }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(data?.message ?? "Could not import the Excel file.");
+        }
+
+        refreshIssues(0);
+        toast.success(data.message);
+
+        if (data.warnings.length > 0) {
+          const preview = data.warnings.slice(0, 2).join(" ");
+          const remainingCount = data.warnings.length - Math.min(data.warnings.length, 2);
+
+          toast.warning(
+            remainingCount > 0
+              ? `${preview} ${remainingCount} more import warning${
+                  remainingCount === 1 ? "" : "s"
+                }.`
+              : preview
+          );
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not import the issues.");
+      }
+    });
+  }
+
   return {
     hasRequiredParams,
     isLoading,
@@ -888,6 +996,10 @@ export function useProjectIssuesWorkspace() {
     isDeletingIssue,
     areIssueActionsPending,
     handleDeleteIssue,
+    isExportingIssues,
+    isImportingIssues,
+    handleExportIssuesToExcel,
+    handleImportIssuesFromFile,
     handlePageSizeChange,
     refreshIssues,
   };

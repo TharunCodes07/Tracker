@@ -27,6 +27,20 @@ export const ISSUE_STATUS_OPTIONS = [
   { value: "review", label: "In Review" },
   { value: "done", label: "Done" },
 ] as const;
+export const ISSUE_EXCEL_HEADERS = [
+  "No",
+  "Navigation",
+  "Issue",
+  "Priority",
+  "Assigned to",
+  "Status",
+  "Comments",
+  "Remark",
+  "Tested By",
+  "Fixed Date",
+  "Development",
+  "Deployement",
+] as const;
 
 export type IssuePriority = (typeof ISSUE_PRIORITY_OPTIONS)[number]["value"];
 export type IssueStatus = (typeof ISSUE_STATUS_OPTIONS)[number]["value"];
@@ -65,6 +79,7 @@ export interface IssueClassListItem {
 export interface IssueListItem {
   id: string;
   no: number;
+  navigation: string | null;
   title: string;
   description: string | null;
   priority: IssuePriority;
@@ -77,8 +92,13 @@ export interface IssueListItem {
   assignedToName: string | null;
   reviewedBy: string | null;
   reviewedByName: string | null;
+  comments: string | null;
+  remark: string | null;
   testedBy: string | null;
   testedByName: string | null;
+  fixedDate: string | null;
+  development: boolean;
+  deployment: boolean;
   createdBy: string | null;
   createdByName: string | null;
   createdAt: string;
@@ -166,6 +186,7 @@ export interface CreateIssueClassInput {
 }
 
 export interface CreateIssueInput {
+  navigation?: string | null;
   title: string;
   description?: string | null;
   moduleId?: string | null;
@@ -174,7 +195,36 @@ export interface CreateIssueInput {
   status: IssueStatus;
   assignedTo?: string | null;
   reviewedBy?: string | null;
+  comments?: string | null;
+  remark?: string | null;
   testedBy?: string | null;
+  fixedDate?: string | null;
+  development?: boolean;
+  deployment?: boolean;
 }
 
 export type UpdateIssueInput = CreateIssueInput;
+
+export interface IssueExcelRow {
+  rowNumber?: number;
+  no: number | null;
+  navigation: string | null;
+  title: string | null;
+  priority: string | null;
+  assignedToName: string | null;
+  status: string | null;
+  comments: string | null;
+  remark: string | null;
+  testedByName: string | null;
+  fixedDate: string | null;
+  development: boolean | null;
+  deployment: boolean | null;
+}
+
+export interface IssueExcelImportResponse {
+  createdCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  warnings: string[];
+  message: string;
+}
