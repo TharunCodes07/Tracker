@@ -27,9 +27,12 @@ import {
   GENERAL_MODULE_FILTER_VALUE,
   ISSUE_PRIORITY_OPTIONS,
   ISSUE_STATUS_OPTIONS,
+  MAIN_MODULE_ISSUES_SHEET_NAME,
   UNCLASSIFIED_ISSUE_TYPE_FILTER_VALUE,
   type IssueClassListItem,
   type IssueExcelRow,
+  type IssueExcelSheet,
+  type IssueExcelWorkbook,
   type IssueListItem,
   type IssueListSummary,
   type IssueModuleCount,
@@ -73,6 +76,8 @@ function toProjectModuleListItem(row: {
   id: string;
   name: string;
   description: string | null;
+  parentModuleId: string | null;
+  parentModuleName: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 }): ProjectModuleListItem {
@@ -80,6 +85,10 @@ function toProjectModuleListItem(row: {
     id: row.id,
     name: row.name,
     description: row.description,
+    parentModuleId: row.parentModuleId,
+    parentModuleName: row.parentModuleName,
+    isMainModule: row.parentModuleId === null,
+    displayName: row.parentModuleName ? `${row.parentModuleName} / ${row.name}` : row.name,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
   };
@@ -113,6 +122,10 @@ function toIssueListItem(row: {
   status: string | null;
   moduleId: string | null;
   moduleName: string | null;
+  mainModuleId: string | null;
+  mainModuleName: string | null;
+  subModuleId: string | null;
+  subModuleName: string | null;
   issueClassId: string | null;
   issueClassName: string | null;
   assignedTo: string | null;
@@ -141,6 +154,10 @@ function toIssueListItem(row: {
     status: normalizeIssueStatus(row.status),
     moduleId: row.moduleId,
     moduleName: row.moduleName,
+    mainModuleId: row.mainModuleId,
+    mainModuleName: row.mainModuleName,
+    subModuleId: row.subModuleId,
+    subModuleName: row.subModuleName,
     issueClassId: row.issueClassId,
     issueClassName: row.issueClassName,
     assignedTo: row.assignedTo,
@@ -192,6 +209,7 @@ export async function getProjectIssuesWorkspaceForUser(
   }
 
   await ensureDefaultIssueClassesForProject(projectId);
+  const parentModule = alias(projectModules, "workspace_parent_module");
 
   const [moduleRows, issueClassRows] = await Promise.all([
     db
@@ -199,12 +217,15 @@ export async function getProjectIssuesWorkspaceForUser(
         id: projectModules.id,
         name: projectModules.name,
         description: projectModules.description,
+        parentModuleId: projectModules.parentModuleId,
+        parentModuleName: parentModule.name,
         createdAt: projectModules.createdAt,
         updatedAt: projectModules.updatedAt,
       })
       .from(projectModules)
+      .leftJoin(parentModule, eq(projectModules.parentModuleId, parentModule.id))
       .where(eq(projectModules.projectId, projectId))
-      .orderBy(asc(projectModules.name)),
+      .orderBy(asc(parentModule.name), asc(projectModules.name)),
     db
       .select({
         id: issueClasses.id,
@@ -237,6 +258,9 @@ function buildProjectIssuesWhereClause(
     reviewedUserName: SQLWrapper;
     testedUserName: SQLWrapper;
     createdUserName: SQLWrapper;
+    parentModuleId: SQLWrapper;
+    parentModuleName: SQLWrapper;
+    moduleName: SQLWrapper;
   }
 ) {
   const conditions: SQL[] = [eq(issues.projectId, projectId)];
@@ -245,6 +269,8 @@ function buildProjectIssuesWhereClause(
     conditions.push(ne(issues.status, "done"));
   } else if (input.resolution === "resolved") {
     conditions.push(eq(issues.status, "done"));
+  } else if (input.resolution === "resolved_pending_test") {
+    conditions.push(and(eq(issues.status, "done"), isNull(issues.testedBy)) as SQL);
   }
 
   if (input.moduleFilters.length > 0) {
@@ -254,7 +280,12 @@ function buildProjectIssuesWhereClause(
     );
 
     if (selectedModuleIds.length > 0) {
-      moduleConditions.push(inArray(issues.moduleId, selectedModuleIds));
+      moduleConditions.push(
+        or(
+          inArray(issues.moduleId, selectedModuleIds),
+          inArray(aliases.parentModuleId, selectedModuleIds)
+        ) as SQL
+      );
     }
 
     if (input.moduleFilters.includes(GENERAL_MODULE_FILTER_VALUE)) {
@@ -319,7 +350,14 @@ function buildProjectIssuesWhereClause(
         ilike(issues.description, pattern),
         ilike(issues.comments, pattern),
         ilike(issues.remark, pattern),
-        sql<boolean>`coalesce(${projectModules.name}, 'General') ilike ${pattern}`,
+        sql<boolean>`coalesce(
+          case
+            when ${aliases.parentModuleName} is not null
+              then concat(${aliases.parentModuleName}, ' / ', ${aliases.moduleName})
+            else ${aliases.moduleName}
+          end,
+          'General'
+        ) ilike ${pattern}`,
         sql<boolean>`coalesce(${issueClasses.name}, 'Unclassified') ilike ${pattern}`,
         sql<boolean>`coalesce(${aliases.assignedUserName}, '') ilike ${pattern}`,
         sql<boolean>`coalesce(${aliases.reviewedUserName}, '') ilike ${pattern}`,
@@ -340,6 +378,8 @@ function buildProjectIssuesOrderBy(
   input: Pick<ListProjectIssuesInput, "sortBy" | "sortDirection">,
   aliases: {
     assignedUserName: SQLWrapper;
+    parentModuleName: SQLWrapper;
+    moduleName: SQLWrapper;
   }
 ) {
   const direction = input.sortDirection;
@@ -358,14 +398,21 @@ function buildProjectIssuesOrderBy(
     else 0
   end`;
   const issueClassNameOrder = sql<string>`coalesce(${issueClasses.name}, '')`;
-  const moduleNameOrder = sql<string>`coalesce(${projectModules.name}, 'General')`;
+  const moduleNameOrder = sql<string>`coalesce(
+    case
+      when ${aliases.parentModuleName} is not null
+        then concat(${aliases.parentModuleName}, ' / ', ${aliases.moduleName})
+      else ${aliases.moduleName}
+    end,
+    'General'
+  )`;
   const assignedToNameOrder = sql<string>`coalesce(${aliases.assignedUserName}, '')`;
 
   switch (input.sortBy) {
     case "no":
       return direction === "asc"
-        ? [asc(issues.no), asc(issues.id)]
-        : [desc(issues.no), asc(issues.id)];
+        ? [asc(moduleNameOrder), asc(issues.no), asc(issues.id)]
+        : [desc(moduleNameOrder), desc(issues.no), asc(issues.id)];
     case "title":
       return direction === "asc"
         ? [asc(issues.title), desc(issues.updatedAt), desc(issues.no), asc(issues.id)]
@@ -404,6 +451,7 @@ async function getProjectIssuesSummary(projectId: string): Promise<IssueListSumm
       totalIssues: count(issues.id),
       openIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} <> 'done') as integer)`,
       resolvedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done') as integer)`,
+      pendingTestIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done' and ${issues.testedBy} is null) as integer)`,
       criticalIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.priority} = 'critical') as integer)`,
       unclassifiedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.issueClassId} is null) as integer)`,
     })
@@ -414,6 +462,7 @@ async function getProjectIssuesSummary(projectId: string): Promise<IssueListSumm
     totalIssues: Number(summaryRow?.totalIssues ?? 0),
     openIssueCount: Number(summaryRow?.openIssueCount ?? 0),
     resolvedIssueCount: Number(summaryRow?.resolvedIssueCount ?? 0),
+    pendingTestIssueCount: Number(summaryRow?.pendingTestIssueCount ?? 0),
     criticalIssueCount: Number(summaryRow?.criticalIssueCount ?? 0),
     hasUnclassifiedIssues: Number(summaryRow?.unclassifiedIssueCount ?? 0) > 0,
   };
@@ -444,6 +493,7 @@ async function getFilteredProjectIssuesCount(
   const reviewedUser = alias(user, "filtered_count_reviewed_user");
   const testedUser = alias(user, "filtered_count_tested_user");
   const createdUser = alias(user, "filtered_count_created_user");
+  const parentModule = alias(projectModules, "filtered_count_parent_module");
 
   const [countRow] = await db
     .select({
@@ -451,6 +501,7 @@ async function getFilteredProjectIssuesCount(
     })
     .from(issues)
     .leftJoin(projectModules, eq(issues.moduleId, projectModules.id))
+    .leftJoin(parentModule, eq(projectModules.parentModuleId, parentModule.id))
     .leftJoin(issueClasses, eq(issues.issueClassId, issueClasses.id))
     .leftJoin(assignedUser, eq(issues.assignedTo, assignedUser.id))
     .leftJoin(reviewedUser, eq(issues.reviewedBy, reviewedUser.id))
@@ -462,6 +513,9 @@ async function getFilteredProjectIssuesCount(
         reviewedUserName: reviewedUser.name,
         testedUserName: testedUser.name,
         createdUserName: createdUser.name,
+        parentModuleId: parentModule.id,
+        parentModuleName: parentModule.name,
+        moduleName: projectModules.name,
       })
     );
 
@@ -477,6 +531,7 @@ async function getProjectIssueRows(
   const reviewedUser = alias(user, "reviewed_user");
   const testedUser = alias(user, "tested_user");
   const createdUser = alias(user, "created_user");
+  const parentModule = alias(projectModules, "parent_module");
 
   return db
     .select({
@@ -488,7 +543,26 @@ async function getProjectIssueRows(
       priority: issues.priority,
       status: issues.status,
       moduleId: issues.moduleId,
-      moduleName: projectModules.name,
+      moduleName: sql<string | null>`case
+        when ${parentModule.id} is not null then concat(${parentModule.name}, ' / ', ${projectModules.name})
+        else ${projectModules.name}
+      end`,
+      mainModuleId: sql<string | null>`case
+        when ${parentModule.id} is not null then ${parentModule.id}
+        else ${projectModules.id}
+      end`,
+      mainModuleName: sql<string | null>`case
+        when ${parentModule.id} is not null then ${parentModule.name}
+        else ${projectModules.name}
+      end`,
+      subModuleId: sql<string | null>`case
+        when ${parentModule.id} is not null then ${projectModules.id}
+        else null
+      end`,
+      subModuleName: sql<string | null>`case
+        when ${parentModule.id} is not null then ${projectModules.name}
+        else null
+      end`,
       issueClassId: issues.issueClassId,
       issueClassName: issueClasses.name,
       assignedTo: issues.assignedTo,
@@ -509,6 +583,7 @@ async function getProjectIssueRows(
     })
     .from(issues)
     .leftJoin(projectModules, eq(issues.moduleId, projectModules.id))
+    .leftJoin(parentModule, eq(projectModules.parentModuleId, parentModule.id))
     .leftJoin(issueClasses, eq(issues.issueClassId, issueClasses.id))
     .leftJoin(assignedUser, eq(issues.assignedTo, assignedUser.id))
     .leftJoin(reviewedUser, eq(issues.reviewedBy, reviewedUser.id))
@@ -520,9 +595,18 @@ async function getProjectIssueRows(
         reviewedUserName: reviewedUser.name,
         testedUserName: testedUser.name,
         createdUserName: createdUser.name,
+        parentModuleId: parentModule.id,
+        parentModuleName: parentModule.name,
+        moduleName: projectModules.name,
       })
     )
-    .orderBy(...buildProjectIssuesOrderBy(input, { assignedUserName: assignedUser.name }))
+    .orderBy(
+      ...buildProjectIssuesOrderBy(input, {
+        assignedUserName: assignedUser.name,
+        parentModuleName: parentModule.name,
+        moduleName: projectModules.name,
+      })
+    )
     .limit(input.pageSize)
     .offset((input.page - 1) * input.pageSize);
 }
@@ -530,6 +614,8 @@ async function getProjectIssueRows(
 function toIssueExcelRow(issue: IssueListItem): IssueExcelRow {
   return {
     no: issue.no,
+    mainModuleName: issue.mainModuleName,
+    subModuleName: issue.subModuleName,
     navigation: issue.navigation,
     title: issue.title,
     priority:
@@ -544,6 +630,14 @@ function toIssueExcelRow(issue: IssueListItem): IssueExcelRow {
     development: issue.development,
     deployment: issue.deployment,
   };
+}
+
+function slugifyFileNamePart(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 export async function listProjectIssuesForExcelForUser(
@@ -565,6 +659,104 @@ export async function listProjectIssuesForExcelForUser(
   }
 
   return projectIssues.issues.map(toIssueExcelRow);
+}
+
+export async function listProjectIssueWorkbookBundleForUser(
+  userId: string,
+  teamId: string,
+  projectId: string,
+  projectName: string
+): Promise<IssueExcelWorkbook[] | null> {
+  const [projectIssues, workspace] = await Promise.all([
+    listProjectIssuesForUser(userId, teamId, projectId, {
+      page: 1,
+      pageSize: 2147483647,
+      search: "",
+      resolution: "all",
+      moduleFilters: [],
+      issueTypeFilters: [],
+      priorityFilters: [],
+      assigneeFilters: [],
+      sortBy: "no",
+      sortDirection: "asc",
+    }),
+    getProjectIssuesWorkspaceForUser(userId, teamId, projectId),
+  ]);
+
+  if (!projectIssues || !workspace) {
+    return null;
+  }
+
+  const projectSlug = slugifyFileNamePart(projectName || projectId) || "project";
+  const workbooksByKey = new Map<string, IssueExcelWorkbook>();
+
+  for (const issue of projectIssues.issues) {
+    const issueRow = toIssueExcelRow(issue);
+
+    if (!issue.mainModuleId) {
+      const generalWorkbook =
+        workbooksByKey.get(GENERAL_MODULE_FILTER_VALUE) ??
+        ({
+          fileName: `${projectSlug}-general-issues.xlsx`,
+          sheets: [{ sheetName: "General", rows: [] }],
+        } satisfies IssueExcelWorkbook);
+
+      generalWorkbook.sheets[0].rows.push(issueRow);
+      workbooksByKey.set(GENERAL_MODULE_FILTER_VALUE, generalWorkbook);
+      continue;
+    }
+
+    const mainModule =
+      workspace.modules.find((projectModule) => projectModule.id === issue.mainModuleId) ?? null;
+
+    if (!mainModule) {
+      continue;
+    }
+
+    const workbookKey = mainModule.id;
+    const workbook =
+      workbooksByKey.get(workbookKey) ??
+      ({
+        fileName: `${projectSlug}-${slugifyFileNamePart(mainModule.name) || "module"}-issues.xlsx`,
+        sheets: [],
+      } satisfies IssueExcelWorkbook);
+
+    const targetSheetName = issue.subModuleName ?? MAIN_MODULE_ISSUES_SHEET_NAME;
+    let targetSheet = workbook.sheets.find((sheet) => sheet.sheetName === targetSheetName);
+
+    if (!targetSheet) {
+      targetSheet = {
+        sheetName: targetSheetName,
+        rows: [],
+      } satisfies IssueExcelSheet;
+      workbook.sheets.push(targetSheet);
+    }
+
+    targetSheet.rows.push(issueRow);
+    workbooksByKey.set(workbookKey, workbook);
+  }
+
+  return Array.from(workbooksByKey.values()).map((workbook) => ({
+    ...workbook,
+    sheets: workbook.sheets
+      .sort((left, right) => {
+        if (left.sheetName === MAIN_MODULE_ISSUES_SHEET_NAME) {
+          return -1;
+        }
+
+        if (right.sheetName === MAIN_MODULE_ISSUES_SHEET_NAME) {
+          return 1;
+        }
+
+        return left.sheetName.localeCompare(right.sheetName, undefined, {
+          sensitivity: "base",
+        });
+      })
+      .map((sheet) => ({
+        ...sheet,
+        rows: [...sheet.rows].sort((left, right) => (left.no ?? 0) - (right.no ?? 0)),
+      })),
+  }));
 }
 
 export async function listProjectIssuesForUser(

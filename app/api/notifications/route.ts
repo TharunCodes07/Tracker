@@ -4,28 +4,45 @@ import { handleRouteError, requireRouteUser } from "@/routes/http";
 import { listNotificationsForUser } from "@/routes/notifications/queries";
 import type { NotificationsResponse } from "@/routes/notifications/types";
 
+const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 12;
-const MAX_LIMIT = 30;
+const MAX_LIMIT = 50;
 
-function parseLimit(value: string | null) {
+function parsePositiveInteger(value: string | null, fallback: number) {
   if (!value) {
-    return DEFAULT_LIMIT;
+    return fallback;
   }
 
   const parsedValue = Number.parseInt(value, 10);
 
   if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
-    return DEFAULT_LIMIT;
+    return fallback;
   }
 
-  return Math.min(parsedValue, MAX_LIMIT);
+  return parsedValue;
+}
+
+function parsePageSize(searchParams: URLSearchParams) {
+  const pageSize = parsePositiveInteger(
+    searchParams.get("pageSize") ?? searchParams.get("limit"),
+    DEFAULT_LIMIT
+  );
+
+  return Math.min(pageSize, MAX_LIMIT);
+}
+
+function parseUnreadOnly(value: string | null) {
+  return value === "true" || value === "1";
 }
 
 export async function GET(request: NextRequest) {
   try {
     const actor = await requireRouteUser(request);
-    const limit = parseLimit(request.nextUrl.searchParams.get("limit"));
-    const notificationCenter = await listNotificationsForUser(actor.id, limit);
+    const notificationCenter = await listNotificationsForUser(actor.id, {
+      page: parsePositiveInteger(request.nextUrl.searchParams.get("page"), DEFAULT_PAGE),
+      pageSize: parsePageSize(request.nextUrl.searchParams),
+      unreadOnly: parseUnreadOnly(request.nextUrl.searchParams.get("unreadOnly")),
+    });
 
     return NextResponse.json<NotificationsResponse>(notificationCenter);
   } catch (error) {

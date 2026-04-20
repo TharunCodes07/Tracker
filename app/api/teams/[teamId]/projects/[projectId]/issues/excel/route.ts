@@ -2,13 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { RouteError } from "@/routes/errors";
 import { handleRouteError, requireRouteUser } from "@/routes/http";
-import { buildIssueWorkbook, readIssueWorkbook } from "@/routes/issues/excel-bridge";
+import {
+  buildIssueWorkbook,
+  buildIssueWorkbookBundle,
+  readIssueWorkbook,
+} from "@/routes/issues/excel-bridge";
 import { readListProjectIssuesInput } from "@/routes/issues/http";
 import { importIssuesFromExcel } from "@/routes/issues/mutations";
-import { listProjectIssuesForExcelForUser } from "@/routes/issues/queries";
+import {
+  listProjectIssueWorkbookBundleForUser,
+  listProjectIssuesForExcelForUser,
+} from "@/routes/issues/queries";
 import type { IssueExcelImportResponse } from "@/routes/issues/types";
 
 export const runtime = "nodejs";
+
+function parseExportMode(value: string | null) {
+  return value === "bundle" ? "bundle" : "current";
+}
 
 function slugifyFileNamePart(value: string) {
   return value
@@ -25,6 +36,35 @@ export async function GET(
   try {
     const actor = await requireRouteUser(request);
     const { teamId, projectId } = await context.params;
+    const exportMode = parseExportMode(request.nextUrl.searchParams.get("mode"));
+    const projectLabel = slugifyFileNamePart(
+      request.nextUrl.searchParams.get("project") ?? projectId
+    );
+
+    if (exportMode === "bundle") {
+      const workbooks = await listProjectIssueWorkbookBundleForUser(
+        actor.id,
+        teamId,
+        projectId,
+        request.nextUrl.searchParams.get("project") ?? projectId
+      );
+
+      if (!workbooks) {
+        return NextResponse.json({ message: "Project not found." }, { status: 404 });
+      }
+
+      const bundle = await buildIssueWorkbookBundle(workbooks);
+      const fileName = `${projectLabel || "project"}-issues.zip`;
+
+      return new NextResponse(bundle, {
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition": `attachment; filename="${fileName}"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     const listInput = readListProjectIssuesInput(request, {
       defaultPageSize: 2147483647,
       maxPageSize: 2147483647,
@@ -36,9 +76,6 @@ export async function GET(
     }
 
     const workbook = await buildIssueWorkbook(issues);
-    const projectLabel = slugifyFileNamePart(
-      request.nextUrl.searchParams.get("project") ?? projectId
-    );
     const fileName = `${projectLabel || "project"}-issues.xlsx`;
 
     return new NextResponse(workbook, {
@@ -63,9 +100,14 @@ export async function POST(
     const { teamId, projectId } = await context.params;
     const formData = await request.formData();
     const file = formData.get("file");
+    const mainModuleId = String(formData.get("mainModuleId") ?? "").trim();
 
     if (!(file instanceof File)) {
       return NextResponse.json({ message: "Choose an Excel file to import." }, { status: 400 });
+    }
+
+    if (!mainModuleId) {
+      return NextResponse.json({ message: "Choose a main module for this import." }, { status: 400 });
     }
 
     let workbookRows;
@@ -81,7 +123,13 @@ export async function POST(
       );
     }
 
-    const result = await importIssuesFromExcel(actor, teamId, projectId, workbookRows);
+    const result = await importIssuesFromExcel(
+      actor,
+      teamId,
+      projectId,
+      mainModuleId,
+      workbookRows
+    );
 
     return NextResponse.json<IssueExcelImportResponse>(result);
   } catch (error) {

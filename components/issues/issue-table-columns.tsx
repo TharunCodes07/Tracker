@@ -56,12 +56,6 @@ export function getIssueTableColumns({
             </span>
           </div>
           <div
-            className="line-clamp-1 break-words text-xs uppercase tracking-[0.16em] text-muted-foreground"
-            title={row.original.navigation ?? "No navigation"}
-          >
-            {row.original.navigation ?? "No navigation"}
-          </div>
-          <div
             className="line-clamp-2 break-words text-sm text-muted-foreground"
             title={row.original.description ?? "No description"}
           >

@@ -33,6 +33,7 @@ interface EntityDialogProps {
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  children?: React.ReactNode;
 }
 
 export function EntityDialog({
@@ -53,6 +54,7 @@ export function EntityDialog({
   onNameChange,
   onDescriptionChange,
   onSubmit,
+  children,
 }: EntityDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -89,6 +91,8 @@ export function EntityDialog({
               />
               <FieldDescription>{descriptionHelpText}</FieldDescription>
             </Field>
+
+            {children}
 
             <DialogFooter className="w-full flex-wrap">
               <Button

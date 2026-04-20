@@ -1,9 +1,9 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { usersToTeams } from "@/db/schema";
+import { teamMemberRoles, usersToTeams } from "@/db/schema";
 
 import { createNotifications, type CreateNotificationInput } from "./mutations";
 import type { NotificationEvent } from "./types";
@@ -21,6 +21,17 @@ async function listTeamRecipientIds(teamId: string) {
     })
     .from(usersToTeams)
     .where(eq(usersToTeams.teamId, teamId));
+
+  return rows.map((row) => row.userId);
+}
+
+async function listTeamRecipientIdsByRole(teamId: string, role: "developer" | "tester") {
+  const rows = await db
+    .select({
+      userId: teamMemberRoles.userId,
+    })
+    .from(teamMemberRoles)
+    .where(and(eq(teamMemberRoles.teamId, teamId), eq(teamMemberRoles.role, role)));
 
   return rows.map((row) => row.userId);
 }
@@ -49,17 +60,13 @@ async function buildProjectCreatedNotifications(
 async function buildIssueCreatedNotifications(
   event: Extract<NotificationEvent, { type: "issue.created" }>
 ) {
-  const teamMemberIds = await listTeamRecipientIds(event.teamId);
+  const testerIds = await listTeamRecipientIdsByRole(event.teamId, "tester");
   const excludedUserIds = new Set([event.actorId]);
-
-  if (event.assignedTo && event.assignedTo !== event.actorId) {
-    excludedUserIds.add(event.assignedTo);
-  }
 
   const actorName = normalizeActorName(event.actorName);
   const issueLabel = `#${event.issueNo} ${event.issueTitle}`;
 
-  return teamMemberIds
+  return testerIds
     .filter((userId) => !excludedUserIds.has(userId))
     .map(
       (userId): CreateNotificationInput => ({
@@ -99,6 +106,58 @@ async function buildIssueAssignedNotifications(
   ];
 }
 
+async function buildIssueReadyForTestNotifications(
+  event: Extract<NotificationEvent, { type: "issue.ready_for_test" }>
+) {
+  const testerIds = await listTeamRecipientIdsByRole(event.teamId, "tester");
+  const actorName = normalizeActorName(event.actorName);
+  const issueLabel = `#${event.issueNo} ${event.issueTitle}`;
+
+  return testerIds
+    .filter((userId) => userId !== event.actorId)
+    .map(
+      (userId): CreateNotificationInput => ({
+        userId,
+        trigger: event.type,
+        teamId: event.teamId,
+        projectId: event.projectId,
+        issueId: event.issueId,
+        title: "Issue ready for testing",
+        message: `${actorName} marked ${issueLabel} as done.`,
+        href: `/teams/${event.teamId}/projects/${event.projectId}`,
+      })
+    );
+}
+
+async function buildIssueReopenedNotifications(
+  event: Extract<NotificationEvent, { type: "issue.reopened" }>
+) {
+  const developerIds = await listTeamRecipientIdsByRole(event.teamId, "developer");
+  const recipientIds = new Set(developerIds);
+
+  if (event.assigneeId) {
+    recipientIds.add(event.assigneeId);
+  }
+
+  recipientIds.delete(event.actorId);
+
+  const actorName = normalizeActorName(event.actorName);
+  const issueLabel = `#${event.issueNo} ${event.issueTitle}`;
+
+  return Array.from(recipientIds).map(
+    (userId): CreateNotificationInput => ({
+      userId,
+      trigger: event.type,
+      teamId: event.teamId,
+      projectId: event.projectId,
+      issueId: event.issueId,
+      title: "Issue reopened",
+      message: `${actorName} reopened ${issueLabel} after testing.`,
+      href: `/teams/${event.teamId}/projects/${event.projectId}`,
+    })
+  );
+}
+
 async function buildNotificationEntries(event: NotificationEvent) {
   switch (event.type) {
     case "project.created":
@@ -107,6 +166,10 @@ async function buildNotificationEntries(event: NotificationEvent) {
       return buildIssueCreatedNotifications(event);
     case "issue.assigned":
       return buildIssueAssignedNotifications(event);
+    case "issue.ready_for_test":
+      return buildIssueReadyForTestNotifications(event);
+    case "issue.reopened":
+      return buildIssueReopenedNotifications(event);
     default:
       return [];
   }

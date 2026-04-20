@@ -62,11 +62,11 @@ import type {
   UpdateProjectInput,
 } from "@/routes/projects/types";
 import type {
-  TeamAccessLevel,
   TeamListItem,
   TeamMemberListItem,
   TeamMemberMutationResponse,
   TeamMembersResponse,
+  UpdateTeamMemberInput,
 } from "@/routes/teams/types";
 
 const DEFAULT_SORTING: SortingState = [{ id: "createdAt", desc: true }];
@@ -330,7 +330,7 @@ export default function TeamProjectsRoute() {
   const [isCreating, startCreateTransition] = useTransition();
   const [isUpdating, startUpdateTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
-  const [isUpdatingMemberAccess, startMemberAccessTransition] = useTransition();
+  const [isUpdatingMemberSettings, startMemberSettingsTransition] = useTransition();
 
   useEffect(() => {
     let isActive = true;
@@ -519,20 +519,20 @@ export default function TeamProjectsRoute() {
     }
   }
 
-  function handleMemberAccessChange(memberUserId: string, accessLevel: TeamAccessLevel) {
+  function handleMemberChange(memberUserId: string, input: UpdateTeamMemberInput) {
     if (!team) {
       return;
     }
 
     setPendingMemberId(memberUserId);
 
-    startMemberAccessTransition(async () => {
+    startMemberSettingsTransition(async () => {
       try {
         const data = await requestJson<TeamMemberMutationResponse>(
           `/api/teams/${team.id}/members/${memberUserId}`,
           {
             method: "PATCH",
-            body: JSON.stringify({ accessLevel }),
+            body: JSON.stringify(input),
           }
         );
 
@@ -544,7 +544,7 @@ export default function TeamProjectsRoute() {
         toast.success(data.message);
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "Could not update member access."
+          error instanceof Error ? error.message : "Could not update the team member."
         );
       } finally {
         setPendingMemberId(null);
@@ -995,8 +995,8 @@ export default function TeamProjectsRoute() {
         members={members}
         isLoading={isMembersLoading}
         canManageMembers={canManageMembers}
-        pendingMemberId={isUpdatingMemberAccess ? pendingMemberId : null}
-        onAccessChange={handleMemberAccessChange}
+        pendingMemberId={isUpdatingMemberSettings ? pendingMemberId : null}
+        onMemberChange={handleMemberChange}
       />
 
       <AlertDialog

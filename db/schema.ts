@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   boolean,
   index,
   pgTable,
@@ -9,6 +10,7 @@ import {
   uniqueIndex,
   uuid,
   varchar,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 
@@ -121,6 +123,9 @@ export const projectModules = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
+    parentModuleId: uuid('parent_module_id').references((): AnyPgColumn => projectModules.id, {
+      onDelete: 'cascade',
+    }),
     name: varchar('name', { length: 80 }).notNull(),
     description: text('description'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -128,7 +133,12 @@ export const projectModules = pgTable(
   },
   (table) => [
     index('project_modules_project_id_idx').on(table.projectId),
-    uniqueIndex('project_modules_project_name_unique').on(table.projectId, table.name),
+    index('project_modules_parent_module_id_idx').on(table.parentModuleId),
+    uniqueIndex('project_modules_project_parent_name_unique').on(
+      table.projectId,
+      table.parentModuleId,
+      table.name
+    ),
   ]
 );
 
@@ -166,6 +176,26 @@ export const usersToTeams = pgTable(
     primaryKey({ columns: [t.userId, t.teamId] }),
     index('users_to_teams_user_id_idx').on(t.userId),
     index('users_to_teams_team_id_idx').on(t.teamId),
+  ]
+);
+
+export const teamMemberRoles = pgTable(
+  'team_member_roles',
+  {
+    userId: uuid('user_id').notNull(),
+    teamId: uuid('team_id').notNull(),
+    role: varchar('role', { length: 24 }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.teamId, t.role] }),
+    foreignKey({
+      columns: [t.userId, t.teamId],
+      foreignColumns: [usersToTeams.userId, usersToTeams.teamId],
+      name: 'team_member_roles_membership_fk',
+    }).onDelete('cascade'),
+    index('team_member_roles_user_id_idx').on(t.userId),
+    index('team_member_roles_team_id_idx').on(t.teamId),
+    index('team_member_roles_role_idx').on(t.role),
   ]
 );
 

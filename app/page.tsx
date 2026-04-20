@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, Zap } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-
 
 export default function Home() {
   return (
@@ -12,22 +11,6 @@ export default function Home() {
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(229,231,235,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(229,231,235,0.18)_1px,transparent_1px)] bg-size-[44px_44px] opacity-[0.08]" />
 
       <section className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-8 lg:px-10">
-        {/* <header className="animate-in fade-in duration-500">
-          <Link href="/" className="inline-flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-400/30 bg-[#111827] shadow-[0_0_12px_rgba(16,185,129,0.28)]">
-              <Zap className="size-5 text-emerald-400" />
-            </span>
-            <span className="space-y-0.5">
-              <span className="block text-sm font-semibold tracking-tight text-[#E5E7EB]">
-                Tracker
-              </span>
-              <span className="block text-xs text-[#9CA3AF]">
-                Multi-project issue tracking
-              </span>
-            </span>
-          </Link>
-        </header> */}
-
         <div className="flex flex-1 items-center py-10 lg:py-16">
           <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="mx-auto max-w-4xl text-center">

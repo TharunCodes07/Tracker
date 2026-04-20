@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
-import { updateTeamMemberAccessForUser } from "@/routes/teams/mutations";
+import { updateTeamMemberForUser } from "@/routes/teams/mutations";
 import type {
   TeamMemberMutationResponse,
-  UpdateTeamMemberAccessInput,
+  UpdateTeamMemberInput,
 } from "@/routes/teams/types";
 
 export async function PATCH(
@@ -14,14 +14,14 @@ export async function PATCH(
   try {
     const actor = await requireRouteUser(request);
     const { teamId, memberUserId } = await context.params;
-    const body = await readJsonBody<UpdateTeamMemberAccessInput>(request);
-    const member = await updateTeamMemberAccessForUser(actor, teamId, memberUserId, body);
+    const body = await readJsonBody<UpdateTeamMemberInput>(request);
+    const member = await updateTeamMemberForUser(actor, teamId, memberUserId, body);
 
     return NextResponse.json<TeamMemberMutationResponse>({
       member,
-      message: `${member.name} now has ${member.accessLevel} access.`,
+      message: `Updated team settings for ${member.name}.`,
     });
   } catch (error) {
-    return handleRouteError(error, "Something went wrong while updating member access.");
+    return handleRouteError(error, "Something went wrong while updating the team member.");
   }
 }

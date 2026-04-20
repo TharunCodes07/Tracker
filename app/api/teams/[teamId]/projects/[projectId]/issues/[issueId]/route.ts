@@ -18,7 +18,7 @@ export async function PATCH(
     const actor = await requireRouteUser(request);
     const { teamId, projectId, issueId } = await context.params;
     const body = await readJsonBody<UpdateIssueInput>(request);
-    const { issue, previousAssignedTo } = await updateIssue(
+    const { issue, previousAssignedTo, previousStatus } = await updateIssue(
       actor,
       teamId,
       projectId,
@@ -30,6 +30,33 @@ export async function PATCH(
     if (issue.assignedTo && issue.assignedTo !== previousAssignedTo) {
       notificationEvents.push({
         type: "issue.assigned",
+        actorId: actor.id,
+        actorName: actor.name ?? "",
+        teamId,
+        projectId,
+        issueId: issue.id,
+        issueNo: issue.no,
+        issueTitle: issue.title,
+        assigneeId: issue.assignedTo,
+      });
+    }
+
+    if (previousStatus !== "done" && issue.status === "done") {
+      notificationEvents.push({
+        type: "issue.ready_for_test",
+        actorId: actor.id,
+        actorName: actor.name ?? "",
+        teamId,
+        projectId,
+        issueId: issue.id,
+        issueNo: issue.no,
+        issueTitle: issue.title,
+      });
+    }
+
+    if (previousStatus === "done" && issue.status !== "done") {
+      notificationEvents.push({
+        type: "issue.reopened",
         actorId: actor.id,
         actorName: actor.name ?? "",
         teamId,

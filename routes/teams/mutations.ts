@@ -5,16 +5,18 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { teams, usersToTeams } from "@/db/schema";
+import { teamMemberRoles, teams, usersToTeams } from "@/db/schema";
 
 import { RouteError } from "@/routes/errors";
 
+import { TEAM_MEMBER_ROLE_OPTIONS } from "./types";
 import type {
   CreateTeamInput,
   JoinTeamInput,
   TeamAccessLevel,
+  TeamMemberRole,
   UpdateTeamInput,
-  UpdateTeamMemberAccessInput,
+  UpdateTeamMemberInput,
 } from "./types";
 import { getTeamForUser, getTeamMemberForUser } from "./queries";
 
@@ -76,6 +78,41 @@ function normalizeTeamAccessLevel(value: string): TeamAccessLevel {
   }
 
   throw new RouteError("Access must be either edit or read.");
+}
+
+function normalizeTeamMemberRoles(values: string[]): TeamMemberRole[] {
+  const validRoles = new Set<TeamMemberRole>(
+    TEAM_MEMBER_ROLE_OPTIONS.map((option) => option.value)
+  );
+  const seenRoles = new Set<TeamMemberRole>();
+  const normalizedRoles: TeamMemberRole[] = [];
+
+  for (const value of values) {
+    const normalizedValue = value.trim().toLowerCase();
+
+    if (!validRoles.has(normalizedValue as TeamMemberRole)) {
+      throw new RouteError("Choose valid team member roles.");
+    }
+
+    const role = normalizedValue as TeamMemberRole;
+
+    if (seenRoles.has(role)) {
+      continue;
+    }
+
+    seenRoles.add(role);
+    normalizedRoles.push(role);
+  }
+
+  const roleOrder = new Map<TeamMemberRole, number>(
+    TEAM_MEMBER_ROLE_OPTIONS.map((option, index) => [option.value, index])
+  );
+
+  normalizedRoles.sort(
+    (left, right) => (roleOrder.get(left) ?? 999) - (roleOrder.get(right) ?? 999)
+  );
+
+  return normalizedRoles;
 }
 
 async function generateUniqueJoinCode() {
@@ -218,11 +255,11 @@ export async function deleteTeamForUser(actor: TeamActor, teamId: string) {
   return team;
 }
 
-export async function updateTeamMemberAccessForUser(
+export async function updateTeamMemberForUser(
   actor: TeamActor,
   teamId: string,
   memberUserId: string,
-  input: UpdateTeamMemberAccessInput
+  input: UpdateTeamMemberInput
 ) {
   await requireOwnedTeamForUser(actor, teamId);
 
@@ -238,13 +275,10 @@ export async function updateTeamMemberAccessForUser(
     throw new RouteError("Team not found.", 404);
   }
 
-  if (teamRecord.createdBy === memberUserId) {
-    throw new RouteError("The owner's access cannot be changed.");
-  }
-
   const [membership] = await db
     .select({
       userId: usersToTeams.userId,
+      accessLevel: usersToTeams.accessLevel,
     })
     .from(usersToTeams)
     .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)))
@@ -254,14 +288,47 @@ export async function updateTeamMemberAccessForUser(
     throw new RouteError("Member not found.", 404);
   }
 
-  const accessLevel = normalizeTeamAccessLevel(input.accessLevel);
+  if (input.accessLevel === undefined && input.roles === undefined) {
+    throw new RouteError("Choose at least one member setting to update.");
+  }
 
-  await db
-    .update(usersToTeams)
-    .set({
-      accessLevel,
-    })
-    .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)));
+  const isOwner = teamRecord.createdBy === memberUserId;
+  const accessLevel =
+    input.accessLevel !== undefined ? normalizeTeamAccessLevel(input.accessLevel) : undefined;
+  const roles = input.roles !== undefined ? normalizeTeamMemberRoles(input.roles) : undefined;
+
+  if (isOwner && accessLevel && accessLevel !== "edit") {
+    throw new RouteError("The owner's access cannot be changed.");
+  }
+
+  await db.transaction(async (tx) => {
+    if (accessLevel && !isOwner) {
+      await tx
+        .update(usersToTeams)
+        .set({
+          accessLevel,
+        })
+        .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)));
+    }
+
+    if (roles) {
+      await tx
+        .delete(teamMemberRoles)
+        .where(
+          and(eq(teamMemberRoles.teamId, teamId), eq(teamMemberRoles.userId, memberUserId))
+        );
+
+      if (roles.length > 0) {
+        await tx.insert(teamMemberRoles).values(
+          roles.map((role) => ({
+            teamId,
+            userId: memberUserId,
+            role,
+          }))
+        );
+      }
+    }
+  });
 
   const member = await getTeamMemberForUser(actor.id, teamId, memberUserId);
 

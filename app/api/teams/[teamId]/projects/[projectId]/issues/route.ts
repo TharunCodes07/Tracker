@@ -55,6 +55,19 @@ export async function POST(
       },
     ];
 
+    if (issue.status === "done") {
+      notificationEvents.push({
+        type: "issue.ready_for_test",
+        actorId: actor.id,
+        actorName: actor.name ?? "",
+        teamId,
+        projectId,
+        issueId: issue.id,
+        issueNo: issue.no,
+        issueTitle: issue.title,
+      });
+    }
+
     if (issue.assignedTo) {
       notificationEvents.push({
         type: "issue.assigned",

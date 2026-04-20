@@ -48,6 +48,7 @@ function parseResolution(value: string | null): IssueResolutionFilter {
   switch (value) {
     case "open":
     case "resolved":
+    case "resolved_pending_test":
       return value;
     case "all":
     default:

@@ -38,7 +38,8 @@ export interface IssueFormValues {
   navigation: string;
   title: string;
   description: string;
-  moduleId: string;
+  mainModuleId: string;
+  subModuleId: string;
   issueClassId: string;
   priority: IssuePriority;
   status: IssueStatus;
@@ -89,6 +90,10 @@ export function IssueDialog({
   descriptionText = "Add a general issue or tie it to a project module, then assign the right teammates for build, review, and testing.",
   submitLabel = "Create issue",
 }: IssueDialogProps) {
+  const mainModules = modules.filter((module) => module.parentModuleId === null);
+  const subModules = modules.filter((module) => module.parentModuleId === values.mainModuleId);
+  const hasSubModules = subModules.length > 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-4xl">
@@ -141,12 +146,17 @@ export function IssueDialog({
               </FieldDescription>
             </Field>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <Field>
-                <FieldLabel>Module</FieldLabel>
+                <FieldLabel>Main module</FieldLabel>
                 <Select
-                  value={getOptionalValue(values.moduleId)}
-                  onValueChange={(value) => onChange({ moduleId: normalizeOptionalValue(value) })}
+                  value={getOptionalValue(values.mainModuleId)}
+                  onValueChange={(value) =>
+                    onChange({
+                      mainModuleId: normalizeOptionalValue(value),
+                      subModuleId: "",
+                    })
+                  }
                   disabled={pending}
                 >
                   <SelectTrigger className="h-10 w-full">
@@ -154,7 +164,36 @@ export function IssueDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE_VALUE}>General issue</SelectItem>
-                    {modules.map((module) => (
+                    {mainModules.map((module) => (
+                      <SelectItem key={module.id} value={module.id}>
+                        {module.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field>
+                <FieldLabel>Sub module</FieldLabel>
+                <Select
+                  value={getOptionalValue(values.subModuleId)}
+                  onValueChange={(value) => onChange({ subModuleId: normalizeOptionalValue(value) })}
+                  disabled={pending || !values.mainModuleId || !hasSubModules}
+                >
+                  <SelectTrigger className="h-10 w-full">
+                    <SelectValue
+                      placeholder={
+                        !values.mainModuleId
+                          ? "Choose a main module first"
+                          : hasSubModules
+                            ? "Main module only"
+                            : "No sub modules yet"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE_VALUE}>Main module only</SelectItem>
+                    {subModules.map((module) => (
                       <SelectItem key={module.id} value={module.id}>
                         {module.name}
                       </SelectItem>
@@ -289,10 +328,14 @@ export function IssueDialog({
                 <Select
                   value={getOptionalValue(values.testedBy)}
                   onValueChange={(value) => onChange({ testedBy: normalizeOptionalValue(value) })}
-                  disabled={pending}
+                  disabled={pending || values.status !== "done"}
                 >
                   <SelectTrigger className="h-10 w-full">
-                    <SelectValue placeholder="No tester yet" />
+                    <SelectValue
+                      placeholder={
+                        values.status === "done" ? "No tester yet" : "Available when status is Done"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE_VALUE}>No tester yet</SelectItem>

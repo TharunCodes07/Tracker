@@ -71,6 +71,13 @@
       "when": 1776676352499,
       "tag": "0009_woozy_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776680409443,
+      "tag": "0010_clean_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

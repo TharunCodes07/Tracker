@@ -71,6 +71,7 @@ const EMPTY_SUMMARY: IssueListSummary = {
   totalIssues: 0,
   openIssueCount: 0,
   resolvedIssueCount: 0,
+  pendingTestIssueCount: 0,
   criticalIssueCount: 0,
   hasUnclassifiedIssues: false,
 };
@@ -122,6 +123,7 @@ export function useProjectIssuesWorkspace() {
   const [isModuleOpen, setIsModuleOpen] = useState(false);
   const [moduleName, setModuleName] = useState("");
   const [moduleDescription, setModuleDescription] = useState("");
+  const [moduleParentId, setModuleParentId] = useState("");
 
   const [isIssueClassOpen, setIsIssueClassOpen] = useState(false);
   const [issueClassName, setIssueClassName] = useState("");
@@ -337,6 +339,10 @@ export function useProjectIssuesWorkspace() {
     () => members.find((member) => member.isCurrentUser) ?? null,
     [members]
   );
+  const mainModules = useMemo(
+    () => modules.filter((projectModule) => projectModule.parentModuleId === null),
+    [modules]
+  );
   const currentUserId = currentUser?.userId ?? null;
   const canEditProject = team?.canEdit ?? false;
   const currentPageIndex = Math.max(0, pagination.page - 1);
@@ -363,10 +369,14 @@ export function useProjectIssuesWorkspace() {
         label: "General issue",
         description: "Issues not tied to any specific module.",
       },
-      ...modules.map((module) => ({
-        value: module.id,
-        label: module.name,
-        description: module.description,
+      ...modules.map((projectModule) => ({
+        value: projectModule.id,
+        label: projectModule.displayName,
+        description:
+          projectModule.description ??
+          (projectModule.parentModuleName
+            ? `Sub module under ${projectModule.parentModuleName}.`
+            : "Main module."),
       })),
     ],
     [modules]
@@ -429,8 +439,19 @@ export function useProjectIssuesWorkspace() {
       counts.set(moduleCount.moduleId ?? GENERAL_MODULE_FILTER_VALUE, moduleCount.issueCount);
     }
 
+    for (const projectModule of modules) {
+      if (!projectModule.parentModuleId) {
+        continue;
+      }
+
+      counts.set(
+        projectModule.parentModuleId,
+        (counts.get(projectModule.parentModuleId) ?? 0) + (counts.get(projectModule.id) ?? 0)
+      );
+    }
+
     return counts;
-  }, [moduleCounts]);
+  }, [moduleCounts, modules]);
 
   const activeFilterChips = useMemo<IssueWorkspaceFilterChip[]>(
     () => [
@@ -513,10 +534,12 @@ export function useProjectIssuesWorkspace() {
     if (!open) {
       setModuleName("");
       setModuleDescription("");
+      setModuleParentId("");
     }
   }
 
-  function openModuleDialog() {
+  function openModuleDialog(parentModuleId = "") {
+    setModuleParentId(parentModuleId);
     setIsModuleOpen(true);
   }
 
@@ -649,6 +672,7 @@ export function useProjectIssuesWorkspace() {
     const payload: CreateProjectModuleInput = {
       name: moduleName,
       description: moduleDescription,
+      parentModuleId: moduleParentId || null,
     };
 
     startCreateModuleTransition(async () => {
@@ -820,7 +844,7 @@ export function useProjectIssuesWorkspace() {
     });
   }
 
-  function handleExportIssuesToExcel() {
+  function handleExportIssuesToExcel(mode: "current" | "bundle" = "current") {
     if (!team || !project) {
       return;
     }
@@ -829,6 +853,7 @@ export function useProjectIssuesWorkspace() {
       try {
         const searchParams = buildIssueFiltersSearchParams();
         searchParams.set("project", project.name);
+        searchParams.set("mode", mode);
         const response = await fetch(
           `/api/teams/${team.id}/projects/${project.id}/issues/excel?${searchParams.toString()}`,
           {
@@ -856,14 +881,18 @@ export function useProjectIssuesWorkspace() {
         link.click();
         link.remove();
         URL.revokeObjectURL(objectUrl);
-        toast.success("Issues exported to Excel.");
+        toast.success(
+          mode === "bundle"
+            ? "Module workbooks exported."
+            : "Issues exported to Excel."
+        );
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not export the issues.");
       }
     });
   }
 
-  function handleImportIssuesFromFile(file: File) {
+  function handleImportIssuesFromFile(file: File, mainModuleId: string) {
     if (!team || !project) {
       return;
     }
@@ -873,6 +902,7 @@ export function useProjectIssuesWorkspace() {
         const formData = new FormData();
 
         formData.set("file", file);
+        formData.set("mainModuleId", mainModuleId);
 
         const response = await fetch(`/api/teams/${team.id}/projects/${project.id}/issues/excel`, {
           method: "POST",
@@ -887,12 +917,14 @@ export function useProjectIssuesWorkspace() {
           throw new Error(data?.message ?? "Could not import the Excel file.");
         }
 
+        const importResult = data as IssueExcelImportResponse;
         refreshIssues(0);
-        toast.success(data.message);
+        toast.success(importResult.message);
 
-        if (data.warnings.length > 0) {
-          const preview = data.warnings.slice(0, 2).join(" ");
-          const remainingCount = data.warnings.length - Math.min(data.warnings.length, 2);
+        if (importResult.warnings.length > 0) {
+          const preview = importResult.warnings.slice(0, 2).join(" ");
+          const remainingCount =
+            importResult.warnings.length - Math.min(importResult.warnings.length, 2);
 
           toast.warning(
             remainingCount > 0
@@ -918,6 +950,7 @@ export function useProjectIssuesWorkspace() {
     project,
     members,
     modules,
+    mainModules,
     issueClasses,
     issues,
     pagination,
@@ -927,6 +960,7 @@ export function useProjectIssuesWorkspace() {
     totalIssues: summary.totalIssues,
     openIssueCount: summary.openIssueCount,
     resolvedIssueCount: summary.resolvedIssueCount,
+    pendingTestIssueCount: summary.pendingTestIssueCount,
     criticalIssueCount: summary.criticalIssueCount,
     viewMode,
     setViewMode,
@@ -970,6 +1004,8 @@ export function useProjectIssuesWorkspace() {
     setModuleName,
     moduleDescription,
     setModuleDescription,
+    moduleParentId,
+    setModuleParentId,
     isCreatingModule,
     handleCreateModule,
     isIssueClassOpen,

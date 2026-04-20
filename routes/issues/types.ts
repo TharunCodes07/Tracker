@@ -2,6 +2,7 @@ import type { ProjectListItem } from "@/routes/projects/types";
 import type { TeamMemberListItem, TeamListItem } from "@/routes/teams/types";
 
 export const GENERAL_MODULE_FILTER_VALUE = "__general__";
+export const MAIN_MODULE_ISSUES_SHEET_NAME = "Main Module";
 export const UNCLASSIFIED_ISSUE_TYPE_FILTER_VALUE = "__unclassified__";
 export const DEFAULT_ISSUE_CLASS_DEFINITIONS = [
   {
@@ -29,6 +30,8 @@ export const ISSUE_STATUS_OPTIONS = [
 ] as const;
 export const ISSUE_EXCEL_HEADERS = [
   "No",
+  "Main Module",
+  "Sub Module",
   "Navigation",
   "Issue",
   "Priority",
@@ -44,7 +47,7 @@ export const ISSUE_EXCEL_HEADERS = [
 
 export type IssuePriority = (typeof ISSUE_PRIORITY_OPTIONS)[number]["value"];
 export type IssueStatus = (typeof ISSUE_STATUS_OPTIONS)[number]["value"];
-export type IssueResolutionFilter = "all" | "open" | "resolved";
+export type IssueResolutionFilter = "all" | "open" | "resolved" | "resolved_pending_test";
 export type IssueAssigneeFilterValue = "current-user" | "unassigned";
 export const ISSUE_LIST_SORT_FIELDS = [
   "updatedAt",
@@ -63,6 +66,10 @@ export interface ProjectModuleListItem {
   id: string;
   name: string;
   description: string | null;
+  parentModuleId: string | null;
+  parentModuleName: string | null;
+  isMainModule: boolean;
+  displayName: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,6 +93,10 @@ export interface IssueListItem {
   status: IssueStatus;
   moduleId: string | null;
   moduleName: string | null;
+  mainModuleId: string | null;
+  mainModuleName: string | null;
+  subModuleId: string | null;
+  subModuleName: string | null;
   issueClassId: string | null;
   issueClassName: string | null;
   assignedTo: string | null;
@@ -114,6 +125,7 @@ export interface IssueListSummary {
   totalIssues: number;
   openIssueCount: number;
   resolvedIssueCount: number;
+  pendingTestIssueCount: number;
   criticalIssueCount: number;
   hasUnclassifiedIssues: boolean;
 }
@@ -178,6 +190,7 @@ export interface IssueDeleteResponse {
 export interface CreateProjectModuleInput {
   name: string;
   description?: string | null;
+  parentModuleId?: string | null;
 }
 
 export interface CreateIssueClassInput {
@@ -208,6 +221,8 @@ export type UpdateIssueInput = CreateIssueInput;
 export interface IssueExcelRow {
   rowNumber?: number;
   no: number | null;
+  mainModuleName?: string | null;
+  subModuleName?: string | null;
   navigation: string | null;
   title: string | null;
   priority: string | null;
@@ -219,6 +234,16 @@ export interface IssueExcelRow {
   fixedDate: string | null;
   development: boolean | null;
   deployment: boolean | null;
+}
+
+export interface IssueExcelSheet {
+  sheetName: string;
+  rows: IssueExcelRow[];
+}
+
+export interface IssueExcelWorkbook {
+  fileName: string;
+  sheets: IssueExcelSheet[];
 }
 
 export interface IssueExcelImportResponse {

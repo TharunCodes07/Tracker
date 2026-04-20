@@ -3,6 +3,7 @@
 import { ShieldCheck, UsersRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,7 +28,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { TeamAccessLevel, TeamMemberListItem } from "@/routes/teams/types";
+import {
+  TEAM_MEMBER_ROLE_OPTIONS,
+  type TeamAccessLevel,
+  type TeamMemberListItem,
+  type TeamMemberRole,
+  type UpdateTeamMemberInput,
+} from "@/routes/teams/types";
 
 interface TeamMembersDialogProps {
   open: boolean;
@@ -29,7 +44,7 @@ interface TeamMembersDialogProps {
   isLoading: boolean;
   canManageMembers: boolean;
   pendingMemberId?: string | null;
-  onAccessChange: (memberUserId: string, accessLevel: TeamAccessLevel) => void;
+  onMemberChange: (memberUserId: string, input: UpdateTeamMemberInput) => void;
 }
 
 function AccessBadge({ accessLevel, isOwner }: { accessLevel: TeamAccessLevel; isOwner: boolean }) {
@@ -44,6 +59,10 @@ function AccessBadge({ accessLevel, isOwner }: { accessLevel: TeamAccessLevel; i
   );
 }
 
+function formatRoleLabel(role: TeamMemberRole) {
+  return TEAM_MEMBER_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
+}
+
 export function TeamMembersDialog({
   open,
   onOpenChange,
@@ -52,7 +71,7 @@ export function TeamMembersDialog({
   isLoading,
   canManageMembers,
   pendingMemberId = null,
-  onAccessChange,
+  onMemberChange,
 }: TeamMembersDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,7 +79,7 @@ export function TeamMembersDialog({
         <DialogHeader className="min-w-0 pr-8">
           <DialogTitle className="break-words">Team members</DialogTitle>
           <DialogDescription>
-            Review who belongs to {teamName}. Owners can switch members between edit and read access.
+            Review who belongs to {teamName}. Owners can update access and assign one or more team roles.
           </DialogDescription>
         </DialogHeader>
 
@@ -102,7 +121,9 @@ export function TeamMembersDialog({
                       <Select
                         value={member.accessLevel}
                         onValueChange={(value) =>
-                          onAccessChange(member.userId, value as TeamAccessLevel)
+                          onMemberChange(member.userId, {
+                            accessLevel: value as TeamAccessLevel,
+                          })
                         }
                         disabled={pendingMemberId === member.userId}
                       >
@@ -116,6 +137,56 @@ export function TeamMembersDialog({
                       </Select>
                     ) : (
                       <AccessBadge accessLevel={member.accessLevel} isOwner={member.isOwner} />
+                    )}
+
+                    {canManageMembers ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={pendingMemberId === member.userId}
+                          >
+                            Roles
+                            {member.roles.length > 0 ? ` (${member.roles.length})` : ""}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuLabel>Team roles</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {TEAM_MEMBER_ROLE_OPTIONS.map((roleOption) => {
+                            const isChecked = member.roles.includes(roleOption.value);
+
+                            return (
+                              <DropdownMenuCheckboxItem
+                                key={roleOption.value}
+                                checked={isChecked}
+                                onSelect={(event) => event.preventDefault()}
+                                onCheckedChange={() => {
+                                  const nextRoles = isChecked
+                                    ? member.roles.filter((role) => role !== roleOption.value)
+                                    : [...member.roles, roleOption.value];
+
+                                  onMemberChange(member.userId, { roles: nextRoles });
+                                }}
+                              >
+                                {roleOption.label}
+                              </DropdownMenuCheckboxItem>
+                            );
+                          })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
+
+                    {member.roles.length > 0 ? (
+                      member.roles.map((role) => (
+                        <Badge key={role} variant="outline">
+                          {formatRoleLabel(role)}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge variant="secondary">No roles</Badge>
                     )}
                   </div>
                 </div>
@@ -133,7 +204,7 @@ export function TeamMembersDialog({
             {canManageMembers ? (
               <>
                 <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                Owners can update member access here.
+                Owners can update member access and roles here.
               </>
             ) : (
               <>

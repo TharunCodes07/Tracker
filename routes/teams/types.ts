@@ -1,4 +1,9 @@
 export type TeamAccessLevel = "edit" | "read";
+export const TEAM_MEMBER_ROLE_OPTIONS = [
+  { value: "developer", label: "Developer" },
+  { value: "tester", label: "Tester" },
+] as const;
+export type TeamMemberRole = (typeof TEAM_MEMBER_ROLE_OPTIONS)[number]["value"];
 
 export const TEAM_LIST_SORT_FIELDS = [
   "createdAt",
@@ -32,6 +37,7 @@ export interface TeamMemberListItem {
   isOwner: boolean;
   isCurrentUser: boolean;
   accessLevel: TeamAccessLevel;
+  roles: TeamMemberRole[];
 }
 
 export interface TeamMembersResponse {
@@ -96,6 +102,7 @@ export interface JoinTeamInput {
   code: string;
 }
 
-export interface UpdateTeamMemberAccessInput {
-  accessLevel: TeamAccessLevel;
+export interface UpdateTeamMemberInput {
+  accessLevel?: TeamAccessLevel;
+  roles?: TeamMemberRole[];
 }

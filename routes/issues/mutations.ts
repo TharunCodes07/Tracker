@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
@@ -12,14 +12,16 @@ import type { TeamMemberListItem } from "@/routes/teams/types";
 
 import { ensureDefaultIssueClassesForProject } from "./queries";
 import {
+  GENERAL_MODULE_FILTER_VALUE,
   ISSUE_PRIORITY_OPTIONS,
   ISSUE_STATUS_OPTIONS,
+  MAIN_MODULE_ISSUES_SHEET_NAME,
   type CreateIssueClassInput,
   type CreateIssueInput,
   type CreateProjectModuleInput,
   type IssueClassListItem,
   type IssueExcelImportResponse,
-  type IssueExcelRow,
+  type IssueExcelSheet,
   type IssueListItem,
   type IssuePriority,
   type IssueStatus,
@@ -40,6 +42,7 @@ export interface IssueActor {
 export interface UpdateIssueResult {
   issue: IssueListItem;
   previousAssignedTo: string | null;
+  previousStatus: IssueStatus;
 }
 
 function toIsoString(value: Date | string) {
@@ -134,6 +137,8 @@ function toProjectModuleListItem(row: {
   id: string;
   name: string;
   description: string | null;
+  parentModuleId: string | null;
+  parentModuleName: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 }): ProjectModuleListItem {
@@ -141,9 +146,34 @@ function toProjectModuleListItem(row: {
     id: row.id,
     name: row.name,
     description: row.description,
+    parentModuleId: row.parentModuleId,
+    parentModuleName: row.parentModuleName,
+    isMainModule: row.parentModuleId === null,
+    displayName: row.parentModuleName ? `${row.parentModuleName} / ${row.name}` : row.name,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
   };
+}
+
+function buildIssueScopeWhereClause(projectId: string, moduleId: string | null) {
+  return moduleId
+    ? and(eq(issues.projectId, projectId), eq(issues.moduleId, moduleId))
+    : and(eq(issues.projectId, projectId), isNull(issues.moduleId));
+}
+
+function getIssueScopeKey(moduleId: string | null) {
+  return moduleId ?? GENERAL_MODULE_FILTER_VALUE;
+}
+
+async function getNextIssueNo(projectId: string, moduleId: string | null) {
+  const [row] = await db
+    .select({
+      maxNo: sql<number>`cast(coalesce(max(${issues.no}), 0) as integer)`,
+    })
+    .from(issues)
+    .where(buildIssueScopeWhereClause(projectId, moduleId));
+
+  return Number(row?.maxNo ?? 0) + 1;
 }
 
 function toIssueClassListItem(row: {
@@ -174,6 +204,10 @@ function toIssueListItem(row: {
   status: string;
   moduleId: string | null;
   moduleName: string | null;
+  mainModuleId: string | null;
+  mainModuleName: string | null;
+  subModuleId: string | null;
+  subModuleName: string | null;
   issueClassId: string | null;
   issueClassName: string | null;
   assignedTo: string | null;
@@ -202,6 +236,10 @@ function toIssueListItem(row: {
     status: row.status as IssueStatus,
     moduleId: row.moduleId,
     moduleName: row.moduleName,
+    mainModuleId: row.mainModuleId,
+    mainModuleName: row.mainModuleName,
+    subModuleId: row.subModuleId,
+    subModuleName: row.subModuleName,
     issueClassId: row.issueClassId,
     issueClassName: row.issueClassName,
     assignedTo: row.assignedTo,
@@ -247,15 +285,19 @@ async function requireEditableProjectForUser(
 }
 
 async function getProjectModuleRecord(projectId: string, moduleId: string) {
+  const parentModule = alias(projectModules, "project_module_parent");
   const [module] = await db
     .select({
       id: projectModules.id,
       name: projectModules.name,
       description: projectModules.description,
+      parentModuleId: projectModules.parentModuleId,
+      parentModuleName: parentModule.name,
       createdAt: projectModules.createdAt,
       updatedAt: projectModules.updatedAt,
     })
     .from(projectModules)
+    .leftJoin(parentModule, eq(projectModules.parentModuleId, parentModule.id))
     .where(and(eq(projectModules.projectId, projectId), eq(projectModules.id, moduleId)))
     .limit(1);
 
@@ -284,6 +326,7 @@ async function getIssueRecord(projectId: string, issueId: string) {
   const reviewedUser = alias(user, "reviewed_user");
   const testedUser = alias(user, "tested_user");
   const createdUser = alias(user, "created_user");
+  const parentModule = alias(projectModules, "parent_module");
 
   const [issue] = await db
     .select({
@@ -295,7 +338,26 @@ async function getIssueRecord(projectId: string, issueId: string) {
       priority: issues.priority,
       status: issues.status,
       moduleId: issues.moduleId,
-      moduleName: projectModules.name,
+      moduleName: sql<string | null>`case
+        when ${parentModule.id} is not null then concat(${parentModule.name}, ' / ', ${projectModules.name})
+        else ${projectModules.name}
+      end`,
+      mainModuleId: sql<string | null>`case
+        when ${parentModule.id} is not null then ${parentModule.id}
+        else ${projectModules.id}
+      end`,
+      mainModuleName: sql<string | null>`case
+        when ${parentModule.id} is not null then ${parentModule.name}
+        else ${projectModules.name}
+      end`,
+      subModuleId: sql<string | null>`case
+        when ${parentModule.id} is not null then ${projectModules.id}
+        else null
+      end`,
+      subModuleName: sql<string | null>`case
+        when ${parentModule.id} is not null then ${projectModules.name}
+        else null
+      end`,
       issueClassId: issues.issueClassId,
       issueClassName: issueClasses.name,
       assignedTo: issues.assignedTo,
@@ -316,6 +378,7 @@ async function getIssueRecord(projectId: string, issueId: string) {
     })
     .from(issues)
     .leftJoin(projectModules, eq(issues.moduleId, projectModules.id))
+    .leftJoin(parentModule, eq(projectModules.parentModuleId, parentModule.id))
     .leftJoin(issueClasses, eq(issues.issueClassId, issueClasses.id))
     .leftJoin(assignedUser, eq(issues.assignedTo, assignedUser.id))
     .leftJoin(reviewedUser, eq(issues.reviewedBy, reviewedUser.id))
@@ -433,7 +496,7 @@ async function validateIssueFields(
     reviewedBy,
     comments,
     remark,
-    testedBy,
+    testedBy: status === "done" ? testedBy : null,
     fixedDate,
     development,
     deployment,
@@ -448,6 +511,20 @@ function normalizeLookupValue(value: string) {
 
 function normalizeLookupKey(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeImportedModuleName(value: string, label: string) {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    throw new RouteError(`${label} is required.`);
+  }
+
+  if (normalizedValue.length > MODULE_NAME_MAX_LENGTH) {
+    throw new RouteError(`${label} must be ${MODULE_NAME_MAX_LENGTH} characters or fewer.`);
+  }
+
+  return normalizedValue;
 }
 
 function normalizeImportedIssuePriority(value: string | null | undefined) {
@@ -613,48 +690,79 @@ async function getDefaultIssueClassId(projectId: string) {
   return firstIssueClass.id;
 }
 
+async function requireMainModuleForProject(projectId: string, moduleId: string) {
+  const [module] = await db
+    .select({
+      id: projectModules.id,
+      name: projectModules.name,
+      parentModuleId: projectModules.parentModuleId,
+    })
+    .from(projectModules)
+    .where(and(eq(projectModules.projectId, projectId), eq(projectModules.id, moduleId)))
+    .limit(1);
+
+  if (!module || module.parentModuleId !== null) {
+    throw new RouteError("Choose a valid main module for this import.");
+  }
+
+  return module;
+}
+
+function isMainModuleSheetName(value: string) {
+  const normalizedValue = normalizeLookupKey(value);
+
+  return (
+    normalizedValue === normalizeLookupKey(MAIN_MODULE_ISSUES_SHEET_NAME) ||
+    normalizedValue === "mainissues" ||
+    normalizedValue === "moduleissues"
+  );
+}
+
 export async function importIssuesFromExcel(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  importedRows: IssueExcelRow[]
+  mainModuleId: string,
+  importedSheets: IssueExcelSheet[]
 ): Promise<IssueExcelImportResponse> {
   await requireEditableProjectForUser(actor, teamId, projectId);
 
-  const [teamMembers, defaultIssueClassId] = await Promise.all([
+  const [teamMembers, defaultIssueClassId, mainModule, moduleRows] = await Promise.all([
     listTeamMembersForUser(actor.id, teamId),
     getDefaultIssueClassId(projectId),
+    requireMainModuleForProject(projectId, mainModuleId),
+    db
+      .select({
+        id: projectModules.id,
+        name: projectModules.name,
+        parentModuleId: projectModules.parentModuleId,
+      })
+      .from(projectModules)
+      .where(eq(projectModules.projectId, projectId)),
   ]);
 
   if (!teamMembers) {
     throw new RouteError("Team members could not be loaded.", 404);
   }
 
-  const issueNumbers = Array.from(
-    new Set(
-      importedRows
-        .map((row) => row.no)
-        .filter((value): value is number => typeof value === "number" && Number.isFinite(value))
-    )
-  );
+  if (importedSheets.length === 0) {
+    throw new RouteError("The uploaded Excel file does not contain any importable sheets.", 400);
+  }
 
-  const existingIssues =
-    issueNumbers.length > 0
-      ? await db
-          .select({
-            id: issues.id,
-            no: issues.no,
-          })
-          .from(issues)
-          .where(and(eq(issues.projectId, projectId), inArray(issues.no, issueNumbers)))
-      : [];
+  const existingSubModulesByKey = new Map<string, { id: string; name: string }>();
+  const nextIssueNoByScopeKey = new Map<string, number>();
+  const processedScopedNumbers = new Set<string>();
 
-  const issueIdByNo = new Map<number, string>();
-
-  for (const existingIssue of existingIssues) {
-    if (typeof existingIssue.no === "number") {
-      issueIdByNo.set(existingIssue.no, existingIssue.id);
+  for (const moduleRow of moduleRows) {
+    if (!moduleRow.parentModuleId) {
+      continue;
     }
+
+    const key = `${moduleRow.parentModuleId}:${normalizeLookupValue(moduleRow.name)}`;
+    existingSubModulesByKey.set(key, {
+      id: moduleRow.id,
+      name: moduleRow.name,
+    });
   }
 
   const warnings: string[] = [];
@@ -662,116 +770,177 @@ export async function importIssuesFromExcel(
   let updatedCount = 0;
   let skippedCount = 0;
 
-  for (const importedRow of importedRows) {
-    const rowNumber = importedRow.rowNumber ?? skippedCount + createdCount + updatedCount + 2;
+  async function allocateIssueNo(moduleId: string | null, preferredNo: number | null) {
+    const scopeKey = getIssueScopeKey(moduleId);
+    const cachedNextNo = nextIssueNoByScopeKey.get(scopeKey);
 
-    let title: string;
-    let navigation: string | null;
-    let comments: string | null;
-    let remark: string | null;
+    if (typeof preferredNo === "number" && Number.isFinite(preferredNo) && preferredNo > 0) {
+      const minimumNextNo = preferredNo + 1;
 
-    try {
-      title = normalizeName(importedRow.title ?? "", "Issue", ISSUE_TITLE_MAX_LENGTH);
-      navigation = normalizeOptionalText(
-        importedRow.navigation,
-        "Navigation",
-        ISSUE_NAVIGATION_MAX_LENGTH
-      );
-      comments = normalizeOptionalText(importedRow.comments, "Comments", ISSUE_TEXT_MAX_LENGTH);
-      remark = normalizeOptionalText(importedRow.remark, "Remark", ISSUE_TEXT_MAX_LENGTH);
-    } catch (error) {
-      skippedCount += 1;
-      warnings.push(
-        `Row ${rowNumber}: ${
-          error instanceof Error ? error.message : "Could not validate the issue."
-        }`
-      );
-      continue;
+      if (typeof cachedNextNo !== "number" || cachedNextNo < minimumNextNo) {
+        nextIssueNoByScopeKey.set(scopeKey, minimumNextNo);
+      }
+
+      return preferredNo;
     }
 
-    const priority = normalizeImportedIssuePriority(importedRow.priority);
-    const status = normalizeImportedIssueStatus(importedRow.status);
-    const assigneeMatch = resolveTeamMemberId(importedRow.assignedToName, teamMembers.members);
-    const testerMatch = resolveTeamMemberId(importedRow.testedByName, teamMembers.members);
-    const fixedDate = parseImportedFixedDate(importedRow.fixedDate);
-    const development = parseImportedBoolean(importedRow.development);
-    const deployment = parseImportedBoolean(importedRow.deployment);
+    const nextNo =
+      typeof cachedNextNo === "number" ? cachedNextNo : await getNextIssueNo(projectId, moduleId);
 
-    if (assigneeMatch.warning) {
-      warnings.push(`Row ${rowNumber}: Assigned to ${assigneeMatch.warning}`);
+    nextIssueNoByScopeKey.set(scopeKey, nextNo + 1);
+    return nextNo;
+  }
+
+  for (const importedSheet of importedSheets) {
+    const importsToMainModule = isMainModuleSheetName(importedSheet.sheetName);
+    const sheetLabel = importsToMainModule
+      ? MAIN_MODULE_ISSUES_SHEET_NAME
+      : normalizeImportedModuleName(importedSheet.sheetName, "Sheet name");
+    let targetModuleId = mainModule.id;
+
+    if (!importsToMainModule) {
+      const subModuleKey = `${mainModule.id}:${normalizeLookupValue(sheetLabel)}`;
+      let subModule = existingSubModulesByKey.get(subModuleKey) ?? null;
+
+      if (!subModule) {
+        const [createdModule] = await db
+          .insert(projectModules)
+          .values({
+            projectId,
+            parentModuleId: mainModule.id,
+            name: sheetLabel,
+          })
+          .returning({
+            id: projectModules.id,
+            name: projectModules.name,
+          });
+
+        subModule = createdModule;
+        existingSubModulesByKey.set(subModuleKey, createdModule);
+      }
+
+      targetModuleId = subModule.id;
     }
 
-    if (testerMatch.warning) {
-      warnings.push(`Row ${rowNumber}: Tested By ${testerMatch.warning}`);
+    const issueNumbers = Array.from(
+      new Set(
+        importedSheet.rows
+          .map((row) => row.no)
+          .filter(
+            (value): value is number =>
+              typeof value === "number" && Number.isFinite(value) && value > 0
+          )
+      )
+    );
+    const existingIssues =
+      issueNumbers.length > 0
+        ? await db
+            .select({
+              id: issues.id,
+              no: issues.no,
+            })
+            .from(issues)
+            .where(
+              and(
+                buildIssueScopeWhereClause(projectId, targetModuleId),
+                inArray(issues.no, issueNumbers)
+              )
+            )
+        : [];
+    const issueIdByNo = new Map<number, string>();
+
+    for (const existingIssue of existingIssues) {
+      if (typeof existingIssue.no === "number") {
+        issueIdByNo.set(existingIssue.no, existingIssue.id);
+      }
     }
 
-    if (fixedDate.state === "invalid") {
-      warnings.push(`Row ${rowNumber}: Fixed Date "${importedRow.fixedDate}" is invalid.`);
-    }
+    for (const importedRow of importedSheet.rows) {
+      const rowNumber = importedRow.rowNumber ?? skippedCount + createdCount + updatedCount + 2;
+      const rowLabel = `Sheet "${sheetLabel}" row ${rowNumber}`;
 
-    const issueId =
-      typeof importedRow.no === "number" ? issueIdByNo.get(importedRow.no) ?? null : null;
+      let title: string;
+      let navigation: string | null;
+      let comments: string | null;
+      let remark: string | null;
 
-    const importedValues: {
-      navigation: string | null;
-      title: string;
-      priority: IssuePriority;
-      status: IssueStatus;
-      comments: string | null;
-      remark: string | null;
-      development: boolean;
-      deployment: boolean;
-      updatedAt: Date;
-      assignedTo?: string | null;
-      testedBy?: string | null;
-      fixedDate?: Date | null;
-    } = {
-      navigation,
-      title,
-      priority,
-      status,
-      comments,
-      remark,
-      development,
-      deployment,
-      updatedAt: new Date(),
-    };
+      try {
+        title = normalizeName(importedRow.title ?? "", "Issue", ISSUE_TITLE_MAX_LENGTH);
+        navigation = normalizeOptionalText(
+          importedRow.navigation,
+          "Navigation",
+          ISSUE_NAVIGATION_MAX_LENGTH
+        );
+        comments = normalizeOptionalText(importedRow.comments, "Comments", ISSUE_TEXT_MAX_LENGTH);
+        remark = normalizeOptionalText(importedRow.remark, "Remark", ISSUE_TEXT_MAX_LENGTH);
+      } catch (error) {
+        skippedCount += 1;
+        warnings.push(
+          `${rowLabel}: ${
+            error instanceof Error ? error.message : "Could not validate the issue."
+          }`
+        );
+        continue;
+      }
 
-    if (assigneeMatch.state === "empty") {
-      importedValues.assignedTo = null;
-    } else if (assigneeMatch.state === "matched") {
-      importedValues.assignedTo = assigneeMatch.userId;
-    }
+      const priority = normalizeImportedIssuePriority(importedRow.priority);
+      const status = normalizeImportedIssueStatus(importedRow.status);
+      const assigneeMatch = resolveTeamMemberId(importedRow.assignedToName, teamMembers.members);
+      const testerMatch = resolveTeamMemberId(importedRow.testedByName, teamMembers.members);
+      const fixedDate = parseImportedFixedDate(importedRow.fixedDate);
+      const development = parseImportedBoolean(importedRow.development);
+      const deployment = parseImportedBoolean(importedRow.deployment);
 
-    if (testerMatch.state === "empty") {
-      importedValues.testedBy = null;
-    } else if (testerMatch.state === "matched") {
-      importedValues.testedBy = testerMatch.userId;
-    }
+      if (assigneeMatch.warning) {
+        warnings.push(`${rowLabel}: Assigned to ${assigneeMatch.warning}`);
+      }
 
-    if (fixedDate.state === "empty" || fixedDate.state === "valid") {
-      importedValues.fixedDate = fixedDate.value;
-    }
+      if (testerMatch.warning) {
+        warnings.push(`${rowLabel}: Tested By ${testerMatch.warning}`);
+      }
 
-    if (issueId) {
-      await db
-        .update(issues)
-        .set(importedValues)
-        .where(and(eq(issues.projectId, projectId), eq(issues.id, issueId)));
+      if (fixedDate.state === "invalid") {
+        warnings.push(`${rowLabel}: Fixed Date "${importedRow.fixedDate}" is invalid.`);
+      }
 
-      updatedCount += 1;
-      continue;
-    }
+      const importedNo =
+        typeof importedRow.no === "number" && Number.isFinite(importedRow.no) && importedRow.no > 0
+          ? importedRow.no
+          : null;
+      const scopedNumberKey =
+        importedNo === null ? null : `${getIssueScopeKey(targetModuleId)}:${importedNo}`;
 
-    const [createdIssue] = await db
-      .insert(issues)
-      .values({
-        projectId,
-        issueClassId: defaultIssueClassId,
-        createdBy: actor.id,
-        assignedTo: assigneeMatch.state === "matched" ? assigneeMatch.userId : null,
-        testedBy: testerMatch.state === "matched" ? testerMatch.userId : null,
-        fixedDate: fixedDate.state === "valid" ? fixedDate.value : null,
+      if (scopedNumberKey && processedScopedNumbers.has(scopedNumberKey)) {
+        skippedCount += 1;
+        warnings.push(`${rowLabel}: Issue number ${importedNo} is duplicated in this import.`);
+        continue;
+      }
+
+      if (scopedNumberKey) {
+        processedScopedNumbers.add(scopedNumberKey);
+      }
+
+      const issueId = importedNo === null ? null : issueIdByNo.get(importedNo) ?? null;
+      const resolvedIssueNo = await allocateIssueNo(targetModuleId, importedNo);
+
+      const importedValues: {
+        moduleId: string;
+        no: number;
+        navigation: string | null;
+        title: string;
+        priority: IssuePriority;
+        status: IssueStatus;
+        comments: string | null;
+        remark: string | null;
+        development: boolean;
+        deployment: boolean;
+        updatedAt: Date;
+        assignedTo?: string | null;
+        testedBy?: string | null;
+        fixedDate?: Date | null;
+      } = {
+        moduleId: targetModuleId,
+        no: resolvedIssueNo,
         navigation,
         title,
         priority,
@@ -780,24 +949,69 @@ export async function importIssuesFromExcel(
         remark,
         development,
         deployment,
-        ...(typeof importedRow.no === "number" ? { no: importedRow.no } : {}),
-      })
-      .returning({
-        id: issues.id,
-        no: issues.no,
-      });
+        updatedAt: new Date(),
+      };
 
-    if (typeof createdIssue.no === "number") {
-      issueIdByNo.set(createdIssue.no, createdIssue.id);
+      if (assigneeMatch.state === "empty") {
+        importedValues.assignedTo = null;
+      } else if (assigneeMatch.state === "matched") {
+        importedValues.assignedTo = assigneeMatch.userId;
+      }
+
+      if (status !== "done") {
+        importedValues.testedBy = null;
+      } else if (testerMatch.state === "empty") {
+        importedValues.testedBy = null;
+      } else if (testerMatch.state === "matched") {
+        importedValues.testedBy = testerMatch.userId;
+      }
+
+      if (fixedDate.state === "empty" || fixedDate.state === "valid") {
+        importedValues.fixedDate = fixedDate.value;
+      }
+
+      if (issueId) {
+        await db
+          .update(issues)
+          .set(importedValues)
+          .where(and(eq(issues.projectId, projectId), eq(issues.id, issueId)));
+
+        updatedCount += 1;
+        continue;
+      }
+
+      const [createdIssue] = await db
+        .insert(issues)
+        .values({
+          projectId,
+          moduleId: targetModuleId,
+          issueClassId: defaultIssueClassId,
+          createdBy: actor.id,
+          assignedTo: assigneeMatch.state === "matched" ? assigneeMatch.userId : null,
+          testedBy:
+            status === "done" && testerMatch.state === "matched" ? testerMatch.userId : null,
+          fixedDate: fixedDate.state === "valid" ? fixedDate.value : null,
+          navigation,
+          title,
+          priority,
+          status,
+          comments,
+          remark,
+          development,
+          deployment,
+          no: resolvedIssueNo,
+        })
+        .returning({
+          id: issues.id,
+          no: issues.no,
+        });
+
+      if (typeof createdIssue.no === "number") {
+        issueIdByNo.set(createdIssue.no, createdIssue.id);
+      }
+
+      createdCount += 1;
     }
-
-    createdCount += 1;
-  }
-
-  if (createdCount > 0) {
-    await db.execute(
-      sql`select setval(pg_get_serial_sequence('issues', 'no'), coalesce((select max(no) from issues), 1), true)`
-    );
   }
 
   return {
@@ -819,21 +1033,46 @@ export async function createProjectModule(
 
   const name = normalizeName(input.name, "Module name", MODULE_NAME_MAX_LENGTH);
   const description = normalizeDescription(input.description);
+  const parentModuleId = normalizeOptionalId(input.parentModuleId);
+
+  if (parentModuleId) {
+    const [parentModule] = await db
+      .select({
+        id: projectModules.id,
+        parentModuleId: projectModules.parentModuleId,
+      })
+      .from(projectModules)
+      .where(and(eq(projectModules.projectId, projectId), eq(projectModules.id, parentModuleId)))
+      .limit(1);
+
+    if (!parentModule || parentModule.parentModuleId !== null) {
+      throw new RouteError("Choose a valid main module.");
+    }
+  }
 
   const [existingModule] = await db
     .select({ id: projectModules.id })
     .from(projectModules)
-    .where(and(eq(projectModules.projectId, projectId), eq(projectModules.name, name)))
+    .where(
+      and(
+        eq(projectModules.projectId, projectId),
+        eq(projectModules.name, name),
+        parentModuleId
+          ? eq(projectModules.parentModuleId, parentModuleId)
+          : sql`${projectModules.parentModuleId} is null`
+      )
+    )
     .limit(1);
 
   if (existingModule) {
-    throw new RouteError("A module with that name already exists in this project.");
+    throw new RouteError("A module with that name already exists at this level.");
   }
 
   const [createdModule] = await db
     .insert(projectModules)
     .values({
       projectId,
+      parentModuleId,
       name,
       description,
     })
@@ -897,12 +1136,14 @@ export async function createIssue(
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
   const validatedIssue = await validateIssueFields(teamId, projectId, input);
+  const nextIssueNo = await getNextIssueNo(projectId, validatedIssue.moduleId);
 
   const [createdIssue] = await db
     .insert(issues)
     .values({
       projectId,
       ...validatedIssue,
+      no: nextIssueNo,
       createdBy: actor.id,
     })
     .returning({ id: issues.id });
@@ -925,11 +1166,16 @@ export async function updateIssue(
 ): Promise<UpdateIssueResult> {
   const existingIssue = await requireIssueInEditableProject(actor, teamId, projectId, issueId);
   const validatedIssue = await validateIssueFields(teamId, projectId, input);
+  const nextIssueNo =
+    existingIssue.moduleId === validatedIssue.moduleId
+      ? existingIssue.no
+      : await getNextIssueNo(projectId, validatedIssue.moduleId);
 
   await db
     .update(issues)
     .set({
       ...validatedIssue,
+      no: nextIssueNo,
       updatedAt: new Date(),
     })
     .where(and(eq(issues.projectId, projectId), eq(issues.id, issueId)));
@@ -943,6 +1189,7 @@ export async function updateIssue(
   return {
     issue,
     previousAssignedTo: existingIssue.assignedTo,
+    previousStatus: existingIssue.status,
   };
 }
 

@@ -137,46 +137,75 @@ export function NotificationsMenu() {
             </p>
           </div>
         ) : (
-          <div className="max-h-96 overflow-y-auto p-1.5">
-            {notifications.map((notification, index) => (
-              <div key={notification.id}>
-                <DropdownMenuItem
-                  className={cn(
-                    "items-start gap-3 rounded-xl px-3 py-3",
-                    !notification.isRead && "bg-red-500/5"
-                  )}
-                  onSelect={() => handleNotificationSelect(notification)}
-                >
-                  <span
+          <div>
+            <div className="max-h-96 overflow-y-auto p-1.5">
+              {notifications.map((notification, index) => (
+                <div key={notification.id}>
+                  <DropdownMenuItem
                     className={cn(
-                      "mt-1.5 size-2.5 shrink-0 rounded-full",
-                      notification.isRead ? "bg-border" : "bg-red-500"
+                      "items-start gap-3 rounded-xl px-3 py-3",
+                      !notification.isRead && "bg-red-500/5"
                     )}
-                  />
+                    onSelect={() => handleNotificationSelect(notification)}
+                  >
+                    <span
+                      className={cn(
+                        "mt-1.5 size-2.5 shrink-0 rounded-full",
+                        notification.isRead ? "bg-border" : "bg-red-500"
+                      )}
+                    />
 
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="line-clamp-1 text-sm font-medium text-foreground">
-                        {notification.title}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="line-clamp-1 text-sm font-medium text-foreground">
+                          {notification.title}
+                        </p>
+                        <span className="shrink-0 text-[0.7rem] text-muted-foreground">
+                          {formatDistanceToNow(new Date(notification.createdAt), {
+                            addSuffix: true,
+                          })}
+                        </span>
+                      </div>
+
+                      <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                        {notification.message}
                       </p>
-                      <span className="shrink-0 text-[0.7rem] text-muted-foreground">
-                        {formatDistanceToNow(new Date(notification.createdAt), {
-                          addSuffix: true,
-                        })}
-                      </span>
                     </div>
+                  </DropdownMenuItem>
 
-                    <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                      {notification.message}
-                    </p>
-                  </div>
-                </DropdownMenuItem>
+                  {index < notifications.length - 1 ? (
+                    <DropdownMenuSeparator className="mx-2" />
+                  ) : null}
+                </div>
+              ))}
+            </div>
 
-                {index < notifications.length - 1 ? (
-                  <DropdownMenuSeparator className="mx-2" />
-                ) : null}
-              </div>
-            ))}
+            <div className="flex items-center gap-2 border-t border-border/70 p-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="flex-1 rounded-xl"
+                onClick={() => {
+                  setOpen(false);
+                  router.push("/notifications");
+                }}
+              >
+                View all
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => {
+                  setOpen(false);
+                  router.push("/notifications?unreadOnly=true");
+                }}
+              >
+                Unread
+              </Button>
+            </div>
           </div>
         )}
       </DropdownMenuContent>

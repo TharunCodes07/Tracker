@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useState } from "react";
 
 import {
   AlertTriangle,
@@ -41,13 +41,32 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EntityDialog } from "@/components/ui/entity-dialog";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { GridView } from "@/components/ui/grid-view";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function ProjectIssuesPage() {
   const workspace = useProjectIssuesWorkspace();
-  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importMainModuleId, setImportMainModuleId] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
 
   if (!workspace.hasRequiredParams) {
     return (
@@ -102,21 +121,6 @@ export default function ProjectIssuesPage() {
   return (
     <div className="space-y-4">
       <IssuePageSidebarController />
-      <input
-        ref={importInputRef}
-        type="file"
-        accept=".xlsx,.xlsm"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-
-          if (file) {
-            workspace.handleImportIssuesFromFile(file);
-          }
-
-          event.target.value = "";
-        }}
-      />
 
       <section className="rounded-[28px] border border-border/60 bg-card/80 px-5 py-4 shadow-sm sm:px-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -175,6 +179,12 @@ export default function ProjectIssuesPage() {
                 </span>
               </div>
               <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-sm">
+                <span className="text-muted-foreground">Awaiting test</span>
+                <span className="font-semibold text-cyan-600 dark:text-cyan-300">
+                  {workspace.pendingTestIssueCount}
+                </span>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-sm">
                 <span className="text-muted-foreground">Critical</span>
                 <span className="font-semibold text-rose-600 dark:text-rose-300">
                   {workspace.criticalIssueCount}
@@ -186,7 +196,7 @@ export default function ProjectIssuesPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={workspace.handleExportIssuesToExcel}
+                onClick={() => setIsExportOpen(true)}
                 disabled={workspace.isExportingIssues}
               >
                 <Download className="h-4 w-4" />
@@ -197,7 +207,13 @@ export default function ProjectIssuesPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => importInputRef.current?.click()}
+                    onClick={() => {
+                      setImportMainModuleId((currentValue) =>
+                        currentValue || workspace.mainModules[0]?.id || ""
+                      );
+                      setImportFile(null);
+                      setIsImportOpen(true);
+                    }}
                     disabled={workspace.isImportingIssues}
                   >
                     <Upload className="h-4 w-4" />
@@ -206,10 +222,10 @@ export default function ProjectIssuesPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={workspace.openModuleDialog}
+                    onClick={() => workspace.openModuleDialog()}
                   >
                     <Plus className="h-4 w-4" />
-                    New module
+                    New main module
                   </Button>
                   <Button
                     type="button"
@@ -256,7 +272,8 @@ export default function ProjectIssuesPage() {
             onCollapsedChange={workspace.setIsModuleSidebarCollapsed}
             onToggleModule={workspace.handleModuleFilterToggle}
             onClearSelection={workspace.handleClearModuleFilters}
-            onCreateModule={workspace.openModuleDialog}
+            onCreateMainModule={() => workspace.openModuleDialog()}
+            onCreateSubModule={workspace.openModuleDialog}
           />
         </aside>
 
@@ -356,6 +373,21 @@ export default function ProjectIssuesPage() {
                     Resolved
                     <span className="text-xs text-muted-foreground">
                       {workspace.resolvedIssueCount}
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      workspace.resolutionFilter === "resolved_pending_test"
+                        ? "secondary"
+                        : "ghost"
+                    }
+                    className="flex-1 rounded-xl sm:flex-none"
+                    onClick={() => workspace.handleResolutionFilterChange("resolved_pending_test")}
+                  >
+                    Awaiting test
+                    <span className="text-xs text-muted-foreground">
+                      {workspace.pendingTestIssueCount}
                     </span>
                   </Button>
                 </div>
@@ -473,19 +505,53 @@ export default function ProjectIssuesPage() {
         name={workspace.moduleName}
         description={workspace.moduleDescription}
         pending={workspace.isCreatingModule}
-        title="Create Module"
-        descriptionText="Add a project module so issues can be logged against a specific area instead of the full project."
-        submitLabel="Create module"
-        nameLabel="Module name"
+        title={workspace.moduleParentId ? "Create Sub Module" : "Create Main Module"}
+        descriptionText={
+          workspace.moduleParentId
+            ? "Add a sub module under the selected main module so issues can be tracked at a more specific level."
+            : "Add a top-level module so issues can be grouped by the main areas of the project."
+        }
+        submitLabel={workspace.moduleParentId ? "Create sub module" : "Create main module"}
+        nameLabel={workspace.moduleParentId ? "Sub module name" : "Main module name"}
         nameInputId="project-module-name"
-        namePlaceholder="Authentication"
+        namePlaceholder={workspace.moduleParentId ? "Login form" : "Authentication"}
         descriptionInputId="project-module-description"
-        descriptionPlaceholder="What part of the project this module covers."
-        descriptionHelpText="Modules stay optional. General issues can be created without choosing one."
+        descriptionPlaceholder={
+          workspace.moduleParentId
+            ? "What this sub module covers within the selected main module."
+            : "What part of the project this main module covers."
+        }
+        descriptionHelpText="Leave the parent blank to create a main module. Choose one to add a sub module beneath it."
         onNameChange={workspace.setModuleName}
         onDescriptionChange={workspace.setModuleDescription}
         onSubmit={workspace.handleCreateModule}
-      />
+      >
+        <Field className="min-w-0">
+          <FieldLabel>Parent main module</FieldLabel>
+          <Select
+            value={workspace.moduleParentId || "__main__"}
+            onValueChange={(value) =>
+              workspace.setModuleParentId(value === "__main__" ? "" : value)
+            }
+            disabled={workspace.isCreatingModule}
+          >
+            <SelectTrigger className="h-10 w-full">
+              <SelectValue placeholder="Create as a main module" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__main__">Create as a main module</SelectItem>
+              {workspace.mainModules.map((module) => (
+                <SelectItem key={module.id} value={module.id}>
+                  {module.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldDescription>
+            Sub modules inherit their grouping from the selected main module.
+          </FieldDescription>
+        </Field>
+      </EntityDialog>
 
       <EntityDialog
         open={workspace.isIssueClassOpen}
@@ -555,6 +621,181 @@ export default function ProjectIssuesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={isExportOpen}
+        onOpenChange={(open) => {
+          if (!workspace.isExportingIssues) {
+            setIsExportOpen(open);
+          }
+        }}
+      >
+        <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-xl">
+          <DialogHeader className="min-w-0 pr-8">
+            <DialogTitle>Export issues</DialogTitle>
+            <DialogDescription>
+              Export the current filtered view as one workbook, or export everything as one workbook
+              per main module with a sheet for the main module issues and each sub module.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            <button
+              type="button"
+              className="rounded-3xl border border-border/60 bg-background/70 px-4 py-4 text-left transition-colors hover:bg-accent"
+              onClick={() => {
+                workspace.handleExportIssuesToExcel("current");
+                setIsExportOpen(false);
+              }}
+              disabled={workspace.isExportingIssues}
+            >
+              <div className="text-sm font-semibold text-foreground">Current view workbook</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                Exports the filtered issues you are looking at right now into a single Excel file.
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="rounded-3xl border border-border/60 bg-background/70 px-4 py-4 text-left transition-colors hover:bg-accent"
+              onClick={() => {
+                workspace.handleExportIssuesToExcel("bundle");
+                setIsExportOpen(false);
+              }}
+              disabled={workspace.isExportingIssues}
+            >
+              <div className="text-sm font-semibold text-foreground">Everything by main module</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                Downloads a zip with one workbook per main module. Each workbook contains a
+                dedicated Main Module sheet plus one sheet per sub module. General issues are
+                included in a separate workbook.
+              </div>
+            </button>
+          </div>
+
+          <DialogFooter className="w-full flex-wrap">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setIsExportOpen(false)}
+              disabled={workspace.isExportingIssues}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isImportOpen}
+        onOpenChange={(open) => {
+          setIsImportOpen(open);
+
+          if (!open) {
+            setImportFile(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-lg">
+          <DialogHeader className="min-w-0 pr-8">
+            <DialogTitle>Import issues from Excel</DialogTitle>
+            <DialogDescription>
+              Choose the main module first. Sheets named Main Module import direct main-module
+              issues, while every other sheet is imported as a sub module under it.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            className="min-w-0"
+            onSubmit={(event) => {
+              event.preventDefault();
+
+              if (!importFile || !importMainModuleId) {
+                return;
+              }
+
+              workspace.handleImportIssuesFromFile(importFile, importMainModuleId);
+              setIsImportOpen(false);
+              setImportFile(null);
+            }}
+          >
+            <FieldGroup>
+              <Field className="min-w-0">
+                <FieldLabel>Main module</FieldLabel>
+                <Select
+                  value={importMainModuleId || "__none__"}
+                  onValueChange={(value) =>
+                    setImportMainModuleId(value === "__none__" ? "" : value)
+                  }
+                  disabled={workspace.isImportingIssues || workspace.mainModules.length === 0}
+                >
+                  <SelectTrigger className="h-10 w-full">
+                    <SelectValue placeholder="Choose a main module" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__" disabled>
+                      Choose a main module
+                    </SelectItem>
+                    {workspace.mainModules.map((module) => (
+                      <SelectItem key={module.id} value={module.id}>
+                        {module.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  {workspace.mainModules.length === 0
+                    ? "Create a main module before importing sheets as sub modules."
+                    : "Use Main Module for direct module issues. Every other sheet name becomes a sub module under the selected main module."}
+                </FieldDescription>
+              </Field>
+
+              <Field className="min-w-0">
+                <FieldLabel htmlFor="issues-import-file">Excel file</FieldLabel>
+                <Input
+                  id="issues-import-file"
+                  type="file"
+                  accept=".xlsx,.xlsm"
+                  disabled={workspace.isImportingIssues}
+                  onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                />
+                <FieldDescription>
+                  Use one sheet per sub module, or add a Main Module sheet for direct module issues.
+                  Existing issue numbers are matched within their own module scope.
+                </FieldDescription>
+              </Field>
+
+              <DialogFooter className="w-full flex-wrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    setIsImportOpen(false);
+                    setImportFile(null);
+                  }}
+                  disabled={workspace.isImportingIssues}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="w-full bg-linear-to-r from-emerald-400 to-cyan-400 text-black shadow-[0_0_18px_rgba(16,185,129,0.25)] hover:opacity-90 sm:w-auto"
+                  disabled={
+                    workspace.isImportingIssues ||
+                    !importFile ||
+                    !importMainModuleId ||
+                    workspace.mainModules.length === 0
+                  }
+                >
+                  {workspace.isImportingIssues ? "Importing..." : "Start import"}
+                </Button>
+              </DialogFooter>
+            </FieldGroup>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

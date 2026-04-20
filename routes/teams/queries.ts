@@ -14,13 +14,14 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
-import { teams, user, usersToTeams } from "@/db/schema";
+import { teamMemberRoles, teams, user, usersToTeams } from "@/db/schema";
 
 import type {
   ListTeamsInput,
   TeamAccessLevel,
   TeamListItem,
   TeamMemberListItem,
+  TeamMemberRole,
   TeamsListResponse,
 } from "./types";
 
@@ -35,6 +36,25 @@ function normalizeTeamAccessLevel(value: string | null | undefined): TeamAccessL
   return value === "read" ? "read" : "edit";
 }
 
+function normalizeTeamMemberRole(value: string | null | undefined): TeamMemberRole | null {
+  switch (value) {
+    case "developer":
+    case "tester":
+      return value;
+    default:
+      return null;
+  }
+}
+
+function sortTeamMemberRoles(roles: TeamMemberRole[]) {
+  const order = new Map<TeamMemberRole, number>([
+    ["developer", 0],
+    ["tester", 1],
+  ]);
+
+  return [...roles].sort((left, right) => (order.get(left) ?? 999) - (order.get(right) ?? 999));
+}
+
 function toTeamMemberListItem(
   row: {
     userId: string;
@@ -42,10 +62,20 @@ function toTeamMemberListItem(
     email: string | null;
     accessLevel: string | null;
   },
+  roles: string[],
   ownerUserId: string | null,
   currentUserId: string
 ): TeamMemberListItem {
   const isOwner = ownerUserId === row.userId;
+  const normalizedRoles = sortTeamMemberRoles(
+    Array.from(
+      new Set(
+        roles
+          .map((role) => normalizeTeamMemberRole(role))
+          .filter((role): role is TeamMemberRole => role !== null)
+      )
+    )
+  );
 
   return {
     userId: row.userId,
@@ -54,6 +84,7 @@ function toTeamMemberListItem(
     isOwner,
     isCurrentUser: row.userId === currentUserId,
     accessLevel: isOwner ? "edit" : normalizeTeamAccessLevel(row.accessLevel),
+    roles: normalizedRoles,
   };
 }
 
@@ -333,19 +364,42 @@ export async function listTeamMembersForUser(userId: string, teamId: string) {
     return null;
   }
 
-  const results = await db
-    .select({
-      userId: user.id,
-      name: user.name,
-      email: user.email,
-      accessLevel: usersToTeams.accessLevel,
-    })
-    .from(usersToTeams)
-    .innerJoin(user, eq(usersToTeams.userId, user.id))
-    .where(eq(usersToTeams.teamId, teamId));
+  const [results, roleRows] = await Promise.all([
+    db
+      .select({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        accessLevel: usersToTeams.accessLevel,
+      })
+      .from(usersToTeams)
+      .innerJoin(user, eq(usersToTeams.userId, user.id))
+      .where(eq(usersToTeams.teamId, teamId)),
+    db
+      .select({
+        userId: teamMemberRoles.userId,
+        role: teamMemberRoles.role,
+      })
+      .from(teamMemberRoles)
+      .where(eq(teamMemberRoles.teamId, teamId)),
+  ]);
+
+  const rolesByUserId = new Map<string, string[]>();
+
+  for (const roleRow of roleRows) {
+    const existingRoles = rolesByUserId.get(roleRow.userId);
+
+    if (existingRoles) {
+      existingRoles.push(roleRow.role);
+    } else {
+      rolesByUserId.set(roleRow.userId, [roleRow.role]);
+    }
+  }
 
   const members = results
-    .map((row) => toTeamMemberListItem(row, teamRecord.createdBy, userId))
+    .map((row) =>
+      toTeamMemberListItem(row, rolesByUserId.get(row.userId) ?? [], teamRecord.createdBy, userId)
+    )
     .sort((left, right) => {
       if (left.isOwner !== right.isOwner) {
         return left.isOwner ? -1 : 1;

@@ -61,7 +61,8 @@ export function createEmptyIssueForm(defaultIssueClassId = ""): IssueFormValues 
     navigation: "",
     title: "",
     description: "",
-    moduleId: "",
+    mainModuleId: "",
+    subModuleId: "",
     issueClassId: defaultIssueClassId,
     priority: "medium",
     status: "open",
@@ -84,7 +85,8 @@ export function createIssueFormFromIssue(
     navigation: issue.navigation ?? "",
     title: issue.title,
     description: issue.description ?? "",
-    moduleId: issue.moduleId ?? "",
+    mainModuleId: issue.mainModuleId ?? "",
+    subModuleId: issue.subModuleId ?? "",
     issueClassId: issue.issueClassId ?? defaultIssueClassId,
     priority: issue.priority,
     status: issue.status,
@@ -104,7 +106,7 @@ export function createIssuePayload(values: IssueFormValues): CreateIssueInput {
     navigation: values.navigation || null,
     title: values.title,
     description: values.description || null,
-    moduleId: values.moduleId || null,
+    moduleId: values.subModuleId || values.mainModuleId || null,
     issueClassId: values.issueClassId,
     priority: values.priority,
     status: values.status,
@@ -120,9 +122,38 @@ export function createIssuePayload(values: IssueFormValues): CreateIssueInput {
 }
 
 export function sortModules(modules: ProjectModuleListItem[]) {
-  return [...modules].sort((left, right) =>
-    left.name.localeCompare(right.name, undefined, { sensitivity: "base" })
-  );
+  const mainModules = modules
+    .filter((projectModule) => projectModule.parentModuleId === null)
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+  const subModulesByParentId = new Map<string, ProjectModuleListItem[]>();
+
+  for (const projectModule of modules) {
+    if (!projectModule.parentModuleId) {
+      continue;
+    }
+
+    const siblings = subModulesByParentId.get(projectModule.parentModuleId);
+
+    if (siblings) {
+      siblings.push(projectModule);
+    } else {
+      subModulesByParentId.set(projectModule.parentModuleId, [projectModule]);
+    }
+  }
+
+  const sortedModules: ProjectModuleListItem[] = [];
+
+  for (const mainModule of mainModules) {
+    sortedModules.push(mainModule);
+
+    const subModules = subModulesByParentId.get(mainModule.id) ?? [];
+    subModules.sort((left, right) =>
+      left.name.localeCompare(right.name, undefined, { sensitivity: "base" })
+    );
+    sortedModules.push(...subModules);
+  }
+
+  return sortedModules;
 }
 
 export function sortIssueClasses(issueClasses: IssueClassListItem[]) {

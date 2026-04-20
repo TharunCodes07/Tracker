@@ -1,15 +1,14 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Layers3, Plus, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+
+import { ChevronDown, ChevronLeft, ChevronRight, Layers3, Plus, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import {
-  GENERAL_MODULE_FILTER_VALUE,
-  type ProjectModuleListItem,
-} from "@/routes/issues/types";
+import { GENERAL_MODULE_FILTER_VALUE, type ProjectModuleListItem } from "@/routes/issues/types";
 
 interface ModuleNavigationSidebarProps {
   modules: ProjectModuleListItem[];
@@ -21,11 +20,12 @@ interface ModuleNavigationSidebarProps {
   onCollapsedChange: (collapsed: boolean) => void;
   onToggleModule: (value: string) => void;
   onClearSelection: () => void;
-  onCreateModule: () => void;
+  onCreateMainModule: () => void;
+  onCreateSubModule: (parentModuleId: string) => void;
 }
 
 function getModuleMonogram(label: string) {
-  const words = label.trim().split(/\s+/).filter(Boolean);
+  const words = label.trim().split(/[^A-Za-z0-9]+/).filter(Boolean);
 
   if (words.length === 0) {
     return "?";
@@ -48,24 +48,54 @@ export function ModuleNavigationSidebar({
   onCollapsedChange,
   onToggleModule,
   onClearSelection,
-  onCreateModule,
+  onCreateMainModule,
+  onCreateSubModule,
 }: ModuleNavigationSidebarProps) {
-  const moduleItems = [
+  const mainModules = useMemo(
+    () => modules.filter((projectModule) => projectModule.parentModuleId === null),
+    [modules]
+  );
+  const subModulesByParentId = new Map<string, ProjectModuleListItem[]>();
+  const [collapsedMainModuleIds, setCollapsedMainModuleIds] = useState<string[]>([]);
+
+  for (const projectModule of modules) {
+    if (!projectModule.parentModuleId) {
+      continue;
+    }
+
+    const siblings = subModulesByParentId.get(projectModule.parentModuleId);
+
+    if (siblings) {
+      siblings.push(projectModule);
+    } else {
+      subModulesByParentId.set(projectModule.parentModuleId, [projectModule]);
+    }
+  }
+
+  const collapsedModuleItems = [
     {
       value: GENERAL_MODULE_FILTER_VALUE,
       label: "General",
       count: moduleIssueCountById.get(GENERAL_MODULE_FILTER_VALUE) ?? 0,
     },
-    ...modules.map((module) => ({
-      value: module.id,
-      label: module.name,
-      count: moduleIssueCountById.get(module.id) ?? 0,
+    ...modules.map((projectModule) => ({
+      value: projectModule.id,
+      label: projectModule.displayName,
+      count: moduleIssueCountById.get(projectModule.id) ?? 0,
     })),
   ];
 
   const selectedCount = selectedModuleFilters.length;
   const sidebarMeta =
-    selectedCount > 0 ? `${selectedCount} selected` : `${moduleItems.length} items`;
+    selectedCount > 0 ? `${selectedCount} selected` : `${modules.length + 2} items`;
+
+  function toggleMainModuleExpansion(mainModuleId: string) {
+    setCollapsedMainModuleIds((currentIds) =>
+      currentIds.includes(mainModuleId)
+        ? currentIds.filter((id) => id !== mainModuleId)
+        : [...currentIds, mainModuleId]
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-border/60 bg-card/80 shadow-sm">
@@ -129,7 +159,7 @@ export function ModuleNavigationSidebar({
               </TooltipContent>
             </Tooltip>
 
-            {moduleItems.map((item) => {
+            {collapsedModuleItems.map((item) => {
               const isActive = selectedModuleFilters.includes(item.value);
 
               return (
@@ -163,13 +193,13 @@ export function ModuleNavigationSidebar({
                   type="button"
                   size="icon"
                   className="rounded-2xl bg-linear-to-r from-emerald-400 to-cyan-400 text-black hover:opacity-90"
-                  onClick={onCreateModule}
-                  aria-label="Create module"
+                  onClick={onCreateMainModule}
+                  aria-label="Create main module"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right">New module</TooltipContent>
+              <TooltipContent side="right">New main module</TooltipContent>
             </Tooltip>
           ) : null}
         </div>
@@ -196,24 +226,122 @@ export function ModuleNavigationSidebar({
                 <Badge variant="outline">{totalIssues}</Badge>
               </button>
 
-              {moduleItems.map((item) => {
-                const isActive = selectedModuleFilters.includes(item.value);
+              <button
+                type="button"
+                onClick={() => onToggleModule(GENERAL_MODULE_FILTER_VALUE)}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors",
+                  selectedModuleFilters.includes(GENERAL_MODULE_FILTER_VALUE)
+                    ? "border-cyan-400/35 bg-cyan-400/12 text-foreground"
+                    : "border-border/60 bg-background/55 text-foreground hover:bg-accent"
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">General</div>
+                  <div className="text-xs text-muted-foreground">
+                    Issues not tied to any module
+                  </div>
+                </div>
+                <Badge
+                  variant={
+                    selectedModuleFilters.includes(GENERAL_MODULE_FILTER_VALUE)
+                      ? "secondary"
+                      : "outline"
+                  }
+                >
+                  {moduleIssueCountById.get(GENERAL_MODULE_FILTER_VALUE) ?? 0}
+                </Badge>
+              </button>
+
+              {mainModules.map((mainModule) => {
+                const isMainModuleActive = selectedModuleFilters.includes(mainModule.id);
+                const subModules = subModulesByParentId.get(mainModule.id) ?? [];
+                const isMainModuleExpanded = !collapsedMainModuleIds.includes(mainModule.id);
 
                 return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => onToggleModule(item.value)}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors",
-                      isActive
-                        ? "border-cyan-400/35 bg-cyan-400/12 text-foreground"
-                        : "border-border/60 bg-background/55 text-foreground hover:bg-accent"
-                    )}
-                  >
-                    <div className="min-w-0 truncate text-sm font-medium">{item.label}</div>
-                    <Badge variant={isActive ? "secondary" : "outline"}>{item.count}</Badge>
-                  </button>
+                  <div key={mainModule.id} className="space-y-1">
+                    <div
+                      className={cn(
+                        "flex items-center gap-2 rounded-2xl border px-3 py-2.5 transition-colors",
+                        isMainModuleActive
+                          ? "border-cyan-400/35 bg-cyan-400/12 text-foreground"
+                          : "border-border/60 bg-background/55 text-foreground"
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onToggleModule(mainModule.id)}
+                        className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                      >
+                        <div className="min-w-0 truncate text-sm font-medium">{mainModule.name}</div>
+                        <Badge variant={isMainModuleActive ? "secondary" : "outline"}>
+                          {moduleIssueCountById.get(mainModule.id) ?? 0}
+                        </Badge>
+                      </button>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="rounded-xl"
+                        onClick={() => toggleMainModuleExpansion(mainModule.id)}
+                        aria-label={
+                          isMainModuleExpanded
+                            ? `Collapse ${mainModule.name}`
+                            : `Expand ${mainModule.name}`
+                        }
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 transition-transform",
+                            isMainModuleExpanded ? "rotate-180" : ""
+                          )}
+                        />
+                      </Button>
+
+                      {canEditProject ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="rounded-xl"
+                          onClick={() => onCreateSubModule(mainModule.id)}
+                          aria-label={`Create sub module under ${mainModule.name}`}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                    </div>
+
+                    {subModules.length > 0 && isMainModuleExpanded ? (
+                      <div className="space-y-1 pl-4">
+                        {subModules.map((subModule) => {
+                          const isSubModuleActive = selectedModuleFilters.includes(subModule.id);
+
+                          return (
+                            <button
+                              key={subModule.id}
+                              type="button"
+                              onClick={() => onToggleModule(subModule.id)}
+                              className={cn(
+                                "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors",
+                                isSubModuleActive
+                                  ? "border-cyan-400/35 bg-cyan-400/12 text-foreground"
+                                  : "border-border/60 bg-background/55 text-foreground hover:bg-accent"
+                              )}
+                            >
+                              <div className="min-w-0 truncate text-sm text-muted-foreground">
+                                {subModule.name}
+                              </div>
+                              <Badge variant={isSubModuleActive ? "secondary" : "outline"}>
+                                {moduleIssueCountById.get(subModule.id) ?? 0}
+                              </Badge>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>
@@ -232,11 +360,11 @@ export function ModuleNavigationSidebar({
               {canEditProject ? (
                 <Button
                   type="button"
-                  onClick={onCreateModule}
+                  onClick={onCreateMainModule}
                   className="bg-linear-to-r from-emerald-400 to-cyan-400 text-black hover:opacity-90"
                 >
                   <Plus className="h-4 w-4" />
-                  New module
+                  New main module
                 </Button>
               ) : null}
             </div>

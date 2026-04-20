@@ -16,6 +16,11 @@ interface NavigationHistoryState {
     index: number;
 }
 
+const EMPTY_NAVIGATION_HISTORY_SNAPSHOT: NavigationHistoryState = {
+    entries: [],
+    index: -1,
+};
+
 const isUUID = (str: string): boolean => {
     const uuidRegex = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
     return uuidRegex.test(str);
@@ -44,7 +49,7 @@ function getNavigationHistorySnapshot() {
 }
 
 function getServerNavigationHistorySnapshot(): NavigationHistoryState {
-    return { entries: [], index: -1 };
+    return EMPTY_NAVIGATION_HISTORY_SNAPSHOT;
 }
 
 function sanitizeNavigationHistoryState(value: unknown): NavigationHistoryState {
