@@ -2,9 +2,9 @@ import Link from "next/link";
 import { CheckCircle2, Zap } from "lucide-react";
 
 const authHighlights = [
-  "Track projects, teams, and issue flow from one workspace.",
-  "Keep status visible without adding extra UI noise.",
-  "Use the same session across the dashboard and future modules.",
+  "Manage issues across multiple projects from one shared workspace.",
+  "Give every team clear ownership, priorities, and progress visibility.",
+  "Stay aligned with a system built for ongoing delivery, not scattered updates.",
 ];
 
 export default function AuthLayout({
@@ -25,7 +25,7 @@ export default function AuthLayout({
               Tracker
             </span>
             <span className="block text-xs text-muted-foreground">
-              Issue and team coordination
+              Multi-project issue tracking for teams
             </span>
           </span>
         </Link>
@@ -34,14 +34,14 @@ export default function AuthLayout({
           <div className="grid w-full gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(420px,480px)] lg:items-center">
             <section className="hidden max-w-xl lg:block">
               <p className="text-sm font-medium uppercase tracking-[0.28em] text-emerald-500/90">
-                Team Access
+                Team Workspace
               </p>
               <h1 className="mt-6 text-4xl font-semibold leading-tight tracking-tight text-foreground">
-                Keep delivery, ownership, and status in one place.
+                Track work across teams, projects, and priorities.
               </h1>
               <p className="mt-5 max-w-lg text-base leading-7 text-muted-foreground">
-                Sign in to continue working or create a new account to start
-                managing teams, projects, and issue updates from the same
+                Sign in to manage issues, coordinate contributors, and keep
+                progress moving across multiple projects in one organized
                 workspace.
               </p>
 
