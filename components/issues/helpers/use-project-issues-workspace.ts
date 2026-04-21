@@ -918,6 +918,21 @@ export function useProjectIssuesWorkspace() {
         }
 
         const importResult = data as IssueExcelImportResponse;
+
+        try {
+          const workspaceData = await requestJson<ProjectIssuesWorkspaceResponse>(
+            `/api/teams/${team.id}/projects/${project.id}/issues/workspace`,
+            {
+              cache: "no-store",
+            }
+          );
+
+          setModules(sortModules(workspaceData.modules));
+          setIssueClasses(sortIssueClasses(workspaceData.issueClasses));
+        } catch {
+          toast.warning("Issues were imported, but module metadata could not be refreshed.");
+        }
+
         refreshIssues(0);
         toast.success(importResult.message);
 
