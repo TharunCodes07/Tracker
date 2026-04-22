@@ -391,7 +391,7 @@ export function IssueDialog({
 
               <Field orientation="horizontal" className="justify-between rounded-2xl border border-border/60 bg-background/55 px-4 py-3">
                 <div className="space-y-1">
-                  <FieldLabel htmlFor="issue-deployment">Deployement</FieldLabel>
+                  <FieldLabel htmlFor="issue-deployment">Deployment</FieldLabel>
                   <FieldDescription>Mark whether the fix has been deployed.</FieldDescription>
                 </div>
                 <Switch

@@ -709,7 +709,6 @@ export default function ProjectIssuesPage() {
             : "Add a general issue or tie it to a project module, then assign the right teammates for build, review, and testing."
         }
         submitLabel={workspace.isEditingIssue ? "Save changes" : "Create issue"}
-        className="max-"
       />
 
       <AlertDialog

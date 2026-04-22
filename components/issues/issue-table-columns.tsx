@@ -47,7 +47,7 @@ export function getIssueTableColumns({
       cell: ({ row }) => (
         <div className="mx-auto min-w-0 max-w-[320px] space-y-1 text-center">
           <div className="flex items-center justify-center gap-2">
-            <Badge variant="outline">#{row.original.no}</Badge>
+            {/* <Badge variant="outline">#{row.original.no}</Badge> */}
             <span
               className="line-clamp-2 break-words font-medium text-foreground"
               title={row.original.title}
@@ -63,7 +63,7 @@ export function getIssueTableColumns({
           </div>
         </div>
       ),
-      size: 340,
+      size: 440,
     },
     {
       accessorKey: "issueClassName",
