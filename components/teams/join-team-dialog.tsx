@@ -35,9 +35,9 @@ export function JoinTeamDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Join Team</DialogTitle>
+          <DialogTitle>Request Team Access</DialogTitle>
           <DialogDescription>
-            Enter the shared team code to add this workspace to your account.
+            Enter the shared team code to send an access request to that team&apos;s owners.
           </DialogDescription>
         </DialogHeader>
 
@@ -56,7 +56,7 @@ export function JoinTeamDialog({
                 required
               />
               <FieldDescription>
-                Team codes are case-insensitive. Paste it exactly as shared.
+                Team codes are case-insensitive. Owners must approve the request before you join.
               </FieldDescription>
             </Field>
 
@@ -70,7 +70,7 @@ export function JoinTeamDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Joining..." : "Join team"}
+                {pending ? "Requesting..." : "Request access"}
               </Button>
             </DialogFooter>
           </FieldGroup>

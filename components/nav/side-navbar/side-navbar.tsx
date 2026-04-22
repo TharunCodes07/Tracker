@@ -26,13 +26,15 @@ import {
     ArrowLeft,
     ArrowRight,
     UsersRound,
+    FolderKanban,
+    Zap,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { authClient } from "@/lib/auth-client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import { useRecentProjects } from "@/components/nav/hooks/use-recent-projects";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -56,11 +58,18 @@ const navGroups = [
                 color: "text-blue-500",
             },
             {
+                title: "Projects",
+                url: "/projects",
+                icon: FolderKanban,
+                color: "text-cyan-500",
+            },
+            {
                 title: "Teams",
                 url: "/teams",
                 icon: UsersRound,
                 color: "text-emerald-500",
             },
+            
         ],
     },  
     {
@@ -114,6 +123,7 @@ export function AppSidebar() {
     const { data: session, isPending } = authClient.useSession();
     const { open } = useSidebar();
     const [mounted, setMounted] = useState(false);
+    const recentProjects = useRecentProjects(5);
 
     // This is a valid use case for detecting client-side mounting to prevent hydration mismatches
     useEffect(() => {
@@ -238,6 +248,50 @@ export function AppSidebar() {
                         )}
                     </div>
                 ))}
+
+                {recentProjects.length > 0 ? (
+                    <>
+                        <SidebarSeparator className={sidebarSectionSeparatorClassName} />
+
+                        <SidebarGroup className="px-2 py-4">
+                            <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/70 px-2 group-data-[collapsible=icon]:sr-only">
+                                Recent Projects
+                            </SidebarGroupLabel>
+                            <SidebarGroupContent>
+                                <SidebarMenu>
+                                    {recentProjects.map((project) => (
+                                        <SidebarMenuItem key={`${project.teamId}:${project.projectId}`}>
+                                            <SidebarMenuButton
+                                                asChild
+                                                isActive={isItemActive(project.href)}
+                                                tooltip={`${project.projectName} • ${project.teamName}`}
+                                                className="group/item transition-all duration-200 hover:bg-sidebar-accent/80"
+                                            >
+                                                <Link href={project.href} className="flex items-center min-w-0">
+                                                    <FolderKanban
+                                                        className={`h-4 w-4 transition-colors ${
+                                                            isItemActive(project.href)
+                                                                ? "text-sidebar-accent-foreground"
+                                                                : "text-cyan-500 group-hover/item:text-sidebar-accent-foreground"
+                                                        }`}
+                                                    />
+                                                    <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
+                                                        <span className="truncate font-medium">
+                                                            {project.projectName}
+                                                        </span>
+                                                        <span className="truncate text-xs text-sidebar-foreground/60">
+                                                            {project.teamName}
+                                                        </span>
+                                                    </div>
+                                                </Link>
+                                            </SidebarMenuButton>
+                                        </SidebarMenuItem>
+                                    ))}
+                                </SidebarMenu>
+                            </SidebarGroupContent>
+                        </SidebarGroup>
+                    </>
+                ) : null}
 
                 <SidebarSeparator className={sidebarSectionSeparatorClassName} />
 

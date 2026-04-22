@@ -420,7 +420,11 @@ async function assertUsersBelongToTeam(teamId: string, userIds: string[]) {
     })
     .from(usersToTeams)
     .where(
-      and(eq(usersToTeams.teamId, teamId), inArray(usersToTeams.userId, normalizedUserIds))
+      and(
+        eq(usersToTeams.teamId, teamId),
+        eq(usersToTeams.membershipStatus, "active"),
+        inArray(usersToTeams.userId, normalizedUserIds)
+      )
     );
 
   if (rows.length !== normalizedUserIds.length) {

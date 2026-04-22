@@ -3,18 +3,32 @@
 import type * as React from "react";
 
 import { EntityDialog } from "@/components/ui/entity-dialog";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  TEAM_VISIBILITY_OPTIONS,
+  type TeamVisibility,
+} from "@/routes/teams/types";
 
 interface TeamDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   name: string;
   description: string;
+  visibility: TeamVisibility;
   pending: boolean;
   title?: string;
   descriptionText?: string;
   submitLabel?: string;
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
+  onVisibilityChange: (value: TeamVisibility) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }
 
@@ -23,12 +37,14 @@ export function TeamDialog({
   onOpenChange,
   name,
   description,
+  visibility,
   pending,
   title = "Create Team",
-  descriptionText = "Set up a team workspace and get a join code you can share immediately.",
+  descriptionText = "Set up a team workspace, choose whether everyone can discover it, and generate an invite code.",
   submitLabel = "Create team",
   onNameChange,
   onDescriptionChange,
+  onVisibilityChange,
   onSubmit,
 }: TeamDialogProps) {
   return (
@@ -50,6 +66,30 @@ export function TeamDialog({
       onNameChange={onNameChange}
       onDescriptionChange={onDescriptionChange}
       onSubmit={onSubmit}
-    />
+    >
+      <Field className="min-w-0">
+        <FieldLabel>Visibility</FieldLabel>
+        <Select
+          value={visibility}
+          onValueChange={(value) => onVisibilityChange(value as TeamVisibility)}
+          disabled={pending}
+        >
+          <SelectTrigger className="h-10 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TEAM_VISIBILITY_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FieldDescription>
+          Public teams are visible to everyone in the workspace. Private teams only appear to
+          members or people with the invite code.
+        </FieldDescription>
+      </Field>
+    </EntityDialog>
   );
 }

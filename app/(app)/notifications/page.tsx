@@ -64,6 +64,8 @@ function buildNotificationsHref(options: {
 
 function getNotificationAccentClassName(notification: NotificationListItem) {
   switch (notification.trigger) {
+    case "team.invited":
+      return "border-sky-400/30 bg-sky-400/10 text-sky-700 dark:text-sky-300";
     case "issue.ready_for_test":
       return "border-cyan-400/30 bg-cyan-400/10 text-cyan-700 dark:text-cyan-300";
     case "issue.reopened":
@@ -80,6 +82,8 @@ function getNotificationAccentClassName(notification: NotificationListItem) {
 
 function getNotificationLabel(notification: NotificationListItem) {
   switch (notification.trigger) {
+    case "team.invited":
+      return "Invite";
     case "issue.ready_for_test":
       return "Ready for test";
     case "issue.reopened":

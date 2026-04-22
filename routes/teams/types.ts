@@ -1,4 +1,18 @@
-export type TeamAccessLevel = "edit" | "read";
+export const TEAM_ACCESS_LEVEL_OPTIONS = [
+  { value: "owner", label: "Owner access" },
+  { value: "edit", label: "Edit access" },
+  { value: "read", label: "Read access" },
+] as const;
+export type TeamAccessLevel = (typeof TEAM_ACCESS_LEVEL_OPTIONS)[number]["value"];
+
+export const TEAM_VISIBILITY_OPTIONS = [
+  { value: "private", label: "Private" },
+  { value: "public", label: "Public" },
+] as const;
+export type TeamVisibility = (typeof TEAM_VISIBILITY_OPTIONS)[number]["value"];
+
+export type TeamMembershipStatus = "active" | "pending" | "none";
+
 export const TEAM_MEMBER_ROLE_OPTIONS = [
   { value: "developer", label: "Developer" },
   { value: "tester", label: "Tester" },
@@ -21,13 +35,18 @@ export interface TeamListItem {
   id: string;
   name: string;
   description: string | null;
-  joinCode: string;
+  visibility: TeamVisibility;
+  joinCode: string | null;
   createdAt: string;
   createdByName: string;
   memberCount: number;
+  pendingRequestCount: number;
+  isMember: boolean;
   isOwner: boolean;
-  accessLevel: TeamAccessLevel;
+  accessLevel: TeamAccessLevel | null;
+  membershipStatus: TeamMembershipStatus;
   canEdit: boolean;
+  canRequestAccess: boolean;
 }
 
 export interface TeamMemberListItem {
@@ -40,9 +59,17 @@ export interface TeamMemberListItem {
   roles: TeamMemberRole[];
 }
 
+export interface TeamPendingJoinRequestListItem {
+  userId: string;
+  name: string;
+  email: string;
+  requestedAccessLevel: Exclude<TeamAccessLevel, "owner">;
+}
+
 export interface TeamMembersResponse {
   team: TeamListItem;
   members: TeamMemberListItem[];
+  pendingRequests: TeamPendingJoinRequestListItem[];
 }
 
 export interface ListTeamsInput {
@@ -83,6 +110,11 @@ export interface TeamMutationResponse {
   message: string;
 }
 
+export interface JoinTeamMutationResponse {
+  teamId: string;
+  message: string;
+}
+
 export interface TeamDeleteResponse {
   deletedTeamId: string;
   message: string;
@@ -91,18 +123,36 @@ export interface TeamDeleteResponse {
 export interface CreateTeamInput {
   name: string;
   description?: string | null;
+  visibility: TeamVisibility;
 }
 
 export interface UpdateTeamInput {
   name: string;
   description?: string | null;
+  visibility: TeamVisibility;
 }
 
 export interface JoinTeamInput {
-  code: string;
+  code?: string;
+  teamId?: string;
 }
 
 export interface UpdateTeamMemberInput {
   accessLevel?: TeamAccessLevel;
   roles?: TeamMemberRole[];
+}
+
+export interface TeamJoinRequestMutationResponse {
+  memberUserId: string;
+  message: string;
+}
+
+export interface TeamInviteMemberInput {
+  email: string;
+  accessLevel?: Exclude<TeamAccessLevel, "owner">;
+}
+
+export interface TeamInviteMemberResponse {
+  memberUserId: string;
+  message: string;
 }

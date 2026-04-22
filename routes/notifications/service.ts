@@ -20,7 +20,9 @@ async function listTeamRecipientIds(teamId: string) {
       userId: usersToTeams.userId,
     })
     .from(usersToTeams)
-    .where(eq(usersToTeams.teamId, teamId));
+    .where(
+      and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.membershipStatus, "active"))
+    );
 
   return rows.map((row) => row.userId);
 }
@@ -55,6 +57,27 @@ async function buildProjectCreatedNotifications(
         href: `/teams/${event.teamId}`,
       })
     );
+}
+
+async function buildTeamInvitedNotifications(
+  event: Extract<NotificationEvent, { type: "team.invited" }>
+) {
+  if (event.invitedUserId === event.actorId) {
+    return [];
+  }
+
+  const actorName = normalizeActorName(event.actorName);
+
+  return [
+    {
+      userId: event.invitedUserId,
+      trigger: event.type,
+      teamId: event.teamId,
+      title: "Team invitation",
+      message: `${actorName} invited you to join ${event.teamName}.`,
+      href: "/teams",
+    } satisfies CreateNotificationInput,
+  ];
 }
 
 async function buildIssueCreatedNotifications(
@@ -160,6 +183,8 @@ async function buildIssueReopenedNotifications(
 
 async function buildNotificationEntries(event: NotificationEvent) {
   switch (event.type) {
+    case "team.invited":
+      return buildTeamInvitedNotifications(event);
     case "project.created":
       return buildProjectCreatedNotifications(event);
     case "issue.created":

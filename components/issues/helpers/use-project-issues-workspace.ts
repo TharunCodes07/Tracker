@@ -76,6 +76,18 @@ const EMPTY_SUMMARY: IssueListSummary = {
   hasUnclassifiedIssues: false,
 };
 
+interface SubModuleDraft {
+  name: string;
+  description: string;
+}
+
+function createEmptySubModuleDraft(): SubModuleDraft {
+  return {
+    name: "",
+    description: "",
+  };
+}
+
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
 }
@@ -124,6 +136,8 @@ export function useProjectIssuesWorkspace() {
   const [moduleName, setModuleName] = useState("");
   const [moduleDescription, setModuleDescription] = useState("");
   const [moduleParentId, setModuleParentId] = useState("");
+  const [createSubModulesWithMain, setCreateSubModulesWithMain] = useState(false);
+  const [subModuleDrafts, setSubModuleDrafts] = useState<SubModuleDraft[]>([]);
 
   const [isIssueClassOpen, setIsIssueClassOpen] = useState(false);
   const [issueClassName, setIssueClassName] = useState("");
@@ -535,12 +549,39 @@ export function useProjectIssuesWorkspace() {
       setModuleName("");
       setModuleDescription("");
       setModuleParentId("");
+      setCreateSubModulesWithMain(false);
+      setSubModuleDrafts([]);
     }
   }
 
   function openModuleDialog(parentModuleId = "") {
+    setCreateSubModulesWithMain(false);
+    setSubModuleDrafts([]);
     setModuleParentId(parentModuleId);
     setIsModuleOpen(true);
+  }
+
+  function addSubModuleDraft() {
+    setSubModuleDrafts((currentDrafts) => [...currentDrafts, createEmptySubModuleDraft()]);
+  }
+
+  function updateSubModuleDraft(index: number, patch: Partial<SubModuleDraft>) {
+    setSubModuleDrafts((currentDrafts) =>
+      currentDrafts.map((draft, draftIndex) =>
+        draftIndex === index
+          ? {
+              ...draft,
+              ...patch,
+            }
+          : draft
+      )
+    );
+  }
+
+  function removeSubModuleDraft(index: number) {
+    setSubModuleDrafts((currentDrafts) =>
+      currentDrafts.filter((_, draftIndex) => draftIndex !== index)
+    );
   }
 
   function closeIssueClassDialog(open: boolean) {
@@ -669,6 +710,19 @@ export function useProjectIssuesWorkspace() {
       return;
     }
 
+    const shouldCreateSubModules = !moduleParentId && createSubModulesWithMain;
+    const normalizedSubModules = subModuleDrafts
+      .map((draft) => ({
+        name: draft.name.trim(),
+        description: draft.description.trim(),
+      }))
+      .filter((draft) => draft.name.length > 0);
+
+    if (shouldCreateSubModules && normalizedSubModules.length === 0) {
+      toast.error("Add at least one sub module name or turn off optional sub module creation.");
+      return;
+    }
+
     const payload: CreateProjectModuleInput = {
       name: moduleName,
       description: moduleDescription,
@@ -685,9 +739,61 @@ export function useProjectIssuesWorkspace() {
           }
         );
 
-        setModules((currentModules) => sortModules([...currentModules, data.module]));
+        const createdModules: ProjectModuleListItem[] = [data.module];
+        let moduleSuccessMessage = data.message;
+        let subModuleErrorMessage: string | null = null;
+
+        if (shouldCreateSubModules) {
+          const createdSubModuleNames: string[] = [];
+          const failedSubModuleNames: string[] = [];
+
+          for (const subModule of normalizedSubModules) {
+            try {
+            const subModulePayload: CreateProjectModuleInput = {
+                name: subModule.name,
+                description: subModule.description,
+              parentModuleId: data.module.id,
+            };
+            const subModuleData = await requestJson<ProjectModuleMutationResponse>(
+              `/api/teams/${team.id}/projects/${project.id}/modules`,
+              {
+                method: "POST",
+                body: JSON.stringify(subModulePayload),
+              }
+            );
+
+            createdModules.push(subModuleData.module);
+              createdSubModuleNames.push(subModuleData.module.name);
+            } catch {
+              failedSubModuleNames.push(subModule.name);
+            }
+          }
+
+          if (createdSubModuleNames.length > 0) {
+            moduleSuccessMessage = `${data.module.name} with ${createdSubModuleNames.length} sub module${
+              createdSubModuleNames.length === 1 ? "" : "s"
+            } is ready.`;
+          }
+
+          if (failedSubModuleNames.length > 0) {
+            const preview = failedSubModuleNames.slice(0, 2).join(", ");
+
+            subModuleErrorMessage =
+              failedSubModuleNames.length === 1
+                ? `Main module was created, but sub module ${preview} could not be created.`
+                : `Main module was created, but ${failedSubModuleNames.length} sub modules could not be created (${preview}${
+                    failedSubModuleNames.length > 2 ? ", ..." : ""
+                  }).`;
+          }
+        }
+
+        setModules((currentModules) => sortModules([...currentModules, ...createdModules]));
         closeModuleDialog(false);
-        toast.success(data.message);
+        toast.success(moduleSuccessMessage);
+
+        if (subModuleErrorMessage) {
+          toast.warning(subModuleErrorMessage);
+        }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not create the module.");
       }
@@ -1021,6 +1127,12 @@ export function useProjectIssuesWorkspace() {
     setModuleDescription,
     moduleParentId,
     setModuleParentId,
+    createSubModulesWithMain,
+    setCreateSubModulesWithMain,
+    subModuleDrafts,
+    addSubModuleDraft,
+    updateSubModuleDraft,
+    removeSubModuleDraft,
     isCreatingModule,
     handleCreateModule,
     isIssueClassOpen,

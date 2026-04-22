@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
 import { joinTeamForUser } from "@/routes/teams/mutations";
-import type { JoinTeamInput, TeamMutationResponse } from "@/routes/teams/types";
+import type { JoinTeamInput, JoinTeamMutationResponse } from "@/routes/teams/types";
 
 export async function POST(request: Request) {
   try {
@@ -10,9 +10,9 @@ export async function POST(request: Request) {
     const body = await readJsonBody<JoinTeamInput>(request);
     const team = await joinTeamForUser(actor, body);
 
-    return NextResponse.json<TeamMutationResponse>({
-      team,
-      message: `Joined ${team.name}.`,
+    return NextResponse.json<JoinTeamMutationResponse>({
+      teamId: team.id,
+      message: `Requested access to ${team.name}.`,
     });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the team request.");

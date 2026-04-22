@@ -1,9 +1,18 @@
 import type { TeamListItem } from "@/routes/teams/types";
+import type { TeamAccessLevel } from "@/routes/teams/types";
 
 export const PROJECT_LIST_SORT_FIELDS = ["createdAt", "name", "issueCount"] as const;
+export const USER_PROJECT_LIST_SORT_FIELDS = [
+  "createdAt",
+  "name",
+  "issueCount",
+  "teamName",
+] as const;
 
 export type ProjectListSortField = (typeof PROJECT_LIST_SORT_FIELDS)[number];
 export type ProjectListSortDirection = "asc" | "desc";
+export type UserProjectListSortField = (typeof USER_PROJECT_LIST_SORT_FIELDS)[number];
+export type UserProjectListSortDirection = "asc" | "desc";
 
 export interface ProjectListItem {
   id: string;
@@ -11,6 +20,13 @@ export interface ProjectListItem {
   description: string | null;
   issueCount: number;
   createdAt: string;
+}
+
+export interface UserProjectListItem extends ProjectListItem {
+  teamId: string;
+  teamName: string;
+  teamAccessLevel: TeamAccessLevel;
+  teamCanEdit: boolean;
 }
 
 export interface ListTeamProjectsInput {
@@ -21,8 +37,22 @@ export interface ListTeamProjectsInput {
   sortDirection: ProjectListSortDirection;
 }
 
+export interface ListUserProjectsInput {
+  page: number;
+  pageSize: number;
+  search: string;
+  sortBy: UserProjectListSortField;
+  sortDirection: UserProjectListSortDirection;
+}
+
 export interface TeamProjectsSummary {
   totalProjects: number;
+}
+
+export interface UserProjectsSummary {
+  totalProjects: number;
+  editableProjects: number;
+  teamCount: number;
 }
 
 export interface ProjectListPagination {
@@ -38,6 +68,12 @@ export interface TeamProjectsResponse {
   team: TeamListItem;
   projects: ProjectListItem[];
   summary: TeamProjectsSummary;
+  pagination: ProjectListPagination;
+}
+
+export interface UserProjectsResponse {
+  projects: UserProjectListItem[];
+  summary: UserProjectsSummary;
   pagination: ProjectListPagination;
 }
 

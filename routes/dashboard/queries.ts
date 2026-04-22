@@ -48,7 +48,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
     })
     .from(usersToTeams)
     .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
-    .where(eq(usersToTeams.userId, userId))
+    .where(and(eq(usersToTeams.userId, userId), eq(usersToTeams.membershipStatus, "active")))
     .groupBy(teamsToProjects.projectId)
     .as("dashboard_accessible_project_ids");
 
@@ -61,7 +61,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
     })
     .from(usersToTeams)
     .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
-    .where(eq(usersToTeams.userId, userId))
+    .where(and(eq(usersToTeams.userId, userId), eq(usersToTeams.membershipStatus, "active")))
     .groupBy(teamsToProjects.projectId)
     .as("dashboard_accessible_project_routing");
 
@@ -76,7 +76,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
     .from(usersToTeams)
     .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
     .innerJoin(teams, eq(usersToTeams.teamId, teams.id))
-    .where(eq(usersToTeams.userId, userId))
+    .where(and(eq(usersToTeams.userId, userId), eq(usersToTeams.membershipStatus, "active")))
     .groupBy(teamsToProjects.projectId)
     .as("dashboard_accessible_project_teams");
 
@@ -97,7 +97,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
           coalesce(
             sum(
               case
-                when ${teams.createdBy} = ${userId} or ${usersToTeams.accessLevel} = 'edit' then 1
+                when ${usersToTeams.accessLevel} in ('owner', 'edit') then 1
                 else 0
               end
             ),
@@ -107,7 +107,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
       })
       .from(usersToTeams)
       .innerJoin(teams, eq(usersToTeams.teamId, teams.id))
-      .where(eq(usersToTeams.userId, userId))
+      .where(and(eq(usersToTeams.userId, userId), eq(usersToTeams.membershipStatus, "active")))
       .then((rows) => rows[0] ?? null),
     db
       .select({

@@ -78,6 +78,13 @@
       "when": 1776680409443,
       "tag": "0010_clean_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776844407386,
+      "tag": "0011_fuzzy_stryfe",
+      "breakpoints": true
     }
   ]
 }

@@ -98,6 +98,7 @@ export const teams = pgTable('teams', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
+  visibility: varchar('visibility', { length: 16 }).notNull().default('private'),
   joinCode: varchar('join_code', { length: 12 }).notNull(),
   createdBy: uuid('created_by').references(() => user.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -171,11 +172,14 @@ export const usersToTeams = pgTable(
       .notNull()
       .references(() => teams.id, { onDelete: 'cascade' }),
     accessLevel: varchar('access_level', { length: 16 }).notNull().default('edit'),
+    membershipStatus: varchar('membership_status', { length: 16 }).notNull().default('active'),
   },
   (t) => [
     primaryKey({ columns: [t.userId, t.teamId] }),
     index('users_to_teams_user_id_idx').on(t.userId),
+    index('users_to_teams_user_id_membership_status_idx').on(t.userId, t.membershipStatus),
     index('users_to_teams_team_id_idx').on(t.teamId),
+    index('users_to_teams_team_id_membership_status_idx').on(t.teamId, t.membershipStatus),
   ]
 );
 

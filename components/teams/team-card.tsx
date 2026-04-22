@@ -1,7 +1,17 @@
 import type { MouseEvent } from "react";
 
 import { format } from "date-fns";
-import { CalendarDays, Copy, PencilLine, ShieldCheck, Trash2, UsersRound } from "lucide-react";
+import {
+  CalendarDays,
+  Copy,
+  Globe2,
+  Lock,
+  PencilLine,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+  UsersRound,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +29,9 @@ interface TeamCardProps {
   onEdit: (team: TeamListItem) => void;
   onDelete: (team: TeamListItem) => void;
   onCopyCode: (code: string) => void;
+  onRequestAccess: (team: TeamListItem) => void;
   actionPending?: boolean;
+  pendingRequestTeamId?: string | null;
 }
 
 function stopCardClick(event: MouseEvent<HTMLButtonElement>) {
@@ -31,8 +43,12 @@ export function TeamCard({
   onEdit,
   onDelete,
   onCopyCode,
+  onRequestAccess,
   actionPending = false,
+  pendingRequestTeamId = null,
 }: TeamCardProps) {
+  const isRequestPending = pendingRequestTeamId === team.id;
+
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-emerald-400/70 to-cyan-400/70" />
@@ -41,13 +57,27 @@ export function TeamCard({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-3 pr-12 min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                variant={team.isOwner ? "default" : "secondary"}
-                className={team.isOwner ? "shadow-[0_0_12px_rgba(16,185,129,0.18)]" : undefined}
-              >
-                {team.isOwner ? "Owner" : "Member"}
+              <Badge variant={team.visibility === "public" ? "outline" : "secondary"}>
+                {team.visibility === "public" ? (
+                  <Globe2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Lock className="h-3.5 w-3.5" />
+                )}
+                {team.visibility === "public" ? "Public" : "Private"}
               </Badge>
-              {!team.isOwner ? (
+              {team.membershipStatus === "active" ? (
+                <Badge
+                  variant={team.isOwner ? "default" : "secondary"}
+                  className={team.isOwner ? "shadow-[0_0_12px_rgba(16,185,129,0.18)]" : undefined}
+                >
+                  {team.isOwner ? "Owner" : "Member"}
+                </Badge>
+              ) : team.membershipStatus === "pending" ? (
+                <Badge variant="secondary">Request pending</Badge>
+              ) : (
+                <Badge variant="secondary">Not joined</Badge>
+              )}
+              {team.membershipStatus === "active" && !team.isOwner ? (
                 <Badge variant={team.canEdit ? "outline" : "secondary"}>
                   {team.canEdit ? "Edit access" : "Read access"}
                 </Badge>
@@ -124,6 +154,12 @@ export function TeamCard({
           <div className="text-sm font-medium text-foreground">
             {team.memberCount} {team.memberCount === 1 ? "member" : "members"}
           </div>
+          {team.isOwner && team.pendingRequestCount > 0 ? (
+            <div className="text-xs text-amber-600 dark:text-amber-300">
+              {team.pendingRequestCount} pending{" "}
+              {team.pendingRequestCount === 1 ? "request" : "requests"}
+            </div>
+          ) : null}
         </div>
       </CardContent>
 
@@ -134,22 +170,42 @@ export function TeamCard({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Badge variant="outline" className="gap-1.5 font-mono">
-            Code {team.joinCode}
-          </Badge>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="rounded-lg"
-            onClick={(event) => {
-              stopCardClick(event);
-              onCopyCode(team.joinCode);
-            }}
-            aria-label={`Copy code for ${team.name}`}
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
+          {team.joinCode ? (
+            <>
+              <Badge variant="outline" className="gap-1.5 font-mono">
+                Code {team.joinCode}
+              </Badge>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="rounded-lg"
+                onClick={(event) => {
+                  stopCardClick(event);
+                  onCopyCode(team.joinCode as string);
+                }}
+                aria-label={`Copy code for ${team.name}`}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          ) : team.membershipStatus === "pending" ? (
+            <Badge variant="secondary">Awaiting approval</Badge>
+          ) : team.canRequestAccess ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isRequestPending}
+              onClick={(event) => {
+                stopCardClick(event);
+                onRequestAccess(team);
+              }}
+            >
+              <UserPlus className="h-4 w-4" />
+              {isRequestPending ? "Requesting..." : "Request access"}
+            </Button>
+          ) : null}
         </div>
       </CardFooter>
     </>

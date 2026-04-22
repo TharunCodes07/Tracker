@@ -139,6 +139,21 @@ export type DataTableProps<TData, TValue> = {
     toolbarExtras?: React.ReactNode;
 };
 
+function getColumnToggleLabel(column: { id: string; columnDef: { meta?: unknown } }) {
+    const meta = column.columnDef.meta as { label?: string } | undefined;
+
+    if (meta?.label?.trim()) {
+        return meta.label;
+    }
+
+    return String(column.id)
+        .replace(/[_-]+/g, " ")
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/^./, (char) => char.toUpperCase());
+}
+
 export function DataTable<TData, TValue>({
     columns,
     data,
@@ -330,9 +345,10 @@ export function DataTable<TData, TValue>({
                                     key={column.id}
                                     className="capitalize"
                                     checked={column.getIsVisible()}
+                                    disabled={!column.getCanHide()}
                                     onCheckedChange={(val) => column.toggleVisibility(Boolean(val))}
                                 >
-                                    {String(column.id)}
+                                    {getColumnToggleLabel(column)}
                                 </DropdownMenuCheckboxItem>
                             ))}
                     </DropdownMenuContent>

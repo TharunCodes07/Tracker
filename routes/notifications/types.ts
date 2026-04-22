@@ -1,4 +1,5 @@
 export const NOTIFICATION_TRIGGER_VALUES = [
+  "team.invited",
   "project.created",
   "issue.created",
   "issue.assigned",
@@ -61,6 +62,12 @@ export interface ProjectCreatedNotificationEvent extends NotificationEventBase {
   projectName: string;
 }
 
+export interface TeamInvitedNotificationEvent extends NotificationEventBase {
+  type: "team.invited";
+  invitedUserId: string;
+  teamName: string;
+}
+
 export interface IssueCreatedNotificationEvent extends NotificationEventBase {
   type: "issue.created";
   projectId: string;
@@ -97,6 +104,7 @@ export interface IssueReopenedNotificationEvent extends NotificationEventBase {
 }
 
 export type NotificationEvent =
+  | TeamInvitedNotificationEvent
   | ProjectCreatedNotificationEvent
   | IssueCreatedNotificationEvent
   | IssueAssignedNotificationEvent

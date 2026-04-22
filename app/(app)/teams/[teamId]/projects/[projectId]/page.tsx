@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   AlertTriangle,
@@ -26,6 +26,7 @@ import { useProjectIssuesWorkspace } from "@/components/issues/helpers/use-proje
 import { ModuleNavigationSidebar } from "@/components/issues/module-navigation-sidebar";
 import { IssuePageSidebarController } from "@/components/issues/issue-page-sidebar-controller";
 import { MultiSelectFilterMenu } from "@/components/issues/multi-select-filter-menu";
+import { saveRecentProject } from "@/components/nav/hooks/use-recent-projects";
 import { getIssueTableColumns } from "@/components/issues/issue-table-columns";
 import { IssueWorkspaceLoading } from "@/components/issues/issues-view-skeleton";
 import {
@@ -40,6 +41,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
@@ -67,6 +69,19 @@ export default function ProjectIssuesPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importMainModuleId, setImportMainModuleId] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (!workspace.team || !workspace.project) {
+      return;
+    }
+
+    saveRecentProject({
+      teamId: workspace.team.id,
+      teamName: workspace.team.name,
+      projectId: workspace.project.id,
+      projectName: workspace.project.name,
+    });
+  }, [workspace.project, workspace.team]);
 
   if (!workspace.hasRequiredParams) {
     return (
@@ -225,7 +240,7 @@ export default function ProjectIssuesPage() {
                     onClick={() => workspace.openModuleDialog()}
                   >
                     <Plus className="h-4 w-4" />
-                    New main module
+                    New module
                   </Button>
                   <Button
                     type="button"
@@ -258,7 +273,7 @@ export default function ProjectIssuesPage() {
         <aside
           className={
             workspace.isModuleSidebarCollapsed
-              ? "transition-[width] duration-200 lg:w-[4.75rem] lg:self-stretch"
+              ? "transition-[width] duration-200 lg:w-19 lg:self-stretch"
               : "transition-[width] duration-200 lg:w-[18rem] lg:self-stretch"
           }
         >
@@ -505,13 +520,19 @@ export default function ProjectIssuesPage() {
         name={workspace.moduleName}
         description={workspace.moduleDescription}
         pending={workspace.isCreatingModule}
-        title={workspace.moduleParentId ? "Create Sub Module" : "Create Main Module"}
+        title={workspace.moduleParentId ? "Create Sub Module" : "Create Module"}
         descriptionText={
           workspace.moduleParentId
             ? "Add a sub module under the selected main module so issues can be tracked at a more specific level."
-            : "Add a top-level module so issues can be grouped by the main areas of the project."
+            : "Add a top-level module and optionally create its first sub module in one step."
         }
-        submitLabel={workspace.moduleParentId ? "Create sub module" : "Create main module"}
+        submitLabel={
+          workspace.moduleParentId
+            ? "Create sub module"
+            : workspace.createSubModulesWithMain
+              ? "Create module set"
+              : "Create module"
+        }
         nameLabel={workspace.moduleParentId ? "Sub module name" : "Main module name"}
         nameInputId="project-module-name"
         namePlaceholder={workspace.moduleParentId ? "Login form" : "Authentication"}
@@ -551,6 +572,104 @@ export default function ProjectIssuesPage() {
             Sub modules inherit their grouping from the selected main module.
           </FieldDescription>
         </Field>
+
+        {!workspace.moduleParentId ? (
+          <div className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-3">
+            <Field orientation="horizontal" className="items-start gap-3">
+              <Checkbox
+                id="create-first-sub-module"
+                checked={workspace.createSubModulesWithMain}
+                onCheckedChange={(checked) => {
+                  const shouldCreateSubModules = checked === true;
+
+                  workspace.setCreateSubModulesWithMain(shouldCreateSubModules);
+
+                  if (shouldCreateSubModules && workspace.subModuleDrafts.length === 0) {
+                    workspace.addSubModuleDraft();
+                  }
+                }}
+                disabled={workspace.isCreatingModule}
+              />
+              <div className="space-y-1">
+                <FieldLabel htmlFor="create-first-sub-module">Create sub modules now</FieldLabel>
+                <FieldDescription>
+                  Optional: create one or more sub modules immediately after the main module is
+                  created.
+                </FieldDescription>
+              </div>
+            </Field>
+
+            {workspace.createSubModulesWithMain ? (
+              <>
+                {workspace.subModuleDrafts.map((subModuleDraft, index) => (
+                  <div
+                    key={`sub-module-draft-${index}`}
+                    className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium text-foreground">Sub module {index + 1}</div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => workspace.removeSubModuleDraft(index)}
+                        disabled={workspace.isCreatingModule}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+
+                    <Field className="min-w-0">
+                      <FieldLabel htmlFor={`project-module-sub-name-${index}`}>
+                        Sub module name
+                      </FieldLabel>
+                      <Input
+                        id={`project-module-sub-name-${index}`}
+                        value={subModuleDraft.name}
+                        onChange={(event) =>
+                          workspace.updateSubModuleDraft(index, { name: event.target.value })
+                        }
+                        placeholder="Login form"
+                        autoComplete="off"
+                        disabled={workspace.isCreatingModule}
+                        required={workspace.createSubModulesWithMain}
+                      />
+                    </Field>
+
+                    <Field className="min-w-0">
+                      <FieldLabel htmlFor={`project-module-sub-description-${index}`}>
+                        Sub module description
+                      </FieldLabel>
+                      <Input
+                        id={`project-module-sub-description-${index}`}
+                        value={subModuleDraft.description}
+                        onChange={(event) =>
+                          workspace.updateSubModuleDraft(index, {
+                            description: event.target.value,
+                          })
+                        }
+                        placeholder="Optional details for this sub module"
+                        autoComplete="off"
+                        disabled={workspace.isCreatingModule}
+                      />
+                    </Field>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={workspace.addSubModuleDraft}
+                  disabled={workspace.isCreatingModule}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add another sub module
+                </Button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </EntityDialog>
 
       <EntityDialog
@@ -590,6 +709,7 @@ export default function ProjectIssuesPage() {
             : "Add a general issue or tie it to a project module, then assign the right teammates for build, review, and testing."
         }
         submitLabel={workspace.isEditingIssue ? "Save changes" : "Create issue"}
+        className="max-"
       />
 
       <AlertDialog

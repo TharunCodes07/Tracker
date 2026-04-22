@@ -22,18 +22,63 @@ import type {
   TeamListItem,
   TeamMemberListItem,
   TeamMemberRole,
+  TeamMembersResponse,
+  TeamMembershipStatus,
+  TeamPendingJoinRequestListItem,
   TeamsListResponse,
+  TeamVisibility,
 } from "./types";
 
 const teamCreator = alias(user, "team_creator");
-const teamMembers = alias(usersToTeams, "team_members");
+const actorMembership = alias(usersToTeams, "actor_membership");
+
+const activeMembershipCounts = db
+  .select({
+    teamId: usersToTeams.teamId,
+    memberCount: count(usersToTeams.userId).as("member_count"),
+  })
+  .from(usersToTeams)
+  .where(eq(usersToTeams.membershipStatus, "active"))
+  .groupBy(usersToTeams.teamId)
+  .as("active_membership_counts");
+
+const pendingMembershipCounts = db
+  .select({
+    teamId: usersToTeams.teamId,
+    pendingRequestCount: count(usersToTeams.userId).as("pending_request_count"),
+  })
+  .from(usersToTeams)
+  .where(eq(usersToTeams.membershipStatus, "pending"))
+  .groupBy(usersToTeams.teamId)
+  .as("pending_membership_counts");
 
 function toIsoString(value: Date | string) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
 function normalizeTeamAccessLevel(value: string | null | undefined): TeamAccessLevel {
-  return value === "read" ? "read" : "edit";
+  switch (value) {
+    case "owner":
+    case "edit":
+      return value;
+    case "read":
+    default:
+      return "read";
+  }
+}
+
+function normalizeTeamVisibility(value: string | null | undefined): TeamVisibility {
+  return value === "public" ? "public" : "private";
+}
+
+function normalizeTeamMembershipStatus(value: string | null | undefined): TeamMembershipStatus {
+  switch (value) {
+    case "active":
+    case "pending":
+      return value;
+    default:
+      return "none";
+  }
 }
 
 function normalizeTeamMemberRole(value: string | null | undefined): TeamMemberRole | null {
@@ -63,10 +108,9 @@ function toTeamMemberListItem(
     accessLevel: string | null;
   },
   roles: string[],
-  ownerUserId: string | null,
   currentUserId: string
 ): TeamMemberListItem {
-  const isOwner = ownerUserId === row.userId;
+  const accessLevel = normalizeTeamAccessLevel(row.accessLevel);
   const normalizedRoles = sortTeamMemberRoles(
     Array.from(
       new Set(
@@ -81,15 +125,35 @@ function toTeamMemberListItem(
     userId: row.userId,
     name: row.name ?? "Unknown member",
     email: row.email ?? "No email",
-    isOwner,
+    isOwner: accessLevel === "owner",
     isCurrentUser: row.userId === currentUserId,
-    accessLevel: isOwner ? "edit" : normalizeTeamAccessLevel(row.accessLevel),
+    accessLevel,
     roles: normalizedRoles,
+  };
+}
+
+function toPendingJoinRequestListItem(row: {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  accessLevel: string | null;
+}): TeamPendingJoinRequestListItem {
+  const normalizedAccessLevel = normalizeTeamAccessLevel(row.accessLevel);
+
+  return {
+    userId: row.userId,
+    name: row.name ?? "Unknown requester",
+    email: row.email ?? "No email",
+    requestedAccessLevel: normalizedAccessLevel === "owner" ? "edit" : normalizedAccessLevel,
   };
 }
 
 function matchesKeyword(search: string, keyword: string) {
   return keyword.includes(search) || search.includes(keyword);
+}
+
+function buildVisibleTeamsClause(userId: string) {
+  return or(eq(actorMembership.userId, userId), eq(teams.visibility, "public")) ?? sql`false`;
 }
 
 function buildTeamSearchCondition(userId: string, search: string) {
@@ -109,47 +173,68 @@ function buildTeamSearchCondition(userId: string, search: string) {
   ];
 
   if (matchesKeyword(loweredSearch, "owner")) {
-    searchConditions.push(eq(teams.createdBy, userId));
+    searchConditions.push(
+      and(
+        eq(actorMembership.membershipStatus, "active"),
+        eq(actorMembership.accessLevel, "owner")
+      ) ?? sql`false`
+    );
   }
 
   if (matchesKeyword(loweredSearch, "member")) {
-    searchConditions.push(sql`${teams.createdBy} is distinct from ${userId}`);
+    searchConditions.push(eq(actorMembership.membershipStatus, "active"));
   }
 
   if (matchesKeyword(loweredSearch, "edit")) {
     searchConditions.push(
-      or(eq(usersToTeams.accessLevel, "edit"), eq(teams.createdBy, userId)) ?? sql`false`
+      and(
+        eq(actorMembership.membershipStatus, "active"),
+        eq(actorMembership.accessLevel, "edit")
+      ) ?? sql`false`
     );
   }
 
   if (matchesKeyword(loweredSearch, "read")) {
     searchConditions.push(
       and(
-        sql`${teams.createdBy} is distinct from ${userId}`,
-        eq(usersToTeams.accessLevel, "read")
+        eq(actorMembership.membershipStatus, "active"),
+        eq(actorMembership.accessLevel, "read")
       ) ?? sql`false`
     );
+  }
+
+  if (matchesKeyword(loweredSearch, "pending")) {
+    searchConditions.push(eq(actorMembership.membershipStatus, "pending"));
+  }
+
+  if (matchesKeyword(loweredSearch, "public")) {
+    searchConditions.push(eq(teams.visibility, "public"));
+  }
+
+  if (matchesKeyword(loweredSearch, "private")) {
+    searchConditions.push(eq(teams.visibility, "private"));
   }
 
   return or(...searchConditions) ?? undefined;
 }
 
 function buildTeamWhereClause(userId: string, search = "") {
+  const visibilityCondition = buildVisibleTeamsClause(userId);
   const searchCondition = buildTeamSearchCondition(userId, search);
 
   return searchCondition
-    ? and(eq(usersToTeams.userId, userId), searchCondition) ?? eq(usersToTeams.userId, userId)
-    : eq(usersToTeams.userId, userId);
+    ? and(visibilityCondition, searchCondition) ?? visibilityCondition
+    : visibilityCondition;
 }
 
 function buildTeamOrderBy(
   input: Pick<ListTeamsInput, "sortBy" | "sortDirection">,
-  userId: string,
-  memberCountExpression: SQL
+  memberCountExpression: SQL,
+  pendingRequestCountExpression: SQL
 ) {
   const accessLevelExpression = sql<string>`case
-    when ${teams.createdBy} = ${userId} then 'edit'
-    else ${usersToTeams.accessLevel}
+    when ${actorMembership.membershipStatus} = 'pending' then 'pending'
+    else coalesce(${actorMembership.accessLevel}, '')
   end`;
   const direction = input.sortDirection;
 
@@ -168,8 +253,8 @@ function buildTeamOrderBy(
         : [desc(memberCountExpression), asc(teams.name), asc(teams.id)];
     case "accessLevel":
       return direction === "asc"
-        ? [asc(accessLevelExpression), asc(teams.name), asc(teams.id)]
-        : [desc(accessLevelExpression), asc(teams.name), asc(teams.id)];
+        ? [asc(accessLevelExpression), desc(pendingRequestCountExpression), asc(teams.name), asc(teams.id)]
+        : [desc(accessLevelExpression), desc(pendingRequestCountExpression), asc(teams.name), asc(teams.id)];
     case "joinCode":
       return direction === "asc"
         ? [asc(teams.joinCode), asc(teams.name), asc(teams.id)]
@@ -185,14 +270,26 @@ function buildTeamOrderBy(
 async function getTeamsSummaryForUser(userId: string) {
   const [summaryRow] = await db
     .select({
-      totalTeams: count(usersToTeams.teamId),
+      totalTeams: count(teams.id),
       ownedTeams: sql<number>`cast(
-        coalesce(sum(case when ${teams.createdBy} = ${userId} then 1 else 0 end), 0) as integer
+        coalesce(
+          sum(
+            case
+              when ${actorMembership.membershipStatus} = 'active' and ${actorMembership.accessLevel} = 'owner'
+                then 1
+              else 0
+            end
+          ),
+          0
+        ) as integer
       )`,
     })
-    .from(usersToTeams)
-    .innerJoin(teams, eq(usersToTeams.teamId, teams.id))
-    .where(eq(usersToTeams.userId, userId));
+    .from(teams)
+    .leftJoin(
+      actorMembership,
+      and(eq(actorMembership.teamId, teams.id), eq(actorMembership.userId, userId))
+    )
+    .where(buildVisibleTeamsClause(userId));
 
   return {
     totalTeams: Number(summaryRow?.totalTeams ?? 0),
@@ -203,10 +300,13 @@ async function getTeamsSummaryForUser(userId: string) {
 async function getFilteredTeamsCountForUser(userId: string, search: string) {
   const [countRow] = await db
     .select({
-      totalItems: count(usersToTeams.teamId),
+      totalItems: count(teams.id),
     })
-    .from(usersToTeams)
-    .innerJoin(teams, eq(usersToTeams.teamId, teams.id))
+    .from(teams)
+    .leftJoin(
+      actorMembership,
+      and(eq(actorMembership.teamId, teams.id), eq(actorMembership.userId, userId))
+    )
     .leftJoin(teamCreator, eq(teams.createdBy, teamCreator.id))
     .where(buildTeamWhereClause(userId, search));
 
@@ -214,38 +314,73 @@ async function getFilteredTeamsCountForUser(userId: string, search: string) {
 }
 
 async function getTeamRowsForUser(userId: string, input: ListTeamsInput) {
-  const memberCountExpression = count(teamMembers.userId);
+  const memberCountExpression = sql<number>`cast(coalesce(${activeMembershipCounts.memberCount}, 0) as integer)`;
+  const pendingRequestCountExpression = sql<number>`cast(coalesce(${pendingMembershipCounts.pendingRequestCount}, 0) as integer)`;
 
   return db
     .select({
       id: teams.id,
       name: teams.name,
       description: teams.description,
+      visibility: teams.visibility,
       joinCode: teams.joinCode,
       createdAt: teams.createdAt,
-      createdBy: teams.createdBy,
       createdByName: teamCreator.name,
       memberCount: memberCountExpression.as("member_count"),
-      accessLevel: usersToTeams.accessLevel,
+      pendingRequestCount: pendingRequestCountExpression.as("pending_request_count"),
+      accessLevel: actorMembership.accessLevel,
+      membershipStatus: actorMembership.membershipStatus,
     })
-    .from(usersToTeams)
-    .innerJoin(teams, eq(usersToTeams.teamId, teams.id))
-    .leftJoin(teamCreator, eq(teams.createdBy, teamCreator.id))
-    .leftJoin(teamMembers, eq(teams.id, teamMembers.teamId))
-    .where(buildTeamWhereClause(userId, input.search))
-    .groupBy(
-      teams.id,
-      teams.name,
-      teams.description,
-      teams.joinCode,
-      teams.createdAt,
-      teams.createdBy,
-      teamCreator.name,
-      usersToTeams.accessLevel
+    .from(teams)
+    .leftJoin(
+      actorMembership,
+      and(eq(actorMembership.teamId, teams.id), eq(actorMembership.userId, userId))
     )
-    .orderBy(...buildTeamOrderBy(input, userId, memberCountExpression))
+    .leftJoin(teamCreator, eq(teams.createdBy, teamCreator.id))
+    .leftJoin(activeMembershipCounts, eq(activeMembershipCounts.teamId, teams.id))
+    .leftJoin(pendingMembershipCounts, eq(pendingMembershipCounts.teamId, teams.id))
+    .where(buildTeamWhereClause(userId, input.search))
+    .orderBy(...buildTeamOrderBy(input, memberCountExpression, pendingRequestCountExpression))
     .limit(input.pageSize)
     .offset((input.page - 1) * input.pageSize);
+}
+
+function toTeamListItem(row: {
+  id: string;
+  name: string;
+  description: string | null;
+  visibility: string;
+  joinCode: string;
+  createdAt: Date | string;
+  createdByName: string | null;
+  memberCount: number | string | null;
+  pendingRequestCount: number | string | null;
+  accessLevel: string | null;
+  membershipStatus: string | null;
+}): TeamListItem {
+  const membershipStatus = normalizeTeamMembershipStatus(row.membershipStatus);
+  const isMember = membershipStatus === "active";
+  const accessLevel = isMember ? normalizeTeamAccessLevel(row.accessLevel) : null;
+  const isOwner = accessLevel === "owner";
+  const canEdit = accessLevel === "owner" || accessLevel === "edit";
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    visibility: normalizeTeamVisibility(row.visibility),
+    joinCode: isMember ? row.joinCode : null,
+    createdAt: toIsoString(row.createdAt),
+    createdByName: row.createdByName ?? "Unknown creator",
+    memberCount: Number(row.memberCount ?? 0),
+    pendingRequestCount: Number(row.pendingRequestCount ?? 0),
+    isMember,
+    isOwner,
+    accessLevel,
+    membershipStatus,
+    canEdit: isMember && canEdit,
+    canRequestAccess: membershipStatus === "none",
+  };
 }
 
 export async function listTeamsForUser(
@@ -265,23 +400,7 @@ export async function listTeamsForUser(
   });
 
   return {
-    teams: rows.map((row) => {
-      const isOwner = row.createdBy === userId;
-      const accessLevel = normalizeTeamAccessLevel(row.accessLevel);
-
-      return {
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        joinCode: row.joinCode,
-        createdAt: toIsoString(row.createdAt),
-        createdByName: row.createdByName ?? "Unknown owner",
-        memberCount: Number(row.memberCount ?? 0),
-        isOwner,
-        accessLevel,
-        canEdit: isOwner || accessLevel === "edit",
-      };
-    }),
+    teams: rows.map(toTeamListItem),
     summary,
     pagination: {
       page,
@@ -295,86 +414,73 @@ export async function listTeamsForUser(
 }
 
 export async function getTeamForUser(userId: string, teamId: string) {
+  const memberCountExpression = sql<number>`cast(coalesce(${activeMembershipCounts.memberCount}, 0) as integer)`;
+  const pendingRequestCountExpression = sql<number>`cast(coalesce(${pendingMembershipCounts.pendingRequestCount}, 0) as integer)`;
+
   const [row] = await db
     .select({
       id: teams.id,
       name: teams.name,
       description: teams.description,
+      visibility: teams.visibility,
       joinCode: teams.joinCode,
       createdAt: teams.createdAt,
-      createdBy: teams.createdBy,
       createdByName: teamCreator.name,
-      memberCount: count(teamMembers.userId).as("member_count"),
+      memberCount: memberCountExpression.as("member_count"),
+      pendingRequestCount: pendingRequestCountExpression.as("pending_request_count"),
       accessLevel: usersToTeams.accessLevel,
+      membershipStatus: usersToTeams.membershipStatus,
     })
     .from(usersToTeams)
     .innerJoin(teams, eq(usersToTeams.teamId, teams.id))
     .leftJoin(teamCreator, eq(teams.createdBy, teamCreator.id))
-    .leftJoin(teamMembers, eq(teams.id, teamMembers.teamId))
-    .where(and(eq(usersToTeams.userId, userId), eq(teams.id, teamId)))
-    .groupBy(
-      teams.id,
-      teams.name,
-      teams.description,
-      teams.joinCode,
-      teams.createdAt,
-      teams.createdBy,
-      teamCreator.name,
-      usersToTeams.accessLevel
+    .leftJoin(activeMembershipCounts, eq(activeMembershipCounts.teamId, teams.id))
+    .leftJoin(pendingMembershipCounts, eq(pendingMembershipCounts.teamId, teams.id))
+    .where(
+      and(
+        eq(usersToTeams.userId, userId),
+        eq(usersToTeams.teamId, teamId),
+        eq(usersToTeams.membershipStatus, "active")
+      )
     )
     .limit(1);
 
-  if (!row) {
-    return null;
-  }
-
-  const isOwner = row.createdBy === userId;
-  const accessLevel = normalizeTeamAccessLevel(row.accessLevel);
-
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    joinCode: row.joinCode,
-    createdAt: toIsoString(row.createdAt),
-    createdByName: row.createdByName ?? "Unknown owner",
-    memberCount: Number(row.memberCount ?? 0),
-    isOwner,
-    accessLevel,
-    canEdit: isOwner || accessLevel === "edit",
-  } satisfies TeamListItem;
+  return row ? toTeamListItem(row) : null;
 }
 
-export async function listTeamMembersForUser(userId: string, teamId: string) {
+export async function listTeamMembersForUser(
+  userId: string,
+  teamId: string
+): Promise<TeamMembersResponse | null> {
   const team = await getTeamForUser(userId, teamId);
 
   if (!team) {
     return null;
   }
 
-  const [teamRecord] = await db
-    .select({
-      createdBy: teams.createdBy,
-    })
-    .from(teams)
-    .where(eq(teams.id, teamId))
-    .limit(1);
+  const membershipStatuses = team.isOwner ? ["active", "pending"] : ["active"];
 
-  if (!teamRecord) {
-    return null;
-  }
-
-  const [results, roleRows] = await Promise.all([
+  const [membershipRows, roleRows] = await Promise.all([
     db
       .select({
         userId: user.id,
         name: user.name,
         email: user.email,
         accessLevel: usersToTeams.accessLevel,
+        membershipStatus: usersToTeams.membershipStatus,
       })
       .from(usersToTeams)
       .innerJoin(user, eq(usersToTeams.userId, user.id))
-      .where(eq(usersToTeams.teamId, teamId)),
+      .where(
+        and(
+          eq(usersToTeams.teamId, teamId),
+          or(
+            ...membershipStatuses.map((membershipStatus) =>
+              eq(usersToTeams.membershipStatus, membershipStatus)
+            )
+          )
+        )
+      ),
     db
       .select({
         userId: teamMemberRoles.userId,
@@ -396,10 +502,9 @@ export async function listTeamMembersForUser(userId: string, teamId: string) {
     }
   }
 
-  const members = results
-    .map((row) =>
-      toTeamMemberListItem(row, rolesByUserId.get(row.userId) ?? [], teamRecord.createdBy, userId)
-    )
+  const members = membershipRows
+    .filter((row) => row.membershipStatus === "active")
+    .map((row) => toTeamMemberListItem(row, rolesByUserId.get(row.userId) ?? [], userId))
     .sort((left, right) => {
       if (left.isOwner !== right.isOwner) {
         return left.isOwner ? -1 : 1;
@@ -408,9 +513,17 @@ export async function listTeamMembersForUser(userId: string, teamId: string) {
       return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
     });
 
+  const pendingRequests = team.isOwner
+    ? membershipRows
+        .filter((row) => row.membershipStatus === "pending")
+        .map(toPendingJoinRequestListItem)
+        .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }))
+    : [];
+
   return {
     team,
     members,
+    pendingRequests,
   };
 }
 

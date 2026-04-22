@@ -54,11 +54,13 @@ import { usePersistedViewMode } from "@/hooks/use-persisted-view-mode";
 import type {
   CreateTeamInput,
   JoinTeamInput,
+  JoinTeamMutationResponse,
   TeamDeleteResponse,
   TeamListItem,
   TeamListPagination,
   TeamListSortDirection,
   TeamListSortField,
+  TeamVisibility,
   TeamsListResponse,
   TeamsListSummary,
   TeamMutationResponse,
@@ -325,13 +327,16 @@ export default function TeamsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [teamDescription, setTeamDescription] = useState("");
+  const [teamVisibility, setTeamVisibility] = useState<TeamVisibility>("private");
 
   const [isJoinOpen, setIsJoinOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+  const [pendingRequestTeamId, setPendingRequestTeamId] = useState<string | null>(null);
 
   const [editingTeam, setEditingTeam] = useState<TeamListItem | null>(null);
   const [editTeamName, setEditTeamName] = useState("");
   const [editTeamDescription, setEditTeamDescription] = useState("");
+  const [editTeamVisibility, setEditTeamVisibility] = useState<TeamVisibility>("private");
   const [teamToDelete, setTeamToDelete] = useState<TeamListItem | null>(null);
 
   const [isCreating, startCreateTransition] = useTransition();
@@ -447,6 +452,10 @@ export default function TeamsPage() {
   }
 
   function openTeam(team: TeamListItem) {
+    if (!team.isMember) {
+      return;
+    }
+
     router.push(`/teams/${team.id}`);
   }
 
@@ -454,6 +463,7 @@ export default function TeamsPage() {
     setEditingTeam(team);
     setEditTeamName(team.name);
     setEditTeamDescription(team.description ?? "");
+    setEditTeamVisibility(team.visibility);
   }
 
   function closeEditDialog(open: boolean) {
@@ -461,6 +471,7 @@ export default function TeamsPage() {
       setEditingTeam(null);
       setEditTeamName("");
       setEditTeamDescription("");
+      setEditTeamVisibility("private");
     }
   }
 
@@ -483,6 +494,7 @@ export default function TeamsPage() {
     const payload: CreateTeamInput = {
       name: teamName,
       description: teamDescription,
+      visibility: teamVisibility,
     };
 
     startCreateTransition(async () => {
@@ -495,6 +507,7 @@ export default function TeamsPage() {
         setIsCreateOpen(false);
         setTeamName("");
         setTeamDescription("");
+        setTeamVisibility("private");
         refreshTeams(0);
         toast.success(data.message);
       } catch (error) {
@@ -512,7 +525,7 @@ export default function TeamsPage() {
 
     startJoinTransition(async () => {
       try {
-        const data = await requestJson<TeamMutationResponse>("/api/teams/join", {
+        const data = await requestJson<JoinTeamMutationResponse>("/api/teams/join", {
           method: "POST",
           body: JSON.stringify(payload),
         });
@@ -522,7 +535,27 @@ export default function TeamsPage() {
         refreshTeams(0);
         toast.success(data.message);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not join the team.");
+        toast.error(error instanceof Error ? error.message : "Could not request team access.");
+      }
+    });
+  }
+
+  function handleRequestAccess(team: TeamListItem) {
+    setPendingRequestTeamId(team.id);
+
+    startJoinTransition(async () => {
+      try {
+        const data = await requestJson<JoinTeamMutationResponse>("/api/teams/join", {
+          method: "POST",
+          body: JSON.stringify({ teamId: team.id } satisfies JoinTeamInput),
+        });
+
+        refreshTeams();
+        toast.success(data.message);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not request team access.");
+      } finally {
+        setPendingRequestTeamId(null);
       }
     });
   }
@@ -537,6 +570,7 @@ export default function TeamsPage() {
     const payload: UpdateTeamInput = {
       name: editTeamName,
       description: editTeamDescription,
+      visibility: editTeamVisibility,
     };
 
     startUpdateTransition(async () => {
@@ -570,6 +604,7 @@ export default function TeamsPage() {
           setEditingTeam(null);
           setEditTeamName("");
           setEditTeamDescription("");
+          setEditTeamVisibility("private");
         }
 
         setTeamToDelete(null);
@@ -585,7 +620,9 @@ export default function TeamsPage() {
     onEdit: openEditDialog,
     onDelete: openDeleteDialog,
     onCopyCode: copyJoinCode,
+    onRequestAccess: handleRequestAccess,
     actionPending: isActionPending,
+    pendingRequestTeamId,
   });
 
   function renderEmptyState() {
@@ -598,7 +635,7 @@ export default function TeamsPage() {
       ? loadError
       : hasAnyTeams
         ? "Adjust the current search or switch views if you want a different scan of the same workspace."
-        : "Create a new team or join an existing one to start collaborating from this workspace.";
+        : "Create a team, discover public workspaces, or request access with an invite code.";
 
     return (
       <div className="rounded-[28px] border border-dashed border-border/70 bg-card/70 px-6 py-12 text-center shadow-sm">
@@ -627,7 +664,7 @@ export default function TeamsPage() {
         ) : (
           <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
             <Button type="button" variant="outline" onClick={() => setIsJoinOpen(true)}>
-              Join team
+              Request by code
             </Button>
             <Button
               type="button"
@@ -659,8 +696,8 @@ export default function TeamsPage() {
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold tracking-tight text-foreground">Teams</h1>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Manage the workspaces you belong to, share join codes, and switch between a fast
-                grid overview and the full table.
+                Manage the workspaces you belong to, discover public teams, and request access
+                before you join.
               </p>
             </div>
 
@@ -681,7 +718,7 @@ export default function TeamsPage() {
               <div className="min-w-[11rem] px-4 py-3">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                  Teams you created
+                  Teams you own
                 </div>
                 {isLoading ? (
                   <Skeleton className="mt-2 h-8 w-14" />
@@ -749,7 +786,7 @@ export default function TeamsPage() {
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button type="button" variant="outline" onClick={() => setIsJoinOpen(true)}>
                   <UserPlus className="h-4 w-4" />
-                  Join team
+                  Request by code
                 </Button>
                 <Button
                   type="button"
@@ -788,7 +825,9 @@ export default function TeamsPage() {
                   onEdit={openEditDialog}
                   onDelete={openDeleteDialog}
                   onCopyCode={copyJoinCode}
+                  onRequestAccess={handleRequestAccess}
                   actionPending={isActionPending}
+                  pendingRequestTeamId={pendingRequestTeamId}
                 />
               )}
               emptyState={renderEmptyState()}
@@ -849,9 +888,11 @@ export default function TeamsPage() {
         onOpenChange={setIsCreateOpen}
         name={teamName}
         description={teamDescription}
+        visibility={teamVisibility}
         pending={isCreating}
         onNameChange={setTeamName}
         onDescriptionChange={setTeamDescription}
+        onVisibilityChange={setTeamVisibility}
         onSubmit={handleCreateTeam}
       />
 
@@ -859,13 +900,15 @@ export default function TeamsPage() {
         open={Boolean(editingTeam)}
         onOpenChange={closeEditDialog}
         title="Edit Team"
-        descriptionText="Update the team name or description without changing the join code."
+        descriptionText="Update the team details, including whether everyone can discover it."
         submitLabel="Save changes"
         name={editTeamName}
         description={editTeamDescription}
+        visibility={editTeamVisibility}
         pending={isUpdating}
         onNameChange={setEditTeamName}
         onDescriptionChange={setEditTeamDescription}
+        onVisibilityChange={setEditTeamVisibility}
         onSubmit={handleUpdateTeam}
       />
 

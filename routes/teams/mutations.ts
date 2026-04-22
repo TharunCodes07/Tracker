@@ -2,12 +2,13 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { teamMemberRoles, teams, usersToTeams } from "@/db/schema";
 
 import { RouteError } from "@/routes/errors";
+import { getUserByEmail } from "@/routes/users/queries";
 
 import { TEAM_MEMBER_ROLE_OPTIONS } from "./types";
 import type {
@@ -15,6 +16,8 @@ import type {
   JoinTeamInput,
   TeamAccessLevel,
   TeamMemberRole,
+  TeamVisibility,
+  TeamInviteMemberInput,
   UpdateTeamInput,
   UpdateTeamMemberInput,
 } from "./types";
@@ -73,11 +76,47 @@ function normalizeJoinCode(code: string) {
 }
 
 function normalizeTeamAccessLevel(value: string): TeamAccessLevel {
-  if (value === "edit" || value === "read") {
+  if (value === "owner" || value === "edit" || value === "read") {
     return value;
   }
 
-  throw new RouteError("Access must be either edit or read.");
+  throw new RouteError("Access must be owner, edit, or read.");
+}
+
+function normalizeInvitedAccessLevel(
+  value: string | undefined
+): Exclude<TeamAccessLevel, "owner"> {
+  if (value === undefined || value === "edit") {
+    return "edit";
+  }
+
+  if (value === "read") {
+    return "read";
+  }
+
+  throw new RouteError("Invited access must be edit or read.");
+}
+
+function normalizeInviteEmail(email: string) {
+  const value = email.trim().toLowerCase();
+
+  if (!value) {
+    throw new RouteError("Enter an email address to invite.");
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    throw new RouteError("Enter a valid email address.");
+  }
+
+  return value;
+}
+
+function normalizeTeamVisibility(value: string): TeamVisibility {
+  if (value === "public" || value === "private") {
+    return value;
+  }
+
+  throw new RouteError("Visibility must be public or private.");
 }
 
 function normalizeTeamMemberRoles(values: string[]): TeamMemberRole[] {
@@ -141,7 +180,71 @@ async function requireOwnedTeamForUser(actor: TeamActor, teamId: string) {
   }
 
   if (!team.isOwner) {
-    throw new RouteError("Only the team owner can do that.", 403);
+    throw new RouteError("Only a team owner can do that.", 403);
+  }
+
+  return team;
+}
+
+async function requireActiveTeamForUser(actor: TeamActor, teamId: string) {
+  const team = await getTeamForUser(actor.id, teamId);
+
+  if (!team) {
+    throw new RouteError("Team not found.", 404);
+  }
+
+  return team;
+}
+
+async function requireActiveOwnerCount(teamId: string) {
+  const [row] = await db
+    .select({
+      ownerCount: count(usersToTeams.userId),
+    })
+    .from(usersToTeams)
+    .where(
+      and(
+        eq(usersToTeams.teamId, teamId),
+        eq(usersToTeams.membershipStatus, "active"),
+        eq(usersToTeams.accessLevel, "owner")
+      )
+    );
+
+  return Number(row?.ownerCount ?? 0);
+}
+
+async function resolveJoinTarget(input: JoinTeamInput) {
+  const requestedTeamId = input.teamId?.trim();
+
+  if (requestedTeamId) {
+    const [team] = await db
+      .select({
+        id: teams.id,
+        name: teams.name,
+      })
+      .from(teams)
+      .where(eq(teams.id, requestedTeamId))
+      .limit(1);
+
+    if (!team) {
+      throw new RouteError("Team not found.", 404);
+    }
+
+    return team;
+  }
+
+  const code = normalizeJoinCode(input.code ?? "");
+  const [team] = await db
+    .select({
+      id: teams.id,
+      name: teams.name,
+    })
+    .from(teams)
+    .where(eq(teams.joinCode, code))
+    .limit(1);
+
+  if (!team) {
+    throw new RouteError("No team matches that join code.", 404);
   }
 
   return team;
@@ -150,6 +253,7 @@ async function requireOwnedTeamForUser(actor: TeamActor, teamId: string) {
 export async function createTeamForUser(actor: TeamActor, input: CreateTeamInput) {
   const name = normalizeTeamName(input.name);
   const description = normalizeDescription(input.description);
+  const visibility = normalizeTeamVisibility(input.visibility);
   const joinCode = await generateUniqueJoinCode();
 
   const createdTeam = await db.transaction(async (tx) => {
@@ -158,6 +262,7 @@ export async function createTeamForUser(actor: TeamActor, input: CreateTeamInput
       .values({
         name,
         description,
+        visibility,
         joinCode,
         createdBy: actor.id,
       })
@@ -166,7 +271,8 @@ export async function createTeamForUser(actor: TeamActor, input: CreateTeamInput
     await tx.insert(usersToTeams).values({
       userId: actor.id,
       teamId: team.id,
-      accessLevel: "edit",
+      accessLevel: "owner",
+      membershipStatus: "active",
     });
 
     return team;
@@ -182,41 +288,33 @@ export async function createTeamForUser(actor: TeamActor, input: CreateTeamInput
 }
 
 export async function joinTeamForUser(actor: TeamActor, input: JoinTeamInput) {
-  const code = normalizeJoinCode(input.code);
-
-  const [team] = await db
-    .select({ id: teams.id })
-    .from(teams)
-    .where(eq(teams.joinCode, code))
-    .limit(1);
-
-  if (!team) {
-    throw new RouteError("No team matches that join code.", 404);
-  }
+  const team = await resolveJoinTarget(input);
 
   const [existingMembership] = await db
-    .select({ teamId: usersToTeams.teamId })
+    .select({
+      teamId: usersToTeams.teamId,
+      membershipStatus: usersToTeams.membershipStatus,
+    })
     .from(usersToTeams)
     .where(and(eq(usersToTeams.userId, actor.id), eq(usersToTeams.teamId, team.id)))
     .limit(1);
 
-  if (existingMembership) {
+  if (existingMembership?.membershipStatus === "active") {
     throw new RouteError("You are already a member of this team.", 409);
+  }
+
+  if (existingMembership?.membershipStatus === "pending") {
+    throw new RouteError("Your join request is already pending approval.", 409);
   }
 
   await db.insert(usersToTeams).values({
     userId: actor.id,
     teamId: team.id,
     accessLevel: "edit",
+    membershipStatus: "pending",
   });
 
-  const joinedTeam = await getTeamForUser(actor.id, team.id);
-
-  if (!joinedTeam) {
-    throw new RouteError("Team was joined but could not be loaded.", 500);
-  }
-
-  return joinedTeam;
+  return team;
 }
 
 export async function updateTeamForUser(
@@ -228,12 +326,14 @@ export async function updateTeamForUser(
 
   const name = normalizeTeamName(input.name);
   const description = normalizeDescription(input.description);
+  const visibility = normalizeTeamVisibility(input.visibility);
 
   await db
     .update(teams)
     .set({
       name,
       description,
+      visibility,
       updatedAt: new Date(),
     })
     .where(eq(teams.id, teamId));
@@ -261,30 +361,19 @@ export async function updateTeamMemberForUser(
   memberUserId: string,
   input: UpdateTeamMemberInput
 ) {
-  await requireOwnedTeamForUser(actor, teamId);
-
-  const [teamRecord] = await db
-    .select({
-      createdBy: teams.createdBy,
-    })
-    .from(teams)
-    .where(eq(teams.id, teamId))
-    .limit(1);
-
-  if (!teamRecord) {
-    throw new RouteError("Team not found.", 404);
-  }
+  const team = await requireActiveTeamForUser(actor, teamId);
 
   const [membership] = await db
     .select({
       userId: usersToTeams.userId,
       accessLevel: usersToTeams.accessLevel,
+      membershipStatus: usersToTeams.membershipStatus,
     })
     .from(usersToTeams)
     .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)))
     .limit(1);
 
-  if (!membership) {
+  if (!membership || membership.membershipStatus !== "active") {
     throw new RouteError("Member not found.", 404);
   }
 
@@ -292,17 +381,29 @@ export async function updateTeamMemberForUser(
     throw new RouteError("Choose at least one member setting to update.");
   }
 
-  const isOwner = teamRecord.createdBy === memberUserId;
   const accessLevel =
     input.accessLevel !== undefined ? normalizeTeamAccessLevel(input.accessLevel) : undefined;
   const roles = input.roles !== undefined ? normalizeTeamMemberRoles(input.roles) : undefined;
+  const currentAccessLevel = normalizeTeamAccessLevel(membership.accessLevel);
 
-  if (isOwner && accessLevel && accessLevel !== "edit") {
-    throw new RouteError("The owner's access cannot be changed.");
+  if (accessLevel !== undefined && !team.isOwner) {
+    throw new RouteError("Only a team owner can update member access.", 403);
+  }
+
+  if (roles !== undefined && !team.canEdit) {
+    throw new RouteError("You only have read access to this team.", 403);
+  }
+
+  if (accessLevel !== undefined && currentAccessLevel === "owner" && accessLevel !== "owner") {
+    const ownerCount = await requireActiveOwnerCount(teamId);
+
+    if (ownerCount <= 1) {
+      throw new RouteError("This team must keep at least one owner.", 409);
+    }
   }
 
   await db.transaction(async (tx) => {
-    if (accessLevel && !isOwner) {
+    if (accessLevel !== undefined) {
       await tx
         .update(usersToTeams)
         .set({
@@ -311,7 +412,7 @@ export async function updateTeamMemberForUser(
         .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)));
     }
 
-    if (roles) {
+    if (roles !== undefined) {
       await tx
         .delete(teamMemberRoles)
         .where(
@@ -337,4 +438,111 @@ export async function updateTeamMemberForUser(
   }
 
   return member;
+}
+
+export async function approveTeamJoinRequestForUser(
+  actor: TeamActor,
+  teamId: string,
+  memberUserId: string
+) {
+  await requireOwnedTeamForUser(actor, teamId);
+
+  const [membership] = await db
+    .select({
+      userId: usersToTeams.userId,
+      membershipStatus: usersToTeams.membershipStatus,
+    })
+    .from(usersToTeams)
+    .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)))
+    .limit(1);
+
+  if (!membership || membership.membershipStatus !== "pending") {
+    throw new RouteError("Join request not found.", 404);
+  }
+
+  await db
+    .update(usersToTeams)
+    .set({
+      membershipStatus: "active",
+    })
+    .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)));
+
+  return memberUserId;
+}
+
+export async function rejectTeamJoinRequestForUser(
+  actor: TeamActor,
+  teamId: string,
+  memberUserId: string
+) {
+  await requireOwnedTeamForUser(actor, teamId);
+
+  const [membership] = await db
+    .select({
+      userId: usersToTeams.userId,
+      membershipStatus: usersToTeams.membershipStatus,
+    })
+    .from(usersToTeams)
+    .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)))
+    .limit(1);
+
+  if (!membership || membership.membershipStatus !== "pending") {
+    throw new RouteError("Join request not found.", 404);
+  }
+
+  await db
+    .delete(usersToTeams)
+    .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, memberUserId)));
+
+  return memberUserId;
+}
+
+export async function inviteTeamMemberForUser(
+  actor: TeamActor,
+  teamId: string,
+  input: TeamInviteMemberInput
+) {
+  const team = await requireOwnedTeamForUser(actor, teamId);
+  const email = normalizeInviteEmail(input.email);
+  const accessLevel = normalizeInvitedAccessLevel(input.accessLevel);
+  const invitedUser = await getUserByEmail(email);
+
+  if (!invitedUser) {
+    throw new RouteError("No user account matches that email address.", 404);
+  }
+
+  if (invitedUser.id === actor.id) {
+    throw new RouteError("You are already part of this team.", 409);
+  }
+
+  const [existingMembership] = await db
+    .select({
+      membershipStatus: usersToTeams.membershipStatus,
+    })
+    .from(usersToTeams)
+    .where(and(eq(usersToTeams.teamId, teamId), eq(usersToTeams.userId, invitedUser.id)))
+    .limit(1);
+
+  if (existingMembership?.membershipStatus === "active") {
+    throw new RouteError(`${invitedUser.name ?? invitedUser.email} is already in this team.`, 409);
+  }
+
+  if (existingMembership?.membershipStatus === "pending") {
+    throw new RouteError(
+      `${invitedUser.name ?? invitedUser.email} already has a pending invitation.`,
+      409
+    );
+  }
+
+  await db.insert(usersToTeams).values({
+    userId: invitedUser.id,
+    teamId,
+    accessLevel,
+    membershipStatus: "pending",
+  });
+
+  return {
+    team,
+    invitedUser,
+  };
 }
