@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { cn } from "@/lib/utils";
 import type { IssueListItem } from "@/routes/issues/types";
 
 interface IssueTableColumnOptions {
@@ -20,6 +21,7 @@ interface IssueTableColumnOptions {
   onEdit: (issue: IssueListItem) => void;
   onDelete: (issue: IssueListItem) => void;
   actionPending?: boolean;
+  issueTextMode?: "compact" | "full";
 }
 
 function stopRowClick(event: MouseEvent<HTMLButtonElement>) {
@@ -39,24 +41,45 @@ export function getIssueTableColumns({
   onEdit,
   onDelete,
   actionPending = false,
+  issueTextMode = "compact",
 }: IssueTableColumnOptions): ColumnDef<IssueListItem>[] {
+  const showFullIssueText = issueTextMode === "full";
+
   return [
     {
       accessorKey: "no",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Issue" />,
       cell: ({ row }) => (
-        <div className="mx-auto min-w-0 max-w-[320px] space-y-1 text-center">
-          <div className="flex items-center justify-center gap-2">
-            {/* <Badge variant="outline">#{row.original.no}</Badge> */}
+        <div
+          className={cn(
+            "min-w-0 space-y-1",
+            showFullIssueText ? "max-w-none text-left" : "mx-auto max-w-[320px] text-center"
+          )}
+        >
+          <div
+            className={cn(
+              "flex gap-2",
+              showFullIssueText ? "items-start justify-start" : "items-center justify-center"
+            )}
+          >
+            <Badge variant="outline" className="mt-0.5 shrink-0">
+              #{row.original.no}
+            </Badge>
             <span
-              className="line-clamp-2 break-words font-medium text-foreground"
+              className={cn(
+                "break-words font-medium text-foreground",
+                showFullIssueText ? "whitespace-normal leading-5" : "line-clamp-2"
+              )}
               title={row.original.title}
             >
               {row.original.title}
             </span>
           </div>
           <div
-            className="line-clamp-2 break-words text-sm text-muted-foreground"
+            className={cn(
+              "break-words text-sm text-muted-foreground",
+              showFullIssueText ? "whitespace-normal leading-5" : "line-clamp-2"
+            )}
             title={row.original.description ?? "No description"}
           >
             {row.original.description ?? "No description"}
@@ -64,6 +87,11 @@ export function getIssueTableColumns({
         </div>
       ),
       size: 440,
+      meta: {
+        label: "Issue",
+        align: showFullIssueText ? "left" : "center",
+        textMode: showFullIssueText ? "full" : "wrap",
+      },
     },
     {
       accessorKey: "issueClassName",
@@ -72,6 +100,9 @@ export function getIssueTableColumns({
         <Badge variant="secondary">{row.original.issueClassName ?? "Unclassified"}</Badge>
       ),
       size: 160,
+      meta: {
+        label: "Type",
+      },
     },
     {
       accessorKey: "moduleName",
@@ -82,18 +113,27 @@ export function getIssueTableColumns({
         </div>
       ),
       size: 180,
+      meta: {
+        label: "Module",
+      },
     },
     {
       accessorKey: "priority",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Priority" />,
       cell: ({ row }) => <IssuePriorityBadge priority={row.original.priority} />,
       size: 140,
+      meta: {
+        label: "Priority",
+      },
     },
     {
       accessorKey: "status",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ row }) => <IssueStatusBadge status={row.original.status} />,
       size: 150,
+      meta: {
+        label: "Status",
+      },
     },
     {
       accessorKey: "assignedToName",
@@ -106,6 +146,9 @@ export function getIssueTableColumns({
         </div>
       ),
       size: 180,
+      meta: {
+        label: "Assigned",
+      },
     },
     {
       accessorKey: "development",
@@ -116,6 +159,9 @@ export function getIssueTableColumns({
         </Badge>
       ),
       size: 150,
+      meta: {
+        label: "Development",
+      },
     },
     {
       accessorKey: "deployment",
@@ -126,12 +172,18 @@ export function getIssueTableColumns({
         </Badge>
       ),
       size: 150,
+      meta: {
+        label: "Deployment",
+      },
     },
     {
       accessorKey: "updatedAt",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Updated" />,
       cell: ({ row }) => format(new Date(row.original.updatedAt), "MMM d, yyyy"),
       size: 160,
+      meta: {
+        label: "Updated",
+      },
     },
     {
       id: "actions",

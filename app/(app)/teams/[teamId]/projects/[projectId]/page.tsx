@@ -17,6 +17,7 @@ import {
 
 import { IssueCard } from "@/components/issues/issue-card";
 import { IssueDialog } from "@/components/issues/issue-dialog";
+import { IssueExcelTable } from "@/components/issues/issue-excel-table";
 import {
   ActiveFilterChip,
   IssuesEmptyState,
@@ -27,7 +28,6 @@ import { ModuleNavigationSidebar } from "@/components/issues/module-navigation-s
 import { IssuePageSidebarController } from "@/components/issues/issue-page-sidebar-controller";
 import { MultiSelectFilterMenu } from "@/components/issues/multi-select-filter-menu";
 import { saveRecentProject } from "@/components/nav/hooks/use-recent-projects";
-import { getIssueTableColumns } from "@/components/issues/issue-table-columns";
 import { IssueWorkspaceLoading } from "@/components/issues/issues-view-skeleton";
 import {
   AlertDialog,
@@ -42,7 +42,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -125,13 +124,6 @@ export default function ProjectIssuesPage() {
       </div>
     );
   }
-
-  const issueTableColumns = getIssueTableColumns({
-    canEdit: workspace.canEditProject,
-    onEdit: workspace.openEditIssueDialog,
-    onDelete: workspace.setIssueToDelete,
-    actionPending: workspace.areIssueActionsPending,
-  });
 
   return (
     <div className="space-y-4">
@@ -495,12 +487,20 @@ export default function ProjectIssuesPage() {
                 </Badge>
               </div>
 
-              <DataTable
-                columns={issueTableColumns}
-                data={workspace.issues}
-                onRowClick={
-                  workspace.canEditProject ? workspace.openEditIssueDialog : undefined
-                }
+              <IssueExcelTable
+                issues={workspace.issues}
+                fullscreenIssues={workspace.fullscreenIssues}
+                fullscreenIssuesError={workspace.fullscreenIssuesError}
+                isFullscreenIssuesLoading={workspace.isLoadingFullscreenIssues}
+                modules={workspace.modules}
+                selectedModuleFilters={workspace.selectedModuleFilters}
+                totalIssueCount={workspace.totalIssues}
+                visibleIssueCount={workspace.pagination.totalItems}
+                canEdit={workspace.canEditProject}
+                actionPending={workspace.areIssueActionsPending}
+                onRowClick={workspace.canEditProject ? workspace.openEditIssueDialog : undefined}
+                onEdit={workspace.openEditIssueDialog}
+                onDelete={workspace.setIssueToDelete}
                 sorting={workspace.sorting}
                 onSortingChange={workspace.handleSortingChange}
                 pageIndex={workspace.currentPageIndex}
@@ -508,6 +508,7 @@ export default function ProjectIssuesPage() {
                 pageCount={workspace.pagination.totalPages}
                 onPageIndexChange={workspace.setPageIndex}
                 onPageSizeChange={workspace.handlePageSizeChange}
+                onLoadFullscreenIssues={workspace.handleLoadFullscreenIssues}
               />
             </section>
           )}

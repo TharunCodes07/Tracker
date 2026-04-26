@@ -155,6 +155,9 @@ export function useProjectIssuesWorkspace() {
   const [isDeletingIssue, startDeleteIssueTransition] = useTransition();
   const [isExportingIssues, startExportIssuesTransition] = useTransition();
   const [isImportingIssues, startImportIssuesTransition] = useTransition();
+  const [isLoadingFullscreenIssues, startLoadFullscreenIssuesTransition] = useTransition();
+  const [fullscreenIssues, setFullscreenIssues] = useState<IssueListItem[]>([]);
+  const [fullscreenIssuesError, setFullscreenIssuesError] = useState<string | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -1061,6 +1064,100 @@ export function useProjectIssuesWorkspace() {
     });
   }
 
+  function handleLoadFullscreenIssues(sortingOverride?: SortingState) {
+    if (!team || !project) {
+      return;
+    }
+
+    const activeTeamId = team.id;
+    const activeProjectId = project.id;
+    const requestSorting = sortingOverride ? normalizeSorting(sortingOverride) : sorting;
+    const selectedConcreteModuleFilters = selectedModuleFilters.filter(
+      (value) => value !== GENERAL_MODULE_FILTER_VALUE
+    );
+    const fullscreenModuleFilterIds = new Set<string>();
+
+    for (const moduleId of selectedConcreteModuleFilters) {
+      const selectedModule = modules.find((projectModule) => projectModule.id === moduleId);
+
+      if (selectedModule) {
+        fullscreenModuleFilterIds.add(selectedModule.parentModuleId ?? selectedModule.id);
+      }
+    }
+
+    const fullscreenModuleFilters =
+      selectedModuleFilters.includes(GENERAL_MODULE_FILTER_VALUE) ||
+      fullscreenModuleFilterIds.size !== 1
+        ? selectedModuleFilters
+        : Array.from(fullscreenModuleFilterIds);
+
+    startLoadFullscreenIssuesTransition(async () => {
+      try {
+        const fullscreenPageSize = 100;
+
+        setFullscreenIssuesError(null);
+        setFullscreenIssues([]);
+
+        const firstPage = await requestJson<ProjectIssuesListResponse>(
+          buildIssuesRequestUrl({
+            teamId: activeTeamId,
+            projectId: activeProjectId,
+            pageIndex: 0,
+            pageSize: fullscreenPageSize,
+            search: debouncedSearchValue,
+            resolutionFilter,
+            moduleFilters: fullscreenModuleFilters,
+            issueTypeFilters: selectedIssueTypeFilters,
+            priorityFilters: selectedPriorityFilters,
+            assigneeFilters: selectedAssigneeFilters,
+            sorting: requestSorting,
+          }),
+          {
+            cache: "no-store",
+          }
+        );
+
+        const remainingPageIndexes = Array.from(
+          { length: Math.max(0, firstPage.pagination.totalPages - 1) },
+          (_, index) => index + 1
+        );
+        const remainingPages = await Promise.all(
+          remainingPageIndexes.map((nextPageIndex) =>
+            requestJson<ProjectIssuesListResponse>(
+              buildIssuesRequestUrl({
+                teamId: activeTeamId,
+                projectId: activeProjectId,
+                pageIndex: nextPageIndex,
+                pageSize: fullscreenPageSize,
+                search: debouncedSearchValue,
+                resolutionFilter,
+                moduleFilters: fullscreenModuleFilters,
+                issueTypeFilters: selectedIssueTypeFilters,
+                priorityFilters: selectedPriorityFilters,
+                assigneeFilters: selectedAssigneeFilters,
+                sorting: requestSorting,
+              }),
+              {
+                cache: "no-store",
+              }
+            )
+          )
+        );
+
+        setFullscreenIssues([
+          ...firstPage.issues,
+          ...remainingPages.flatMap((page) => page.issues),
+        ]);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Could not load the fullscreen workbook.";
+
+        setFullscreenIssuesError(message);
+        toast.error(message);
+      }
+    });
+  }
+
   return {
     hasRequiredParams,
     isLoading,
@@ -1161,8 +1258,12 @@ export function useProjectIssuesWorkspace() {
     handleDeleteIssue,
     isExportingIssues,
     isImportingIssues,
+    isLoadingFullscreenIssues,
+    fullscreenIssues,
+    fullscreenIssuesError,
     handleExportIssuesToExcel,
     handleImportIssuesFromFile,
+    handleLoadFullscreenIssues,
     handlePageSizeChange,
     refreshIssues,
   };

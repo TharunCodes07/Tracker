@@ -45,7 +45,20 @@ import {
     SelectItem,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { GripVertical } from "lucide-react";
+
+export type DataTableColumnTextMode = "default" | "truncate" | "wrap" | "full";
+export type DataTableVisualMode = "default" | "excel";
+
+type DataTableColumnMeta = {
+    label?: string;
+    textMode?: DataTableColumnTextMode;
+    align?: "left" | "center" | "right";
+    headerClassName?: string;
+    cellClassName?: string;
+    cellInnerClassName?: string;
+};
 
 function DataTableResizer<TData, TValue>({ header }: { header: Header<TData, TValue> }) {
     const isResizing = header.column.getIsResizing();
@@ -137,10 +150,28 @@ export type DataTableProps<TData, TValue> = {
 
     /** Additional elements to render in the toolbar after the filter input */
     toolbarExtras?: React.ReactNode;
+
+    visualMode?: DataTableVisualMode;
+    fullTextColumnIds?: string[];
+    columnTextModes?: Partial<Record<string, DataTableColumnTextMode>>;
+    showRowNumbers?: boolean;
+    showToolbar?: boolean;
+    showColumnViewControl?: boolean;
+    showPagination?: boolean;
+    maxTableHeight?: string;
+    className?: string;
+    toolbarClassName?: string;
+    tableContainerClassName?: string;
+    emptyMessage?: string;
+    paginationPageSizes?: number[];
 };
 
+function getColumnMeta(column: { columnDef: { meta?: unknown } }) {
+    return (column.columnDef.meta ?? {}) as DataTableColumnMeta;
+}
+
 function getColumnToggleLabel(column: { id: string; columnDef: { meta?: unknown } }) {
-    const meta = column.columnDef.meta as { label?: string } | undefined;
+    const meta = getColumnMeta(column);
 
     if (meta?.label?.trim()) {
         return meta.label;
@@ -152,6 +183,32 @@ function getColumnToggleLabel(column: { id: string; columnDef: { meta?: unknown 
         .replace(/\s+/g, " ")
         .trim()
         .replace(/^./, (char) => char.toUpperCase());
+}
+
+function getAlignmentClassName(align: DataTableColumnMeta["align"]) {
+    switch (align) {
+        case "left":
+            return "text-left justify-start";
+        case "right":
+            return "text-right justify-end";
+        case "center":
+        default:
+            return "text-center justify-center";
+    }
+}
+
+function getTextModeClassName(textMode: DataTableColumnTextMode) {
+    switch (textMode) {
+        case "truncate":
+            return "overflow-hidden text-ellipsis whitespace-nowrap";
+        case "wrap":
+            return "whitespace-normal break-words";
+        case "full":
+            return "whitespace-normal break-words leading-5";
+        case "default":
+        default:
+            return "";
+    }
 }
 
 export function DataTable<TData, TValue>({
@@ -181,6 +238,19 @@ export function DataTable<TData, TValue>({
     onRowClick,
 
     toolbarExtras,
+    visualMode = "default",
+    fullTextColumnIds = [],
+    columnTextModes,
+    showRowNumbers = false,
+    showToolbar = true,
+    showColumnViewControl = true,
+    showPagination = true,
+    maxTableHeight,
+    className,
+    toolbarClassName,
+    tableContainerClassName,
+    emptyMessage = "No results.",
+    paginationPageSizes = [10, 20, 30, 40, 50, 100],
 }: DataTableProps<TData, TValue>) {
     const [iSorting, iSetSorting] = React.useState<SortingState>(defaultSorting);
     const [iColumnFilters, iSetColumnFilters] = React.useState<ColumnFiltersState>(
@@ -200,6 +270,11 @@ export function DataTable<TData, TValue>({
     const columnFilters = iColumnFilters;
     const columnVisibility = iColumnVisibility;
     const rowSelection = iRowSelection;
+    const isExcelMode = visualMode === "excel";
+    const fullTextColumnIdSet = React.useMemo(
+        () => new Set(fullTextColumnIds),
+        [fullTextColumnIds]
+    );
 
     const boundFilter =
         cFilterValue ??
@@ -220,7 +295,33 @@ export function DataTable<TData, TValue>({
     };
 
     const computedColumns = React.useMemo<ColumnDef<TData, TValue>[]>(() => {
-        if (!enableRowSelection) return columns;
+        const nextColumns: ColumnDef<TData, TValue>[] = [...columns];
+
+        if (showRowNumbers) {
+            const rowNumberCol: ColumnDef<TData, TValue> = {
+                id: "__row_number",
+                header: () => <div className="text-center">#</div>,
+                cell: (ctx: CellContext<TData, TValue>) => (
+                    <span className="tabular-nums text-muted-foreground">
+                        {pageIndex * pageSize + ctx.row.index + 1}
+                    </span>
+                ),
+                enableSorting: false,
+                enableHiding: false,
+                enableResizing: false,
+                size: 52,
+                meta: {
+                    label: "Row",
+                    align: "center",
+                    textMode: "truncate",
+                },
+            };
+
+            nextColumns.unshift(rowNumberCol);
+        }
+
+        if (!enableRowSelection) return nextColumns;
+
         const selectCol: ColumnDef<TData, TValue> = {
             id: "__select",
             header: (ctx: HeaderContext<TData, TValue>) => (
@@ -249,8 +350,8 @@ export function DataTable<TData, TValue>({
             size: 60,
             enableResizing: false,
         };
-        return [selectCol, ...columns];
-    }, [columns, enableRowSelection]);
+        return [selectCol, ...nextColumns];
+    }, [columns, enableRowSelection, pageIndex, pageSize, showRowNumbers]);
 
     // eslint-disable-next-line react-hooks/incompatible-library
     const table = useReactTable({
@@ -316,9 +417,23 @@ export function DataTable<TData, TValue>({
         getPaginationRowModel: getPaginationRowModel(),
     });
 
+    const showToolbarRow = showToolbar && (filterColumn || toolbarExtras || showColumnViewControl);
+
+    const resolveTextMode = (columnId: string, meta: DataTableColumnMeta) =>
+        columnTextModes?.[columnId] ??
+        (fullTextColumnIdSet.has(columnId) ? "full" : meta.textMode ?? "default");
+
     return (
-        <div className="space-y-4">
-            <div className="flex items-center gap-2">
+        <div className={cn(isExcelMode ? "space-y-3" : "space-y-4", className)}>
+            {showToolbarRow ? (
+            <div
+                className={cn(
+                    "flex items-center gap-2",
+                    isExcelMode &&
+                        "rounded-xl border border-border/70 bg-muted/25 p-2 shadow-sm",
+                    toolbarClassName
+                )}
+            >
                 {filterColumn ? (
                     <Input
                         placeholder={filterPlaceholder ?? `Filter ${filterColumn}...`}
@@ -330,60 +445,92 @@ export function DataTable<TData, TValue>({
 
                 {toolbarExtras}
 
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm">
-                            View
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-44">
-                        {table
-                            .getAllLeafColumns()
-                            .filter((c) => c.id !== "__select")
-                            .map((column) => (
-                                <DropdownMenuCheckboxItem
-                                    key={column.id}
-                                    className="capitalize"
-                                    checked={column.getIsVisible()}
-                                    disabled={!column.getCanHide()}
-                                    onCheckedChange={(val) => column.toggleVisibility(Boolean(val))}
-                                >
-                                    {getColumnToggleLabel(column)}
-                                </DropdownMenuCheckboxItem>
-                            ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                {showColumnViewControl ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant={isExcelMode ? "secondary" : "outline"} size="sm">
+                                View
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-44">
+                            {table
+                                .getAllLeafColumns()
+                                .filter((c) => c.id !== "__select" && c.id !== "__row_number")
+                                .map((column) => (
+                                    <DropdownMenuCheckboxItem
+                                        key={column.id}
+                                        className="capitalize"
+                                        checked={column.getIsVisible()}
+                                        disabled={!column.getCanHide()}
+                                        onCheckedChange={(val) =>
+                                            column.toggleVisibility(Boolean(val))
+                                        }
+                                    >
+                                        {getColumnToggleLabel(column)}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : null}
             </div>
+            ) : null}
 
             {isLoading ? (
                 <DataTableSkeleton columns={computedColumns.length} rows={skeletonRowCount} />
             ) : (
-                <div className="rounded-md border overflow-x-auto">
-                    <Table>
+                <div
+                    className={cn(
+                        isExcelMode
+                            ? "overflow-auto rounded-xl border border-border/70 bg-background shadow-inner [&_[data-slot=table-container]]:overflow-visible"
+                            : "rounded-md border overflow-x-auto",
+                        tableContainerClassName
+                    )}
+                    style={maxTableHeight ? { maxHeight: maxTableHeight } : undefined}
+                >
+                    <Table
+                        className={cn(
+                            isExcelMode && "min-w-max border-separate border-spacing-0"
+                        )}
+                    >
                         <TableHeader>
                             {table.getHeaderGroups().map((hg) => (
-                                <TableRow key={hg.id}>
-                                    {hg.headers.map((header) => (
-                                        <TableHead
-                                            key={header.id}
-                                            className="relative group/th whitespace-normal text-center"
-                                            style={{
-                                                width: header.getSize(),
-                                            }}
-                                        >
-                                            <div className="flex min-w-0 items-center justify-center px-2">
-                                                {header.isPlaceholder
-                                                    ? null
-                                                    : flexRender(
-                                                          header.column.columnDef.header,
-                                                          header.getContext()
-                                                      )}
-                                            </div>
-                                            {header.column.getCanResize() && (
-                                                <DataTableResizer header={header} />
-                                            )}
-                                        </TableHead>
-                                    ))}
+                                <TableRow key={hg.id} className={cn(isExcelMode && "hover:bg-transparent")}>
+                                    {hg.headers.map((header) => {
+                                        const meta = getColumnMeta(header.column);
+                                        const alignClassName = getAlignmentClassName(meta.align);
+
+                                        return (
+                                            <TableHead
+                                                key={header.id}
+                                                className={cn(
+                                                    "relative group/th whitespace-normal text-center",
+                                                    isExcelMode &&
+                                                        "sticky top-0 z-20 h-9 border-r border-b border-border/70 bg-muted/90 px-1 text-xs uppercase",
+                                                    meta.headerClassName
+                                                )}
+                                                style={{
+                                                    width: header.getSize(),
+                                                }}
+                                            >
+                                                <div
+                                                    className={cn(
+                                                        "flex min-w-0 items-center px-2",
+                                                        alignClassName
+                                                    )}
+                                                >
+                                                    {header.isPlaceholder
+                                                        ? null
+                                                        : flexRender(
+                                                              header.column.columnDef.header,
+                                                              header.getContext()
+                                                          )}
+                                                </div>
+                                                {header.column.getCanResize() && (
+                                                    <DataTableResizer header={header} />
+                                                )}
+                                            </TableHead>
+                                        );
+                                    })}
                                 </TableRow>
                             ))}
                         </TableHeader>
@@ -395,28 +542,48 @@ export function DataTable<TData, TValue>({
                                         key={row.id}
                                         data-state={row.getIsSelected() && "selected"}
                                         onClick={() => onRowClick?.(row.original)}
-                                        className={
-                                            onRowClick
-                                                ? "cursor-pointer transition-colors hover:bg-muted/30"
-                                                : undefined
-                                        }
+                                        className={cn(
+                                            onRowClick &&
+                                                "cursor-pointer transition-colors hover:bg-muted/30",
+                                            isExcelMode &&
+                                                "h-10 odd:bg-muted/[0.12] hover:bg-emerald-500/5"
+                                        )}
                                     >
-                                        {row.getVisibleCells().map((cell) => (
-                                            <TableCell
-                                                key={cell.id}
-                                                className="whitespace-normal text-center align-top"
-                                                style={{
-                                                    width: cell.column.getSize(),
-                                                }}
-                                            >
-                                                <div className="min-w-0 px-2">
-                                                    {flexRender(
-                                                        cell.column.columnDef.cell,
-                                                        cell.getContext()
+                                        {row.getVisibleCells().map((cell) => {
+                                            const meta = getColumnMeta(cell.column);
+                                            const textMode = resolveTextMode(cell.column.id, meta);
+                                            const alignClassName = getAlignmentClassName(meta.align);
+
+                                            return (
+                                                <TableCell
+                                                    key={cell.id}
+                                                    className={cn(
+                                                        "whitespace-normal text-center align-top",
+                                                        isExcelMode &&
+                                                            "border-r border-b border-border/60 p-0",
+                                                        meta.cellClassName
                                                     )}
-                                                </div>
-                                            </TableCell>
-                                        ))}
+                                                    style={{
+                                                        width: cell.column.getSize(),
+                                                    }}
+                                                >
+                                                    <div
+                                                        className={cn(
+                                                            "min-w-0 px-2",
+                                                            isExcelMode && "px-2 py-2",
+                                                            alignClassName,
+                                                            getTextModeClassName(textMode),
+                                                            meta.cellInnerClassName
+                                                        )}
+                                                    >
+                                                        {flexRender(
+                                                            cell.column.columnDef.cell,
+                                                            cell.getContext()
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            );
+                                        })}
                                     </TableRow>
                                 ))
                             ) : (
@@ -425,7 +592,7 @@ export function DataTable<TData, TValue>({
                                         colSpan={computedColumns.length}
                                         className="h-24 text-center"
                                     >
-                                        No results.
+                                        {emptyMessage}
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -434,6 +601,7 @@ export function DataTable<TData, TValue>({
                 </div>
             )}
 
+            {showPagination ? (
             <div className="flex items-center justify-end gap-3">
                 <div className="flex items-center gap-1">
                     <Button
@@ -495,7 +663,7 @@ export function DataTable<TData, TValue>({
                         <SelectValue>{table.getState().pagination.pageSize} / page</SelectValue>
                     </SelectTrigger>
                     <SelectContent align="end">
-                        {[10, 20, 30, 40, 50, 100].map((ps) => (
+                        {paginationPageSizes.map((ps) => (
                             <SelectItem key={ps} value={String(ps)}>
                                 {ps} / page
                             </SelectItem>
@@ -503,6 +671,7 @@ export function DataTable<TData, TValue>({
                     </SelectContent>
                 </Select>
             </div>
+            ) : null}
         </div>
     );
 }
