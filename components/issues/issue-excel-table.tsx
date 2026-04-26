@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import { FileSpreadsheet, Maximize2, Minimize2, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
 
 import { getIssueTableColumns } from "@/components/issues/issue-table-columns";
 import { Badge } from "@/components/ui/badge";
@@ -125,6 +125,9 @@ function buildWorkbook(
   selectedModuleFilters: string[]
 ): IssueWorkbook {
   const selectedMainModule = getSelectedMainModule(modules, selectedModuleFilters);
+  const selectedOnlyGeneral =
+    selectedModuleFilters.length === 1 &&
+    selectedModuleFilters.includes(GENERAL_MODULE_FILTER_VALUE);
   const mainModules = modules.filter((moduleItem) => !moduleItem.parentModuleId);
   const subModulesByParentId = new Map<string, ProjectModuleListItem[]>();
 
@@ -173,6 +176,21 @@ function buildWorkbook(
       description: "Main-module issues and every sub module are available as sheets.",
       defaultSheetId,
       sheets,
+    };
+  }
+
+  if (selectedOnlyGeneral) {
+    return {
+      title: "General issues workbook",
+      description: "Issues without a module are shown as a single workbook sheet.",
+      defaultSheetId: "__general__",
+      sheets: withSheetCounts(issues, [
+        {
+          id: "__general__",
+          label: "General",
+          kind: "general",
+        },
+      ]),
     };
   }
 
@@ -335,7 +353,19 @@ export function IssueExcelTable({
           showCloseButton={false}
           className="fixed inset-2 left-2 top-2 h-[calc(100svh-1rem)] max-h-none w-[calc(100vw-1rem)] max-w-none translate-x-0 translate-y-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-xl p-0 sm:max-w-none"
         >
-          <div className="flex flex-col gap-3 border-b border-border/70 bg-background px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <DialogClose asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="absolute right-3 top-3 z-50 rounded-full bg-background/90 shadow-sm"
+              aria-label="Close fullscreen workbook"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogClose>
+
+          <div className="flex flex-col gap-3 border-b border-border/70 bg-background px-4 py-3 pr-14 lg:flex-row lg:items-center lg:justify-between">
             <DialogHeader className="min-w-0">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
@@ -378,7 +408,7 @@ export function IssueExcelTable({
             ) : null}
           </div>
 
-          <div className="min-h-0 p-3">
+          <div className="min-h-0 overflow-hidden p-3">
             <DataTable
               columns={fullscreenColumns}
               data={activeSheetRows}
@@ -398,7 +428,7 @@ export function IssueExcelTable({
               pageIndex={0}
               pageSize={Math.max(activeSheetRows.length, 1)}
               pageCount={1}
-              maxTableHeight="calc(100svh - 15rem)"
+              fillHeight
               emptyMessage="No issues on this sheet."
               toolbarExtras={
                 <div className="flex min-w-0 flex-1 items-center gap-2">

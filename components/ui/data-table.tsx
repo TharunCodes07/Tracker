@@ -164,6 +164,7 @@ export type DataTableProps<TData, TValue> = {
     tableContainerClassName?: string;
     emptyMessage?: string;
     paginationPageSizes?: number[];
+    fillHeight?: boolean;
 };
 
 function getColumnMeta(column: { columnDef: { meta?: unknown } }) {
@@ -251,6 +252,7 @@ export function DataTable<TData, TValue>({
     tableContainerClassName,
     emptyMessage = "No results.",
     paginationPageSizes = [10, 20, 30, 40, 50, 100],
+    fillHeight = false,
 }: DataTableProps<TData, TValue>) {
     const [iSorting, iSetSorting] = React.useState<SortingState>(defaultSorting);
     const [iColumnFilters, iSetColumnFilters] = React.useState<ColumnFiltersState>(
@@ -424,7 +426,16 @@ export function DataTable<TData, TValue>({
         (fullTextColumnIdSet.has(columnId) ? "full" : meta.textMode ?? "default");
 
     return (
-        <div className={cn(isExcelMode ? "space-y-3" : "space-y-4", className)}>
+        <div
+            className={cn(
+                fillHeight
+                    ? "flex h-full min-h-0 flex-col gap-3"
+                    : isExcelMode
+                      ? "space-y-3"
+                      : "space-y-4",
+                className
+            )}
+        >
             {showToolbarRow ? (
             <div
                 className={cn(
@@ -481,8 +492,9 @@ export function DataTable<TData, TValue>({
                 <div
                     className={cn(
                         isExcelMode
-                            ? "overflow-auto rounded-xl border border-border/70 bg-background shadow-inner [&_[data-slot=table-container]]:overflow-visible"
+                            ? "relative isolate overflow-auto rounded-xl border border-border/70 bg-background shadow-inner [&_[data-slot=table-container]]:overflow-visible"
                             : "rounded-md border overflow-x-auto",
+                        fillHeight && "min-h-0 flex-1",
                         tableContainerClassName
                     )}
                     style={maxTableHeight ? { maxHeight: maxTableHeight } : undefined}
@@ -505,7 +517,7 @@ export function DataTable<TData, TValue>({
                                                 className={cn(
                                                     "relative group/th whitespace-normal text-center",
                                                     isExcelMode &&
-                                                        "sticky top-0 z-20 h-9 border-r border-b border-border/70 bg-muted/90 px-1 text-xs uppercase",
+                                                        "sticky top-0 z-40 h-9 border-r border-b border-border/70 bg-muted px-1 text-xs uppercase shadow-[0_1px_0_var(--border)]",
                                                     meta.headerClassName
                                                 )}
                                                 style={{
