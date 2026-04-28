@@ -16,7 +16,6 @@ import {
   buildIssuesSearchParams,
   DEFAULT_PAGE_SIZE,
   DEFAULT_SORTING,
-  PROJECT_ISSUES_VIEW_STORAGE_KEY,
   SEARCH_DEBOUNCE_MS,
   buildIssuesRequestUrl,
   createEmptyIssueForm,
@@ -32,7 +31,6 @@ import {
   type IssueWorkspaceFilterOption,
 } from "@/components/issues/helpers/project-issues-workspace-utils";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { usePersistedViewMode } from "@/hooks/use-persisted-view-mode";
 import type { ProjectListItem } from "@/routes/projects/types";
 import {
   GENERAL_MODULE_FILTER_VALUE,
@@ -113,10 +111,6 @@ export function useProjectIssuesWorkspace() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const { viewMode, setViewMode } = usePersistedViewMode(
-    PROJECT_ISSUES_VIEW_STORAGE_KEY,
-    "table"
-  );
   const [searchValue, setSearchValue] = useState("");
   const debouncedSearchValue = useDebouncedValue(searchValue.trim(), SEARCH_DEBOUNCE_MS);
   const [resolutionFilter, setResolutionFilter] = useState<IssueResolutionFilter>("all");
@@ -158,6 +152,7 @@ export function useProjectIssuesWorkspace() {
   const [isLoadingFullscreenIssues, startLoadFullscreenIssuesTransition] = useTransition();
   const [fullscreenIssues, setFullscreenIssues] = useState<IssueListItem[]>([]);
   const [fullscreenIssuesError, setFullscreenIssuesError] = useState<string | null>(null);
+  const [issueDataVersion, setIssueDataVersion] = useState(0);
 
   useEffect(() => {
     let isActive = true;
@@ -363,9 +358,6 @@ export function useProjectIssuesWorkspace() {
   const currentUserId = currentUser?.userId ?? null;
   const canEditProject = team?.canEdit ?? false;
   const currentPageIndex = Math.max(0, pagination.page - 1);
-  const isGridView = viewMode === "grid";
-  const hasAnyIssues = summary.totalIssues > 0;
-  const hasVisibleIssues = issues.length > 0;
   const isLoading = isMetadataLoading || isIssuesLoading;
   const isSearchPending = searchValue.trim() !== debouncedSearchValue;
   const isEditingIssue = Boolean(editingIssue);
@@ -387,13 +379,32 @@ export function useProjectIssuesWorkspace() {
         selectedIssueTypeFilters,
         selectedPriorityFilters,
         selectedAssigneeFilters,
+        issueDataVersion,
+      }),
+    [
+      debouncedSearchValue,
+      issueDataVersion,
+      resolutionFilter,
+      selectedAssigneeFilters,
+      selectedIssueTypeFilters,
+      selectedModuleFilters,
+      selectedPriorityFilters,
+    ]
+  );
+  const fullscreenWorkbookReloadKey = useMemo(
+    () =>
+      JSON.stringify({
+        search: debouncedSearchValue,
+        resolutionFilter,
+        selectedIssueTypeFilters,
+        selectedPriorityFilters,
+        selectedAssigneeFilters,
       }),
     [
       debouncedSearchValue,
       resolutionFilter,
       selectedAssigneeFilters,
       selectedIssueTypeFilters,
-      selectedModuleFilters,
       selectedPriorityFilters,
     ]
   );
@@ -551,6 +562,24 @@ export function useProjectIssuesWorkspace() {
     }
 
     setReloadIssuesKey((currentValue) => currentValue + 1);
+  }
+
+  function markIssueDataChanged() {
+    setIssueDataVersion((currentVersion) => currentVersion + 1);
+  }
+
+  function replaceIssueInLoadedRows(updatedIssue: IssueListItem) {
+    setIssues((currentIssues) =>
+      currentIssues.map((issue) => (issue.id === updatedIssue.id ? updatedIssue : issue))
+    );
+    setFullscreenIssues((currentIssues) =>
+      currentIssues.map((issue) => (issue.id === updatedIssue.id ? updatedIssue : issue))
+    );
+  }
+
+  function removeIssueFromLoadedRows(issueId: string) {
+    setIssues((currentIssues) => currentIssues.filter((issue) => issue.id !== issueId));
+    setFullscreenIssues((currentIssues) => currentIssues.filter((issue) => issue.id !== issueId));
   }
 
   function closeModuleDialog(open: boolean) {
@@ -876,6 +905,7 @@ export function useProjectIssuesWorkspace() {
           }
         );
 
+        markIssueDataChanged();
         closeIssueDialog(false);
         refreshIssues(0);
         toast.success(data.message);
@@ -907,6 +937,8 @@ export function useProjectIssuesWorkspace() {
           }
         );
 
+        replaceIssueInLoadedRows(data.issue);
+        markIssueDataChanged();
         closeIssueDialog(false);
         refreshIssues(0);
         toast.success(data.message);
@@ -937,6 +969,8 @@ export function useProjectIssuesWorkspace() {
         }
 
         setIssueToDelete(null);
+        removeIssueFromLoadedRows(data.deletedIssueId);
+        markIssueDataChanged();
         refreshIssues();
         toast.success(data.message);
       } catch (error) {
@@ -1050,6 +1084,7 @@ export function useProjectIssuesWorkspace() {
           toast.warning("Issues were imported, but module metadata could not be refreshed.");
         }
 
+        markIssueDataChanged();
         refreshIssues(0);
         toast.success(importResult.message);
 
@@ -1096,7 +1131,7 @@ export function useProjectIssuesWorkspace() {
             pageSize: fullscreenPageSize,
             search: debouncedSearchValue,
             resolutionFilter,
-            moduleFilters: selectedModuleFilters,
+            moduleFilters: [],
             issueTypeFilters: selectedIssueTypeFilters,
             priorityFilters: selectedPriorityFilters,
             assigneeFilters: selectedAssigneeFilters,
@@ -1121,7 +1156,7 @@ export function useProjectIssuesWorkspace() {
                 pageSize: fullscreenPageSize,
                 search: debouncedSearchValue,
                 resolutionFilter,
-                moduleFilters: selectedModuleFilters,
+                moduleFilters: [],
                 issueTypeFilters: selectedIssueTypeFilters,
                 priorityFilters: selectedPriorityFilters,
                 assigneeFilters: selectedAssigneeFilters,
@@ -1170,16 +1205,11 @@ export function useProjectIssuesWorkspace() {
     resolvedIssueCount: summary.resolvedIssueCount,
     pendingTestIssueCount: summary.pendingTestIssueCount,
     criticalIssueCount: summary.criticalIssueCount,
-    viewMode,
-    setViewMode,
     sorting,
     handleSortingChange,
     pageSize,
     setPageIndex,
     currentPageIndex,
-    isGridView,
-    hasAnyIssues,
-    hasVisibleIssues,
     isModuleSidebarCollapsed,
     setIsModuleSidebarCollapsed,
     searchValue,
@@ -1201,6 +1231,7 @@ export function useProjectIssuesWorkspace() {
     handleClearFilters,
     hasActiveFilters,
     issueFiltersReloadKey,
+    fullscreenWorkbookReloadKey,
     activeFilterChips,
     moduleFilterOptions,
     issueTypeFilterOptions,

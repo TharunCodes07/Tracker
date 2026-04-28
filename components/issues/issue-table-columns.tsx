@@ -24,6 +24,16 @@ interface IssueTableColumnOptions {
   issueTextMode?: "compact" | "full";
 }
 
+const NAVIGATION_TEXT_HEIGHT_CLASS =
+  "tracker-thin-scrollbar min-h-9 max-h-24 overflow-y-auto pr-1";
+const ISSUE_TEXT_HEIGHT_CLASS =
+  "tracker-thin-scrollbar min-h-14 max-h-36 overflow-y-auto pr-1";
+const LONG_TEXT_HEIGHT_CLASS =
+  "tracker-thin-scrollbar min-h-10 max-h-32 overflow-y-auto pr-1";
+const NAVIGATION_TEXT_WIDTH_CLASS = "max-w-[12rem]";
+const ISSUE_TEXT_WIDTH_CLASS = "max-w-[24rem]";
+const LONG_TEXT_WIDTH_CLASS = "max-w-[18rem]";
+
 function stopRowClick(event: MouseEvent<HTMLButtonElement>) {
   event.stopPropagation();
 }
@@ -34,6 +44,23 @@ function getBooleanBadgeVariant(value: boolean): "secondary" | "outline" {
 
 function getBooleanLabel(value: boolean) {
   return value ? "Yes" : "No";
+}
+
+function LongTextCell({ value, fallback }: { value: string | null; fallback: string }) {
+  const displayValue = value?.trim() ? value : fallback;
+
+  return (
+    <div
+      className={cn(
+        "min-w-0 whitespace-pre-wrap text-left leading-5 [overflow-wrap:anywhere]",
+        LONG_TEXT_WIDTH_CLASS,
+        LONG_TEXT_HEIGHT_CLASS
+      )}
+      title={displayValue}
+    >
+      {displayValue}
+    </div>
+  );
 }
 
 export function getIssueTableColumns({
@@ -47,13 +74,39 @@ export function getIssueTableColumns({
 
   return [
     {
+      accessorKey: "navigation",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Navigation" />,
+      cell: ({ row }) => (
+        <div
+          className={cn(
+            "min-w-0 whitespace-pre-wrap text-left leading-5 [overflow-wrap:anywhere]",
+            NAVIGATION_TEXT_WIDTH_CLASS,
+            NAVIGATION_TEXT_HEIGHT_CLASS
+          )}
+          title={row.original.navigation ?? "No navigation"}
+        >
+          {row.original.navigation ?? "No navigation"}
+        </div>
+      ),
+      size: 160,
+      minSize: 120,
+      maxSize: 220,
+      meta: {
+        label: "Navigation",
+        align: "left",
+        textMode: "wrap",
+      },
+    },
+    {
       accessorKey: "no",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Issue" />,
       cell: ({ row }) => (
         <div
           className={cn(
-            "min-w-0 space-y-1",
-            showFullIssueText ? "max-w-none text-left" : "mx-auto max-w-[320px] text-center"
+            "min-w-0 space-y-1 [overflow-wrap:anywhere]",
+            showFullIssueText
+              ? cn("text-left", ISSUE_TEXT_WIDTH_CLASS, ISSUE_TEXT_HEIGHT_CLASS)
+              : "mx-auto max-w-[320px] text-center"
           )}
         >
           <div
@@ -86,7 +139,9 @@ export function getIssueTableColumns({
           </div>
         </div>
       ),
-      size: 440,
+      size: showFullIssueText ? 340 : 300,
+      minSize: 260,
+      maxSize: 440,
       meta: {
         label: "Issue",
         align: showFullIssueText ? "left" : "center",
@@ -99,7 +154,7 @@ export function getIssueTableColumns({
       cell: ({ row }) => (
         <Badge variant="secondary">{row.original.issueClassName ?? "Unclassified"}</Badge>
       ),
-      size: 160,
+      size: 120,
       meta: {
         label: "Type",
       },
@@ -121,7 +176,7 @@ export function getIssueTableColumns({
       accessorKey: "priority",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Priority" />,
       cell: ({ row }) => <IssuePriorityBadge priority={row.original.priority} />,
-      size: 140,
+      size: 120,
       meta: {
         label: "Priority",
       },
@@ -130,9 +185,37 @@ export function getIssueTableColumns({
       accessorKey: "status",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ row }) => <IssueStatusBadge status={row.original.status} />,
-      size: 150,
+      size: 120,
       meta: {
         label: "Status",
+      },
+    },
+    {
+      accessorKey: "comments",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Comments" />,
+      cell: ({ row }) => <LongTextCell value={row.original.comments} fallback="No comments" />,
+      enableSorting: false,
+      size: 220,
+      minSize: 160,
+      maxSize: 320,
+      meta: {
+        label: "Comments",
+        align: "left",
+        textMode: "full",
+      },
+    },
+    {
+      accessorKey: "remark",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Remarks" />,
+      cell: ({ row }) => <LongTextCell value={row.original.remark} fallback="No remarks" />,
+      enableSorting: false,
+      size: 220,
+      minSize: 160,
+      maxSize: 320,
+      meta: {
+        label: "Remarks",
+        align: "left",
+        textMode: "full",
       },
     },
     {
@@ -188,7 +271,7 @@ export function getIssueTableColumns({
           {getBooleanLabel(row.original.development)}
         </Badge>
       ),
-      size: 150,
+      size: 140,
       meta: {
         label: "Development",
       },
@@ -201,7 +284,7 @@ export function getIssueTableColumns({
           {getBooleanLabel(row.original.deployment)}
         </Badge>
       ),
-      size: 150,
+      size: 140,
       meta: {
         label: "Deployment",
       },
@@ -210,7 +293,7 @@ export function getIssueTableColumns({
       accessorKey: "updatedAt",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Updated" />,
       cell: ({ row }) => format(new Date(row.original.updatedAt), "MMM d, yyyy"),
-      size: 160,
+      size: 140,
       meta: {
         label: "Updated",
       },

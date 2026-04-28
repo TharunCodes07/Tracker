@@ -96,13 +96,14 @@ export function IssueDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-4xl">
-        <DialogHeader className="min-w-0 pr-8">
+      <DialogContent className="grid max-h-[calc(100svh-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-5xl">
+        <DialogHeader className="min-w-0 border-b border-border/60 px-4 py-4 pr-12">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{descriptionText}</DialogDescription>
         </DialogHeader>
 
-        <form className="min-w-0" onSubmit={onSubmit}>
+        <form className="flex min-h-0 min-w-0 flex-col overflow-hidden" onSubmit={onSubmit}>
+          <div className="tracker-thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
           <FieldGroup>
             <div className="grid gap-4 md:grid-cols-2">
               <Field>
@@ -403,25 +404,27 @@ export function IssueDialog({
               </Field>
             </div>
 
-            <DialogFooter className="w-full flex-wrap">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => onOpenChange(false)}
-                disabled={pending}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="w-full bg-linear-to-r from-emerald-400 to-cyan-400 text-black shadow-[0_0_18px_rgba(16,185,129,0.25)] hover:opacity-90 sm:w-auto"
-                disabled={pending || issueClasses.length === 0}
-              >
-                {pending ? "Saving..." : submitLabel}
-              </Button>
-            </DialogFooter>
           </FieldGroup>
+          </div>
+
+          <DialogFooter className="m-0 w-full flex-wrap">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => onOpenChange(false)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="w-full bg-linear-to-r from-emerald-400 to-cyan-400 text-black shadow-[0_0_18px_rgba(16,185,129,0.25)] hover:opacity-90 sm:w-auto"
+              disabled={pending || issueClasses.length === 0}
+            >
+              {pending ? "Saving..." : submitLabel}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

@@ -18,7 +18,6 @@ import type {
 export const DEFAULT_SORTING: SortingState = [{ id: "updatedAt", desc: true }];
 export const DEFAULT_PAGE_SIZE = 10;
 export const SEARCH_DEBOUNCE_MS = 300;
-export const PROJECT_ISSUES_VIEW_STORAGE_KEY = "project-issues:view-mode";
 
 export interface IssueWorkspaceFilterOption {
   value: string;

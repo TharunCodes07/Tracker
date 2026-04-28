@@ -497,7 +497,7 @@ export function DataTable<TData, TValue>({
                 <div
                     className={cn(
                         isExcelMode
-                            ? "relative isolate overflow-auto rounded-xl border border-border/70 bg-background shadow-inner [&_[data-slot=table-container]]:overflow-visible"
+                            ? "tracker-thin-scrollbar relative isolate overflow-auto rounded-xl border border-border/70 bg-background shadow-inner [&_[data-slot=table-container]]:overflow-visible"
                             : "rounded-md border overflow-x-auto",
                         fillHeight && "min-h-0 flex-1",
                         tableContainerClassName

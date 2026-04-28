@@ -11,13 +11,8 @@ import {
 } from "lucide-react";
 
 import { IssueFilters } from "@/components/issues/issue-filters";
-import { IssueCard } from "@/components/issues/issue-card";
 import { IssueDialog } from "@/components/issues/issue-dialog";
 import { IssueExcelTable } from "@/components/issues/excel/issue-excel-table";
-import {
-  IssuesEmptyState,
-  IssuesPaginationControls,
-} from "@/components/issues/issue-workspace-parts";
 import { useProjectIssuesWorkspace } from "@/components/issues/helpers/use-project-issues-workspace";
 import { ModuleNavigationSidebar } from "@/components/issues/module-navigation-sidebar";
 import { IssuePageSidebarController } from "@/components/issues/issue-page-sidebar-controller";
@@ -46,7 +41,6 @@ import {
 } from "@/components/ui/dialog";
 import { EntityDialog } from "@/components/ui/entity-dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { GridView } from "@/components/ui/grid-view";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -95,7 +89,6 @@ export default function ProjectIssuesPage() {
       <div className="space-y-4">
         <IssuePageSidebarController />
         <IssueWorkspaceLoading
-          viewMode={workspace.viewMode}
           moduleSidebarCollapsed={workspace.isModuleSidebarCollapsed}
         />
       </div>
@@ -294,8 +287,6 @@ export default function ProjectIssuesPage() {
             selectedAssigneeFilters={workspace.selectedAssigneeFilters}
             onAssigneeFilterToggle={workspace.handleAssigneeFilterToggle}
             onClearAssigneeFilters={workspace.handleClearAssigneeFilters}
-            viewMode={workspace.viewMode}
-            onViewModeChange={workspace.setViewMode}
             resolutionFilter={workspace.resolutionFilter}
             onResolutionFilterChange={workspace.handleResolutionFilterChange}
             totalIssues={workspace.totalIssues}
@@ -310,46 +301,7 @@ export default function ProjectIssuesPage() {
             isSearchPending={workspace.isSearchPending}
           />
 
-          {!workspace.hasVisibleIssues && workspace.isGridView ? (
-            <IssuesEmptyState
-              hasAnyIssues={workspace.hasAnyIssues}
-              canEditProject={workspace.canEditProject}
-              onCreateIssue={workspace.openCreateIssueDialog}
-              loadError={workspace.loadError}
-              onRetry={() => workspace.refreshIssues()}
-            />
-          ) : workspace.isGridView ? (
-            <div className="space-y-4">
-              <GridView
-                items={workspace.issues}
-                getKey={(issue) => issue.id}
-                onItemClick={
-                  workspace.canEditProject ? workspace.openEditIssueDialog : undefined
-                }
-                getItemAriaLabel={(issue) => `Edit issue ${issue.title}`}
-                renderItem={(issue) => (
-                  <IssueCard
-                    issue={issue}
-                    canEdit={workspace.canEditProject}
-                    actionPending={workspace.areIssueActionsPending}
-                    onEdit={workspace.openEditIssueDialog}
-                    onDelete={workspace.setIssueToDelete}
-                  />
-                )}
-                itemClassName="min-h-[308px] to-emerald-400/[0.03]"
-              />
-
-              <IssuesPaginationControls
-                pageIndex={workspace.currentPageIndex}
-                pageSize={workspace.pageSize}
-                pagination={workspace.pagination}
-                disabled={workspace.isRefreshing}
-                onPageIndexChange={workspace.setPageIndex}
-                onPageSizeChange={workspace.handlePageSizeChange}
-              />
-            </div>
-          ) : (
-            <section className="rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-sm">
+          <section className="rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-sm">
               <div className="mb-4 flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-foreground">Issue table</h2>
@@ -388,7 +340,7 @@ export default function ProjectIssuesPage() {
                 onPageIndexChange={workspace.setPageIndex}
                 onPageSizeChange={workspace.handlePageSizeChange}
                 onLoadFullscreenIssues={workspace.handleLoadFullscreenIssues}
-                fullscreenReloadKey={workspace.issueFiltersReloadKey}
+                fullscreenReloadKey={workspace.fullscreenWorkbookReloadKey}
                 fullscreenFilters={
                   <IssueFilters
                     variant="toolbar"
@@ -407,7 +359,6 @@ export default function ProjectIssuesPage() {
                     selectedAssigneeFilters={workspace.selectedAssigneeFilters}
                     onAssigneeFilterToggle={workspace.handleAssigneeFilterToggle}
                     onClearAssigneeFilters={workspace.handleClearAssigneeFilters}
-                    showViewModeToggle={false}
                     showIssueCount={false}
                     resolutionFilter={workspace.resolutionFilter}
                     onResolutionFilterChange={workspace.handleResolutionFilterChange}
@@ -424,8 +375,7 @@ export default function ProjectIssuesPage() {
                   />
                 }
               />
-            </section>
-          )}
+          </section>
         </div>
       </div>
 

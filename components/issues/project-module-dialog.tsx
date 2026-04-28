@@ -1,6 +1,6 @@
 "use client";
 
-import type * as React from "react";
+import * as React from "react";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,25 @@ export function ProjectModuleDialog({
   onRemoveSubModuleDraft,
   onSubmit,
 }: ProjectModuleDialogProps) {
+  const subModuleListRef = React.useRef<HTMLDivElement | null>(null);
+  const previousSubModuleCountRef = React.useRef(subModuleDrafts.length);
+
+  React.useEffect(() => {
+    if (
+      createSubModulesWithMain &&
+      subModuleDrafts.length > previousSubModuleCountRef.current
+    ) {
+      window.requestAnimationFrame(() => {
+        subModuleListRef.current?.lastElementChild?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      });
+    }
+
+    previousSubModuleCountRef.current = subModuleDrafts.length;
+  }, [createSubModulesWithMain, subModuleDrafts.length]);
+
   return (
     <EntityDialog
       open={open}
@@ -91,6 +110,7 @@ export function ProjectModuleDialog({
           : "What part of the project this main module covers."
       }
       descriptionHelpText="Leave the parent blank to create a main module. Choose one to add a sub module beneath it."
+      contentClassName="sm:max-w-3xl"
       onNameChange={onNameChange}
       onDescriptionChange={onDescriptionChange}
       onSubmit={onSubmit}
@@ -147,62 +167,64 @@ export function ProjectModuleDialog({
 
           {createSubModulesWithMain ? (
             <>
-              {subModuleDrafts.map((subModuleDraft, index) => (
-                <div
-                  key={`sub-module-draft-${index}`}
-                  className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium text-foreground">
-                      Sub module {index + 1}
+              <div ref={subModuleListRef} className="space-y-3">
+                {subModuleDrafts.map((subModuleDraft, index) => (
+                  <div
+                    key={`sub-module-draft-${index}`}
+                    className="scroll-mt-4 space-y-3 rounded-xl border border-border/60 bg-background/70 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium text-foreground">
+                        Sub module {index + 1}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveSubModuleDraft(index)}
+                        disabled={pending}
+                      >
+                        Remove
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemoveSubModuleDraft(index)}
-                      disabled={pending}
-                    >
-                      Remove
-                    </Button>
+
+                    <Field className="min-w-0">
+                      <FieldLabel htmlFor={`project-module-sub-name-${index}`}>
+                        Sub module name
+                      </FieldLabel>
+                      <Input
+                        id={`project-module-sub-name-${index}`}
+                        value={subModuleDraft.name}
+                        onChange={(event) =>
+                          onUpdateSubModuleDraft(index, { name: event.target.value })
+                        }
+                        placeholder="Login form"
+                        autoComplete="off"
+                        disabled={pending}
+                        required={createSubModulesWithMain}
+                      />
+                    </Field>
+
+                    <Field className="min-w-0">
+                      <FieldLabel htmlFor={`project-module-sub-description-${index}`}>
+                        Sub module description
+                      </FieldLabel>
+                      <Input
+                        id={`project-module-sub-description-${index}`}
+                        value={subModuleDraft.description}
+                        onChange={(event) =>
+                          onUpdateSubModuleDraft(index, {
+                            description: event.target.value,
+                          })
+                        }
+                        placeholder="Optional details for this sub module"
+                        autoComplete="off"
+                        disabled={pending}
+                      />
+                    </Field>
                   </div>
-
-                  <Field className="min-w-0">
-                    <FieldLabel htmlFor={`project-module-sub-name-${index}`}>
-                      Sub module name
-                    </FieldLabel>
-                    <Input
-                      id={`project-module-sub-name-${index}`}
-                      value={subModuleDraft.name}
-                      onChange={(event) =>
-                        onUpdateSubModuleDraft(index, { name: event.target.value })
-                      }
-                      placeholder="Login form"
-                      autoComplete="off"
-                      disabled={pending}
-                      required={createSubModulesWithMain}
-                    />
-                  </Field>
-
-                  <Field className="min-w-0">
-                    <FieldLabel htmlFor={`project-module-sub-description-${index}`}>
-                      Sub module description
-                    </FieldLabel>
-                    <Input
-                      id={`project-module-sub-description-${index}`}
-                      value={subModuleDraft.description}
-                      onChange={(event) =>
-                        onUpdateSubModuleDraft(index, {
-                          description: event.target.value,
-                        })
-                      }
-                      placeholder="Optional details for this sub module"
-                      autoComplete="off"
-                      disabled={pending}
-                    />
-                  </Field>
-                </div>
-              ))}
+                ))}
+              </div>
 
               <Button
                 type="button"

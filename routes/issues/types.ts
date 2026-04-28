@@ -52,6 +52,7 @@ export type IssueAssigneeFilterValue = "current-user" | "unassigned";
 export const ISSUE_LIST_SORT_FIELDS = [
   "updatedAt",
   "no",
+  "navigation",
   "title",
   "issueClassName",
   "moduleName",

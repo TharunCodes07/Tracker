@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Grid2x2, List, Search, Shapes, UserRound } from "lucide-react";
+import { AlertTriangle, Search, Shapes, UserRound } from "lucide-react";
 
 import { MultiSelectFilterMenu } from "@/components/issues/multi-select-filter-menu";
 import { ActiveFilterChip } from "@/components/issues/issue-workspace-parts";
@@ -17,8 +17,6 @@ import type {
   IssueResolutionFilter,
 } from "@/routes/issues/types";
 import { cn } from "@/lib/utils";
-
-type IssueViewMode = "grid" | "table";
 
 interface IssueFiltersProps {
   variant?: "panel" | "toolbar";
@@ -37,9 +35,6 @@ interface IssueFiltersProps {
   selectedAssigneeFilters: IssueAssigneeFilterValue[];
   onAssigneeFilterToggle: (value: string) => void;
   onClearAssigneeFilters: () => void;
-  viewMode?: IssueViewMode;
-  onViewModeChange?: (value: IssueViewMode) => void;
-  showViewModeToggle?: boolean;
   showIssueCount?: boolean;
   resolutionFilter: IssueResolutionFilter;
   onResolutionFilterChange: (value: IssueResolutionFilter) => void;
@@ -72,9 +67,6 @@ export function IssueFilters({
   selectedAssigneeFilters,
   onAssigneeFilterToggle,
   onClearAssigneeFilters,
-  viewMode,
-  onViewModeChange,
-  showViewModeToggle = true,
   showIssueCount = true,
   resolutionFilter,
   onResolutionFilterChange,
@@ -89,7 +81,6 @@ export function IssueFilters({
   isUpdating,
   isSearchPending,
 }: IssueFiltersProps) {
-  const shouldShowViewModeToggle = showViewModeToggle && viewMode && onViewModeChange;
   const showToolbarStatusRow =
     activeFilterChips.length > 0 || hasActiveFilters || showIssueCount || isUpdating || isSearchPending;
 
@@ -245,28 +236,6 @@ export function IssueFilters({
               onClear={onClearAssigneeFilters}
             />
 
-            {shouldShowViewModeToggle ? (
-              <div className="inline-flex items-center rounded-2xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur">
-              <Button
-                type="button"
-                variant={viewMode === "grid" ? "secondary" : "ghost"}
-                className="rounded-xl"
-                onClick={() => onViewModeChange?.("grid")}
-              >
-                <Grid2x2 className="h-4 w-4" />
-                Grid
-              </Button>
-              <Button
-                type="button"
-                variant={viewMode === "table" ? "secondary" : "ghost"}
-                className="rounded-xl"
-                onClick={() => onViewModeChange?.("table")}
-              >
-                <List className="h-4 w-4" />
-                Table
-              </Button>
-              </div>
-            ) : null}
           </div>
         </div>
 

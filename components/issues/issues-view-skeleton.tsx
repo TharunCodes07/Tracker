@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -8,10 +7,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface IssueGridSkeletonProps {
-  count?: number;
-}
 
 interface IssueTableSkeletonProps {
   rows?: number;
@@ -136,59 +131,6 @@ export function IssuesModuleSidebarSkeleton({
   );
 }
 
-export function IssuesGridSkeleton({ count = 6 }: IssueGridSkeletonProps) {
-  return (
-    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-      {Array.from({ length: count }).map((_, index) => (
-        <Card
-          key={index}
-          className="relative min-h-[308px] border-border/60 bg-linear-to-br from-card via-card to-emerald-400/[0.03] shadow-[0_20px_40px_-36px_rgba(15,23,42,0.42)]"
-        >
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-emerald-400/55 to-cyan-400/55" />
-          <CardContent className="flex h-full flex-col p-0">
-            <CardHeader className="gap-4 pb-4">
-              <div className="flex flex-wrap gap-2">
-                <Skeleton className="h-6 w-16 rounded-full" />
-                <Skeleton className="h-6 w-24 rounded-full" />
-                <Skeleton className="h-6 w-24 rounded-full" />
-              </div>
-
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-4/5" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-5/6" />
-                <Skeleton className="h-4 w-2/3" />
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Skeleton className="h-6 w-20 rounded-full" />
-                <Skeleton className="h-6 w-24 rounded-full" />
-              </div>
-            </CardHeader>
-
-            <div className="grid gap-3 border-t border-border/60 px-6 pt-4 sm:grid-cols-2">
-              {Array.from({ length: 4 }).map((__, detailIndex) => (
-                <div
-                  key={detailIndex}
-                  className="rounded-2xl border border-border/60 bg-background/55 px-3 py-3"
-                >
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="mt-2 h-4 w-24" />
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/60 px-6 py-4">
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-4 w-24" />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
 export function IssuesTableSkeleton({ rows = 8 }: IssueTableSkeletonProps) {
   return (
     <section className="rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-sm">
@@ -275,10 +217,8 @@ export function IssuesTableSkeleton({ rows = 8 }: IssueTableSkeletonProps) {
 }
 
 export function IssueWorkspaceLoading({
-  viewMode = "table",
   moduleSidebarCollapsed = false,
 }: {
-  viewMode?: "grid" | "table";
   moduleSidebarCollapsed?: boolean;
 }) {
   return (
@@ -291,7 +231,7 @@ export function IssueWorkspaceLoading({
 
         <div className="min-w-0 flex-1 space-y-4">
           <IssuesToolbarSkeleton />
-          {viewMode === "grid" ? <IssuesGridSkeleton /> : <IssuesTableSkeleton />}
+          <IssuesTableSkeleton />
         </div>
       </div>
     </div>

@@ -411,6 +411,10 @@ function buildProjectIssuesOrderBy(
       return direction === "asc"
         ? [asc(moduleNameOrder), asc(issues.no), asc(issues.id)]
         : [desc(moduleNameOrder), desc(issues.no), asc(issues.id)];
+    case "navigation":
+      return direction === "asc"
+        ? [asc(issues.navigation), desc(issues.updatedAt), desc(issues.no), asc(issues.id)]
+        : [desc(issues.navigation), desc(issues.updatedAt), desc(issues.no), asc(issues.id)];
     case "title":
       return direction === "asc"
         ? [asc(issues.title), desc(issues.updatedAt), desc(issues.no), asc(issues.id)]
