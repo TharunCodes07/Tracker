@@ -62,6 +62,8 @@ interface IssueExcelTableProps {
   onEdit: (issue: IssueListItem) => void;
   onDelete: (issue: IssueListItem) => void;
   onLoadFullscreenIssues: (sortingOverride?: SortingState) => void;
+  fullscreenReloadKey: string;
+  fullscreenFilters?: React.ReactNode;
 }
 
 function filterIssuesBySheet(issues: IssueListItem[], sheet: Omit<IssueSheet, "count">) {
@@ -251,9 +253,17 @@ export function IssueExcelTable({
   onEdit,
   onDelete,
   onLoadFullscreenIssues,
+  fullscreenReloadKey,
+  fullscreenFilters,
 }: IssueExcelTableProps) {
   const [isFullscreenOpen, setIsFullscreenOpen] = React.useState(false);
   const [hasRequestedFullscreenIssues, setHasRequestedFullscreenIssues] = React.useState(false);
+  const lastFullscreenReloadKeyRef = React.useRef<string | null>(null);
+  const loadFullscreenIssuesRef = React.useRef(onLoadFullscreenIssues);
+
+  React.useEffect(() => {
+    loadFullscreenIssuesRef.current = onLoadFullscreenIssues;
+  }, [onLoadFullscreenIssues]);
   const compactColumns = React.useMemo(
     () =>
       getIssueTableColumns({
@@ -292,10 +302,24 @@ export function IssueExcelTable({
     setIsFullscreenOpen(open);
 
     if (open) {
+      lastFullscreenReloadKeyRef.current = fullscreenReloadKey;
       setHasRequestedFullscreenIssues(true);
       onLoadFullscreenIssues();
     }
   }
+
+  React.useEffect(() => {
+    if (!isFullscreenOpen || !hasRequestedFullscreenIssues) {
+      return;
+    }
+
+    if (lastFullscreenReloadKeyRef.current === fullscreenReloadKey) {
+      return;
+    }
+
+    lastFullscreenReloadKeyRef.current = fullscreenReloadKey;
+    loadFullscreenIssuesRef.current();
+  }, [fullscreenReloadKey, hasRequestedFullscreenIssues, isFullscreenOpen]);
 
   const handleFullscreenSortingChange: OnChangeFn<SortingState> = (updater) => {
     const nextSorting = typeof updater === "function" ? updater(sorting) : updater;
@@ -315,6 +339,8 @@ export function IssueExcelTable({
         columnTextModes={{
           moduleName: "wrap",
           assignedToName: "wrap",
+          reviewedByName: "wrap",
+          testedByName: "wrap",
         }}
         onRowClick={onRowClick}
         sorting={sorting}
@@ -351,7 +377,7 @@ export function IssueExcelTable({
       <Dialog open={isFullscreenOpen} onOpenChange={handleFullscreenOpenChange}>
         <DialogContent
           showCloseButton={false}
-          className="fixed inset-2 left-2 top-2 h-[calc(100svh-1rem)] max-h-none w-[calc(100vw-1rem)] max-w-none translate-x-0 translate-y-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-xl p-0 sm:max-w-none"
+          className="fixed inset-2 left-2 top-2 h-[calc(100svh-1rem)] max-h-none w-[calc(100vw-1rem)] max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-xl p-0 sm:max-w-none"
         >
           <DialogClose asChild>
             <Button
@@ -401,13 +427,6 @@ export function IssueExcelTable({
             </div>
           </div>
 
-          <div className="border-b border-border/70 bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
-            Active sheet: <span className="font-medium text-foreground">{activeSheet?.label ?? "All Issues"}</span>
-            {fullscreenIssuesError ? (
-              <span className="ml-3 text-destructive">{fullscreenIssuesError}</span>
-            ) : null}
-          </div>
-
           <div className="min-h-0 overflow-hidden p-3">
             <DataTable
               columns={fullscreenColumns}
@@ -419,6 +438,8 @@ export function IssueExcelTable({
               columnTextModes={{
                 moduleName: "wrap",
                 assignedToName: "wrap",
+                reviewedByName: "wrap",
+                testedByName: "wrap",
               }}
               isLoading={isFullscreenIssuesLoading}
               skeletonRowCount={12}
@@ -431,8 +452,11 @@ export function IssueExcelTable({
               fillHeight
               emptyMessage="No issues on this sheet."
               toolbarExtras={
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <Badge variant="secondary">{workbookRows.length} workbook rows</Badge>
+                <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+                  {fullscreenIssuesError ? (
+                    <Badge variant="destructive">{fullscreenIssuesError}</Badge>
+                  ) : null}
+                  {fullscreenFilters}
                 </div>
               }
             />

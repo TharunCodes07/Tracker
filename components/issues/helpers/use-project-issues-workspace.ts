@@ -378,6 +378,25 @@ export function useProjectIssuesWorkspace() {
     selectedIssueTypeFilters.length > 0 ||
     selectedPriorityFilters.length > 0 ||
     selectedAssigneeFilters.length > 0;
+  const issueFiltersReloadKey = useMemo(
+    () =>
+      JSON.stringify({
+        search: debouncedSearchValue,
+        resolutionFilter,
+        selectedModuleFilters,
+        selectedIssueTypeFilters,
+        selectedPriorityFilters,
+        selectedAssigneeFilters,
+      }),
+    [
+      debouncedSearchValue,
+      resolutionFilter,
+      selectedAssigneeFilters,
+      selectedIssueTypeFilters,
+      selectedModuleFilters,
+      selectedPriorityFilters,
+    ]
+  );
 
   const moduleFilterOptions = useMemo<IssueWorkspaceFilterOption[]>(
     () => [
@@ -456,19 +475,8 @@ export function useProjectIssuesWorkspace() {
       counts.set(moduleCount.moduleId ?? GENERAL_MODULE_FILTER_VALUE, moduleCount.issueCount);
     }
 
-    for (const projectModule of modules) {
-      if (!projectModule.parentModuleId) {
-        continue;
-      }
-
-      counts.set(
-        projectModule.parentModuleId,
-        (counts.get(projectModule.parentModuleId) ?? 0) + (counts.get(projectModule.id) ?? 0)
-      );
-    }
-
     return counts;
-  }, [moduleCounts, modules]);
+  }, [moduleCounts]);
 
   const activeFilterChips = useMemo<IssueWorkspaceFilterChip[]>(
     () => [
@@ -1072,24 +1080,6 @@ export function useProjectIssuesWorkspace() {
     const activeTeamId = team.id;
     const activeProjectId = project.id;
     const requestSorting = sortingOverride ? normalizeSorting(sortingOverride) : sorting;
-    const selectedConcreteModuleFilters = selectedModuleFilters.filter(
-      (value) => value !== GENERAL_MODULE_FILTER_VALUE
-    );
-    const fullscreenModuleFilterIds = new Set<string>();
-
-    for (const moduleId of selectedConcreteModuleFilters) {
-      const selectedModule = modules.find((projectModule) => projectModule.id === moduleId);
-
-      if (selectedModule) {
-        fullscreenModuleFilterIds.add(selectedModule.parentModuleId ?? selectedModule.id);
-      }
-    }
-
-    const fullscreenModuleFilters =
-      selectedModuleFilters.includes(GENERAL_MODULE_FILTER_VALUE) ||
-      fullscreenModuleFilterIds.size !== 1
-        ? selectedModuleFilters
-        : Array.from(fullscreenModuleFilterIds);
 
     startLoadFullscreenIssuesTransition(async () => {
       try {
@@ -1106,7 +1096,7 @@ export function useProjectIssuesWorkspace() {
             pageSize: fullscreenPageSize,
             search: debouncedSearchValue,
             resolutionFilter,
-            moduleFilters: fullscreenModuleFilters,
+            moduleFilters: selectedModuleFilters,
             issueTypeFilters: selectedIssueTypeFilters,
             priorityFilters: selectedPriorityFilters,
             assigneeFilters: selectedAssigneeFilters,
@@ -1131,7 +1121,7 @@ export function useProjectIssuesWorkspace() {
                 pageSize: fullscreenPageSize,
                 search: debouncedSearchValue,
                 resolutionFilter,
-                moduleFilters: fullscreenModuleFilters,
+                moduleFilters: selectedModuleFilters,
                 issueTypeFilters: selectedIssueTypeFilters,
                 priorityFilters: selectedPriorityFilters,
                 assigneeFilters: selectedAssigneeFilters,
@@ -1210,6 +1200,7 @@ export function useProjectIssuesWorkspace() {
     handleClearAssigneeFilters,
     handleClearFilters,
     hasActiveFilters,
+    issueFiltersReloadKey,
     activeFilterChips,
     moduleFilterOptions,
     issueTypeFilterOptions,

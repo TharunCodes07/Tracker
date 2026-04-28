@@ -258,7 +258,6 @@ function buildProjectIssuesWhereClause(
     reviewedUserName: SQLWrapper;
     testedUserName: SQLWrapper;
     createdUserName: SQLWrapper;
-    parentModuleId: SQLWrapper;
     parentModuleName: SQLWrapper;
     moduleName: SQLWrapper;
   }
@@ -280,12 +279,7 @@ function buildProjectIssuesWhereClause(
     );
 
     if (selectedModuleIds.length > 0) {
-      moduleConditions.push(
-        or(
-          inArray(issues.moduleId, selectedModuleIds),
-          inArray(aliases.parentModuleId, selectedModuleIds)
-        ) as SQL
-      );
+      moduleConditions.push(inArray(issues.moduleId, selectedModuleIds));
     }
 
     if (input.moduleFilters.includes(GENERAL_MODULE_FILTER_VALUE)) {
@@ -378,6 +372,8 @@ function buildProjectIssuesOrderBy(
   input: Pick<ListProjectIssuesInput, "sortBy" | "sortDirection">,
   aliases: {
     assignedUserName: SQLWrapper;
+    reviewedUserName: SQLWrapper;
+    testedUserName: SQLWrapper;
     parentModuleName: SQLWrapper;
     moduleName: SQLWrapper;
   }
@@ -407,6 +403,8 @@ function buildProjectIssuesOrderBy(
     'General'
   )`;
   const assignedToNameOrder = sql<string>`coalesce(${aliases.assignedUserName}, '')`;
+  const reviewedByNameOrder = sql<string>`coalesce(${aliases.reviewedUserName}, '')`;
+  const testedByNameOrder = sql<string>`coalesce(${aliases.testedUserName}, '')`;
 
   switch (input.sortBy) {
     case "no":
@@ -437,6 +435,14 @@ function buildProjectIssuesOrderBy(
       return direction === "asc"
         ? [asc(assignedToNameOrder), desc(issues.updatedAt), desc(issues.no), asc(issues.id)]
         : [desc(assignedToNameOrder), desc(issues.updatedAt), desc(issues.no), asc(issues.id)];
+    case "reviewedByName":
+      return direction === "asc"
+        ? [asc(reviewedByNameOrder), desc(issues.updatedAt), desc(issues.no), asc(issues.id)]
+        : [desc(reviewedByNameOrder), desc(issues.updatedAt), desc(issues.no), asc(issues.id)];
+    case "testedByName":
+      return direction === "asc"
+        ? [asc(testedByNameOrder), desc(issues.updatedAt), desc(issues.no), asc(issues.id)]
+        : [desc(testedByNameOrder), desc(issues.updatedAt), desc(issues.no), asc(issues.id)];
     case "updatedAt":
     default:
       return direction === "asc"
@@ -513,7 +519,6 @@ async function getFilteredProjectIssuesCount(
         reviewedUserName: reviewedUser.name,
         testedUserName: testedUser.name,
         createdUserName: createdUser.name,
-        parentModuleId: parentModule.id,
         parentModuleName: parentModule.name,
         moduleName: projectModules.name,
       })
@@ -595,7 +600,6 @@ async function getProjectIssueRows(
         reviewedUserName: reviewedUser.name,
         testedUserName: testedUser.name,
         createdUserName: createdUser.name,
-        parentModuleId: parentModule.id,
         parentModuleName: parentModule.name,
         moduleName: projectModules.name,
       })
@@ -603,6 +607,8 @@ async function getProjectIssueRows(
     .orderBy(
       ...buildProjectIssuesOrderBy(input, {
         assignedUserName: assignedUser.name,
+        reviewedUserName: reviewedUser.name,
+        testedUserName: testedUser.name,
         parentModuleName: parentModule.name,
         moduleName: projectModules.name,
       })

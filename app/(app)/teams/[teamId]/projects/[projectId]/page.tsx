@@ -5,28 +5,23 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   Download,
-  Grid2x2,
-  List,
   Plus,
-  Search,
-  Shapes,
   Sparkles,
   Upload,
-  UserRound,
 } from "lucide-react";
 
+import { IssueFilters } from "@/components/issues/issue-filters";
 import { IssueCard } from "@/components/issues/issue-card";
 import { IssueDialog } from "@/components/issues/issue-dialog";
-import { IssueExcelTable } from "@/components/issues/issue-excel-table";
+import { IssueExcelTable } from "@/components/issues/excel/issue-excel-table";
 import {
-  ActiveFilterChip,
   IssuesEmptyState,
   IssuesPaginationControls,
 } from "@/components/issues/issue-workspace-parts";
 import { useProjectIssuesWorkspace } from "@/components/issues/helpers/use-project-issues-workspace";
 import { ModuleNavigationSidebar } from "@/components/issues/module-navigation-sidebar";
 import { IssuePageSidebarController } from "@/components/issues/issue-page-sidebar-controller";
-import { MultiSelectFilterMenu } from "@/components/issues/multi-select-filter-menu";
+import { ProjectModuleDialog } from "@/components/issues/project-module-dialog";
 import { saveRecentProject } from "@/components/nav/hooks/use-recent-projects";
 import { IssueWorkspaceLoading } from "@/components/issues/issues-view-skeleton";
 import {
@@ -41,7 +36,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -285,155 +279,38 @@ export default function ProjectIssuesPage() {
         </aside>
 
         <div className="min-w-0 flex-1 space-y-4">
-          <section className="rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-sm">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
-                <div className="relative 2xl:max-w-xl 2xl:flex-1">
-                  <div className="pointer-events-none absolute inset-y-1 left-1 z-10 flex w-8 items-center justify-center rounded-xl bg-background/40 backdrop-blur-sm">
-                    <Search className="h-4 w-4 text-foreground/50" />
-                  </div>
-                  <Input
-                    value={workspace.searchValue}
-                    onChange={(event) => workspace.handleSearchChange(event.target.value)}
-                    placeholder="Search by issue, number, navigation, assignee, or comments"
-                    className="h-10 rounded-2xl border-border/60 bg-background/80 pl-10 shadow-sm backdrop-blur"
-                  />
-                </div>
+          <IssueFilters
+            searchValue={workspace.searchValue}
+            onSearchChange={workspace.handleSearchChange}
+            issueTypeFilterOptions={workspace.issueTypeFilterOptions}
+            selectedIssueTypeFilters={workspace.selectedIssueTypeFilters}
+            onIssueTypeFilterToggle={workspace.handleIssueTypeFilterToggle}
+            onClearIssueTypeFilters={workspace.handleClearIssueTypeFilters}
+            priorityFilterOptions={workspace.priorityFilterOptions}
+            selectedPriorityFilters={workspace.selectedPriorityFilters}
+            onPriorityFilterToggle={workspace.handlePriorityFilterToggle}
+            onClearPriorityFilters={workspace.handleClearPriorityFilters}
+            assigneeFilterOptions={workspace.assigneeFilterOptions}
+            selectedAssigneeFilters={workspace.selectedAssigneeFilters}
+            onAssigneeFilterToggle={workspace.handleAssigneeFilterToggle}
+            onClearAssigneeFilters={workspace.handleClearAssigneeFilters}
+            viewMode={workspace.viewMode}
+            onViewModeChange={workspace.setViewMode}
+            resolutionFilter={workspace.resolutionFilter}
+            onResolutionFilterChange={workspace.handleResolutionFilterChange}
+            totalIssues={workspace.totalIssues}
+            openIssueCount={workspace.openIssueCount}
+            resolvedIssueCount={workspace.resolvedIssueCount}
+            pendingTestIssueCount={workspace.pendingTestIssueCount}
+            activeFilterChips={workspace.activeFilterChips}
+            hasActiveFilters={workspace.hasActiveFilters}
+            onClearFilters={workspace.handleClearFilters}
+            visibleIssueCount={workspace.pagination.totalItems}
+            isUpdating={workspace.isRefreshing}
+            isSearchPending={workspace.isSearchPending}
+          />
 
-                <div className="flex flex-wrap gap-2">
-                  <MultiSelectFilterMenu
-                    label="Types"
-                    icon={Shapes}
-                    options={workspace.issueTypeFilterOptions}
-                    selectedValues={workspace.selectedIssueTypeFilters}
-                    onToggle={workspace.handleIssueTypeFilterToggle}
-                    onClear={workspace.handleClearIssueTypeFilters}
-                  />
-                  <MultiSelectFilterMenu
-                    label="Priority"
-                    icon={AlertTriangle}
-                    options={workspace.priorityFilterOptions}
-                    selectedValues={workspace.selectedPriorityFilters}
-                    onToggle={workspace.handlePriorityFilterToggle}
-                    onClear={workspace.handleClearPriorityFilters}
-                  />
-                  <MultiSelectFilterMenu
-                    label="Assignee"
-                    icon={UserRound}
-                    options={workspace.assigneeFilterOptions}
-                    selectedValues={workspace.selectedAssigneeFilters}
-                    onToggle={workspace.handleAssigneeFilterToggle}
-                    onClear={workspace.handleClearAssigneeFilters}
-                  />
-
-                  <div className="inline-flex items-center rounded-2xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur">
-                    <Button
-                      type="button"
-                      variant={workspace.viewMode === "grid" ? "secondary" : "ghost"}
-                      className="rounded-xl"
-                      onClick={() => workspace.setViewMode("grid")}
-                    >
-                      <Grid2x2 className="h-4 w-4" />
-                      Grid
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={workspace.viewMode === "table" ? "secondary" : "ghost"}
-                      className="rounded-xl"
-                      onClick={() => workspace.setViewMode("table")}
-                    >
-                      <List className="h-4 w-4" />
-                      Table
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div className="inline-flex w-full items-center rounded-2xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur sm:w-auto">
-                  <Button
-                    type="button"
-                    variant={workspace.resolutionFilter === "all" ? "secondary" : "ghost"}
-                    className="flex-1 rounded-xl sm:flex-none"
-                    onClick={() => workspace.handleResolutionFilterChange("all")}
-                  >
-                    All
-                    <span className="text-xs text-muted-foreground">{workspace.totalIssues}</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={workspace.resolutionFilter === "open" ? "secondary" : "ghost"}
-                    className="flex-1 rounded-xl sm:flex-none"
-                    onClick={() => workspace.handleResolutionFilterChange("open")}
-                  >
-                    Open
-                    <span className="text-xs text-muted-foreground">
-                      {workspace.openIssueCount}
-                    </span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={workspace.resolutionFilter === "resolved" ? "secondary" : "ghost"}
-                    className="flex-1 rounded-xl sm:flex-none"
-                    onClick={() => workspace.handleResolutionFilterChange("resolved")}
-                  >
-                    Resolved
-                    <span className="text-xs text-muted-foreground">
-                      {workspace.resolvedIssueCount}
-                    </span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      workspace.resolutionFilter === "resolved_pending_test"
-                        ? "secondary"
-                        : "ghost"
-                    }
-                    className="flex-1 rounded-xl sm:flex-none"
-                    onClick={() => workspace.handleResolutionFilterChange("resolved_pending_test")}
-                  >
-                    Awaiting test
-                    <span className="text-xs text-muted-foreground">
-                      {workspace.pendingTestIssueCount}
-                    </span>
-                  </Button>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {workspace.activeFilterChips.map((filterChip) => (
-                    <ActiveFilterChip
-                      key={filterChip.key}
-                      label={filterChip.label}
-                      onRemove={filterChip.onRemove}
-                    />
-                  ))}
-
-                  {workspace.hasActiveFilters ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={workspace.handleClearFilters}
-                    >
-                      Clear filters
-                    </Button>
-                  ) : null}
-
-                  <Badge variant="outline" className="w-fit">
-                    {workspace.pagination.totalItems} of {workspace.totalIssues} issues
-                  </Badge>
-                </div>
-              </div>
-
-              {workspace.isRefreshing || workspace.isSearchPending ? (
-                <div className="text-xs text-muted-foreground">
-                  {workspace.isSearchPending ? "Waiting for search..." : "Updating issues..."}
-                </div>
-              ) : null}
-            </div>
-          </section>
-
-          {!workspace.hasVisibleIssues ? (
+          {!workspace.hasVisibleIssues && workspace.isGridView ? (
             <IssuesEmptyState
               hasAnyIssues={workspace.hasAnyIssues}
               canEditProject={workspace.canEditProject}
@@ -509,169 +386,66 @@ export default function ProjectIssuesPage() {
                 onPageIndexChange={workspace.setPageIndex}
                 onPageSizeChange={workspace.handlePageSizeChange}
                 onLoadFullscreenIssues={workspace.handleLoadFullscreenIssues}
+                fullscreenReloadKey={workspace.issueFiltersReloadKey}
+                fullscreenFilters={
+                  <IssueFilters
+                    variant="toolbar"
+                    className="justify-end"
+                    searchValue={workspace.searchValue}
+                    onSearchChange={workspace.handleSearchChange}
+                    issueTypeFilterOptions={workspace.issueTypeFilterOptions}
+                    selectedIssueTypeFilters={workspace.selectedIssueTypeFilters}
+                    onIssueTypeFilterToggle={workspace.handleIssueTypeFilterToggle}
+                    onClearIssueTypeFilters={workspace.handleClearIssueTypeFilters}
+                    priorityFilterOptions={workspace.priorityFilterOptions}
+                    selectedPriorityFilters={workspace.selectedPriorityFilters}
+                    onPriorityFilterToggle={workspace.handlePriorityFilterToggle}
+                    onClearPriorityFilters={workspace.handleClearPriorityFilters}
+                    assigneeFilterOptions={workspace.assigneeFilterOptions}
+                    selectedAssigneeFilters={workspace.selectedAssigneeFilters}
+                    onAssigneeFilterToggle={workspace.handleAssigneeFilterToggle}
+                    onClearAssigneeFilters={workspace.handleClearAssigneeFilters}
+                    showViewModeToggle={false}
+                    showIssueCount={false}
+                    resolutionFilter={workspace.resolutionFilter}
+                    onResolutionFilterChange={workspace.handleResolutionFilterChange}
+                    totalIssues={workspace.totalIssues}
+                    openIssueCount={workspace.openIssueCount}
+                    resolvedIssueCount={workspace.resolvedIssueCount}
+                    pendingTestIssueCount={workspace.pendingTestIssueCount}
+                    activeFilterChips={workspace.activeFilterChips}
+                    hasActiveFilters={workspace.hasActiveFilters}
+                    onClearFilters={workspace.handleClearFilters}
+                    visibleIssueCount={workspace.pagination.totalItems}
+                    isUpdating={workspace.isRefreshing}
+                    isSearchPending={workspace.isSearchPending}
+                  />
+                }
               />
             </section>
           )}
         </div>
       </div>
 
-      <EntityDialog
+      <ProjectModuleDialog
         open={workspace.isModuleOpen}
         onOpenChange={workspace.closeModuleDialog}
         name={workspace.moduleName}
         description={workspace.moduleDescription}
+        parentModuleId={workspace.moduleParentId}
+        mainModules={workspace.mainModules}
+        createSubModulesWithMain={workspace.createSubModulesWithMain}
+        subModuleDrafts={workspace.subModuleDrafts}
         pending={workspace.isCreatingModule}
-        title={workspace.moduleParentId ? "Create Sub Module" : "Create Module"}
-        descriptionText={
-          workspace.moduleParentId
-            ? "Add a sub module under the selected main module so issues can be tracked at a more specific level."
-            : "Add a top-level module and optionally create its first sub module in one step."
-        }
-        submitLabel={
-          workspace.moduleParentId
-            ? "Create sub module"
-            : workspace.createSubModulesWithMain
-              ? "Create module set"
-              : "Create module"
-        }
-        nameLabel={workspace.moduleParentId ? "Sub module name" : "Main module name"}
-        nameInputId="project-module-name"
-        namePlaceholder={workspace.moduleParentId ? "Login form" : "Authentication"}
-        descriptionInputId="project-module-description"
-        descriptionPlaceholder={
-          workspace.moduleParentId
-            ? "What this sub module covers within the selected main module."
-            : "What part of the project this main module covers."
-        }
-        descriptionHelpText="Leave the parent blank to create a main module. Choose one to add a sub module beneath it."
         onNameChange={workspace.setModuleName}
         onDescriptionChange={workspace.setModuleDescription}
+        onParentModuleIdChange={workspace.setModuleParentId}
+        onCreateSubModulesWithMainChange={workspace.setCreateSubModulesWithMain}
+        onAddSubModuleDraft={workspace.addSubModuleDraft}
+        onUpdateSubModuleDraft={workspace.updateSubModuleDraft}
+        onRemoveSubModuleDraft={workspace.removeSubModuleDraft}
         onSubmit={workspace.handleCreateModule}
-      >
-        <Field className="min-w-0">
-          <FieldLabel>Parent main module</FieldLabel>
-          <Select
-            value={workspace.moduleParentId || "__main__"}
-            onValueChange={(value) =>
-              workspace.setModuleParentId(value === "__main__" ? "" : value)
-            }
-            disabled={workspace.isCreatingModule}
-          >
-            <SelectTrigger className="h-10 w-full">
-              <SelectValue placeholder="Create as a main module" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__main__">Create as a main module</SelectItem>
-              {workspace.mainModules.map((module) => (
-                <SelectItem key={module.id} value={module.id}>
-                  {module.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <FieldDescription>
-            Sub modules inherit their grouping from the selected main module.
-          </FieldDescription>
-        </Field>
-
-        {!workspace.moduleParentId ? (
-          <div className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-3">
-            <Field orientation="horizontal" className="items-start gap-3">
-              <Checkbox
-                id="create-first-sub-module"
-                checked={workspace.createSubModulesWithMain}
-                onCheckedChange={(checked) => {
-                  const shouldCreateSubModules = checked === true;
-
-                  workspace.setCreateSubModulesWithMain(shouldCreateSubModules);
-
-                  if (shouldCreateSubModules && workspace.subModuleDrafts.length === 0) {
-                    workspace.addSubModuleDraft();
-                  }
-                }}
-                disabled={workspace.isCreatingModule}
-              />
-              <div className="space-y-1">
-                <FieldLabel htmlFor="create-first-sub-module">Create sub modules now</FieldLabel>
-                <FieldDescription>
-                  Optional: create one or more sub modules immediately after the main module is
-                  created.
-                </FieldDescription>
-              </div>
-            </Field>
-
-            {workspace.createSubModulesWithMain ? (
-              <>
-                {workspace.subModuleDrafts.map((subModuleDraft, index) => (
-                  <div
-                    key={`sub-module-draft-${index}`}
-                    className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-medium text-foreground">Sub module {index + 1}</div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => workspace.removeSubModuleDraft(index)}
-                        disabled={workspace.isCreatingModule}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-
-                    <Field className="min-w-0">
-                      <FieldLabel htmlFor={`project-module-sub-name-${index}`}>
-                        Sub module name
-                      </FieldLabel>
-                      <Input
-                        id={`project-module-sub-name-${index}`}
-                        value={subModuleDraft.name}
-                        onChange={(event) =>
-                          workspace.updateSubModuleDraft(index, { name: event.target.value })
-                        }
-                        placeholder="Login form"
-                        autoComplete="off"
-                        disabled={workspace.isCreatingModule}
-                        required={workspace.createSubModulesWithMain}
-                      />
-                    </Field>
-
-                    <Field className="min-w-0">
-                      <FieldLabel htmlFor={`project-module-sub-description-${index}`}>
-                        Sub module description
-                      </FieldLabel>
-                      <Input
-                        id={`project-module-sub-description-${index}`}
-                        value={subModuleDraft.description}
-                        onChange={(event) =>
-                          workspace.updateSubModuleDraft(index, {
-                            description: event.target.value,
-                          })
-                        }
-                        placeholder="Optional details for this sub module"
-                        autoComplete="off"
-                        disabled={workspace.isCreatingModule}
-                      />
-                    </Field>
-                  </div>
-                ))}
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={workspace.addSubModuleDraft}
-                  disabled={workspace.isCreatingModule}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add another sub module
-                </Button>
-              </>
-            ) : null}
-          </div>
-        ) : null}
-      </EntityDialog>
+      />
 
       <EntityDialog
         open={workspace.isIssueClassOpen}

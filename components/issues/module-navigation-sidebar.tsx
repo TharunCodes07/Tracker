@@ -194,7 +194,7 @@ export function ModuleNavigationSidebar({
         )}
 
         <div className="flex items-center gap-1">
-          {canEditProject ? (
+          {canEditProject && !collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

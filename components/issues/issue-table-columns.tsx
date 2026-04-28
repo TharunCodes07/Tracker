@@ -62,9 +62,9 @@ export function getIssueTableColumns({
               showFullIssueText ? "items-start justify-start" : "items-center justify-center"
             )}
           >
-            <Badge variant="outline" className="mt-0.5 shrink-0">
+            {/* <Badge variant="outline" className="mt-0.5 shrink-0">
               #{row.original.no}
-            </Badge>
+            </Badge> */}
             <span
               className={cn(
                 "break-words font-medium text-foreground",
@@ -148,6 +148,36 @@ export function getIssueTableColumns({
       size: 180,
       meta: {
         label: "Assigned",
+      },
+    },
+    {
+      accessorKey: "reviewedByName",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Reviewed By" />,
+      cell: ({ row }) => (
+        <div className="mx-auto min-w-0 max-w-[180px] text-center">
+          <span className="line-clamp-2 break-words">
+            {row.original.reviewedByName ?? "Not reviewed"}
+          </span>
+        </div>
+      ),
+      size: 180,
+      meta: {
+        label: "Reviewed By",
+      },
+    },
+    {
+      accessorKey: "testedByName",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Tested By" />,
+      cell: ({ row }) => (
+        <div className="mx-auto min-w-0 max-w-[180px] text-center">
+          <span className="line-clamp-2 break-words">
+            {row.original.testedByName ?? "Not tested"}
+          </span>
+        </div>
+      ),
+      size: 180,
+      meta: {
+        label: "Tested By",
       },
     },
     {

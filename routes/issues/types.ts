@@ -58,6 +58,8 @@ export const ISSUE_LIST_SORT_FIELDS = [
   "priority",
   "status",
   "assignedToName",
+  "reviewedByName",
+  "testedByName",
 ] as const;
 export type IssueListSortField = (typeof ISSUE_LIST_SORT_FIELDS)[number];
 export type IssueListSortDirection = "asc" | "desc";
