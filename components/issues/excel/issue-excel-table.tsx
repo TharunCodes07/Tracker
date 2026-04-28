@@ -2,12 +2,27 @@
 
 import * as React from "react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import { FileSpreadsheet, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
+import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
+import {
+  ChevronDown,
+  ChevronRight,
+  FileSpreadsheet,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  X,
+} from "lucide-react";
 
 import { getIssueTableColumns } from "@/components/issues/issue-table-columns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogClose,
@@ -23,7 +38,7 @@ import {
   type ProjectModuleListItem,
 } from "@/routes/issues/types";
 
-type IssueSheetKind = "all" | "general" | "main" | "main-direct" | "sub";
+type IssueSheetKind = "all" | "general" | "main" | "sub";
 
 interface IssueSheet {
   id: string;
@@ -36,7 +51,6 @@ interface IssueSheet {
 interface IssueWorkbook {
   title: string;
   description: string;
-  defaultSheetId: string;
   sheets: IssueSheet[];
 }
 
@@ -61,9 +75,39 @@ interface IssueExcelTableProps {
   onRowClick?: (issue: IssueListItem) => void;
   onEdit: (issue: IssueListItem) => void;
   onDelete: (issue: IssueListItem) => void;
+  onModuleFilterToggle: (value: string) => void;
+  onClearModuleFilters: () => void;
   onLoadFullscreenIssues: (sortingOverride?: SortingState) => void;
   fullscreenReloadKey: string;
   fullscreenFilters?: React.ReactNode;
+}
+
+type IssueColumnMeta = {
+  label?: string;
+};
+
+function getColumnId(column: ColumnDef<IssueListItem>) {
+  return (
+    column.id ??
+    ("accessorKey" in column && typeof column.accessorKey === "string"
+      ? column.accessorKey
+      : null)
+  );
+}
+
+function getColumnLabel(column: ColumnDef<IssueListItem>, columnId: string) {
+  const meta = (column.meta ?? {}) as IssueColumnMeta;
+
+  if (meta.label?.trim()) {
+    return meta.label;
+  }
+
+  return columnId
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^./, (char) => char.toUpperCase());
 }
 
 function filterIssuesBySheet(issues: IssueListItem[], sheet: Omit<IssueSheet, "count">) {
@@ -71,15 +115,32 @@ function filterIssuesBySheet(issues: IssueListItem[], sheet: Omit<IssueSheet, "c
     case "general":
       return issues.filter((issue) => !issue.moduleId);
     case "main":
-      return issues.filter((issue) => issue.mainModuleId === sheet.moduleId);
-    case "main-direct":
       return issues.filter((issue) => issue.moduleId === sheet.moduleId && !issue.subModuleId);
     case "sub":
-      return issues.filter((issue) => issue.subModuleId === sheet.moduleId || issue.moduleId === sheet.moduleId);
+      return issues.filter((issue) => issue.moduleId === sheet.moduleId);
     case "all":
     default:
       return issues;
   }
+}
+
+function filterIssuesByModuleFilters(issues: IssueListItem[], selectedModuleFilters: string[]) {
+  if (selectedModuleFilters.length === 0) {
+    return issues;
+  }
+
+  const selectedModules = new Set(
+    selectedModuleFilters.filter((value) => value !== GENERAL_MODULE_FILTER_VALUE)
+  );
+  const includesGeneral = selectedModuleFilters.includes(GENERAL_MODULE_FILTER_VALUE);
+
+  return issues.filter((issue) => {
+    if (!issue.moduleId) {
+      return includesGeneral;
+    }
+
+    return selectedModules.has(issue.moduleId);
+  });
 }
 
 function withSheetCounts(issues: IssueListItem[], sheets: Omit<IssueSheet, "count">[]) {
@@ -89,47 +150,10 @@ function withSheetCounts(issues: IssueListItem[], sheets: Omit<IssueSheet, "coun
   }));
 }
 
-function getSelectedMainModule(
-  modules: ProjectModuleListItem[],
-  selectedModuleFilters: string[]
-) {
-  const moduleById = new Map(modules.map((moduleItem) => [moduleItem.id, moduleItem]));
-  const selectedModuleIds = selectedModuleFilters.filter(
-    (value) => value !== GENERAL_MODULE_FILTER_VALUE
-  );
-
-  if (selectedModuleIds.length === 0) {
-    return null;
-  }
-
-  const selectedMainModuleIds = new Set<string>();
-
-  for (const moduleId of selectedModuleIds) {
-    const moduleItem = moduleById.get(moduleId);
-
-    if (!moduleItem) {
-      continue;
-    }
-
-    selectedMainModuleIds.add(moduleItem.parentModuleId ?? moduleItem.id);
-  }
-
-  if (selectedMainModuleIds.size !== 1) {
-    return null;
-  }
-
-  return moduleById.get(Array.from(selectedMainModuleIds)[0]) ?? null;
-}
-
 function buildWorkbook(
   issues: IssueListItem[],
   modules: ProjectModuleListItem[],
-  selectedModuleFilters: string[]
 ): IssueWorkbook {
-  const selectedMainModule = getSelectedMainModule(modules, selectedModuleFilters);
-  const selectedOnlyGeneral =
-    selectedModuleFilters.length === 1 &&
-    selectedModuleFilters.includes(GENERAL_MODULE_FILTER_VALUE);
   const mainModules = modules.filter((moduleItem) => !moduleItem.parentModuleId);
   const subModulesByParentId = new Map<string, ProjectModuleListItem[]>();
 
@@ -141,59 +165,6 @@ function buildWorkbook(
     const siblings = subModulesByParentId.get(moduleItem.parentModuleId) ?? [];
     siblings.push(moduleItem);
     subModulesByParentId.set(moduleItem.parentModuleId, siblings);
-  }
-
-  if (selectedMainModule) {
-    const selectedModuleId = selectedModuleFilters.find(
-      (value) => value !== GENERAL_MODULE_FILTER_VALUE
-    );
-    const selectedModule = modules.find((moduleItem) => moduleItem.id === selectedModuleId);
-    const defaultSheetId = selectedModule?.parentModuleId
-      ? `sub:${selectedModule.id}`
-      : `main:${selectedMainModule.id}`;
-    const subModules = subModulesByParentId.get(selectedMainModule.id) ?? [];
-    const sheets = withSheetCounts(issues, [
-      {
-        id: `main:${selectedMainModule.id}`,
-        label: selectedMainModule.name,
-        kind: "main",
-        moduleId: selectedMainModule.id,
-      },
-      {
-        id: `main-direct:${selectedMainModule.id}`,
-        label: "Main Module",
-        kind: "main-direct",
-        moduleId: selectedMainModule.id,
-      },
-      ...subModules.map((moduleItem) => ({
-        id: `sub:${moduleItem.id}`,
-        label: moduleItem.name,
-        kind: "sub" as const,
-        moduleId: moduleItem.id,
-      })),
-    ]);
-
-    return {
-      title: `${selectedMainModule.name} workbook`,
-      description: "Main-module issues and every sub module are available as sheets.",
-      defaultSheetId,
-      sheets,
-    };
-  }
-
-  if (selectedOnlyGeneral) {
-    return {
-      title: "General issues workbook",
-      description: "Issues without a module are shown as a single workbook sheet.",
-      defaultSheetId: "__general__",
-      sheets: withSheetCounts(issues, [
-        {
-          id: "__general__",
-          label: "General",
-          kind: "general",
-        },
-      ]),
-    };
   }
 
   const sheets = withSheetCounts(issues, [
@@ -225,8 +196,8 @@ function buildWorkbook(
 
   return {
     title: "Project workbook",
-    description: "The fullscreen workbook groups general issues, main modules, and sub modules into sheets.",
-    defaultSheetId: "__all__",
+    description:
+      "The fullscreen workbook groups general issues, direct main-module issues, and sub modules into sheets.",
     sheets,
   };
 }
@@ -252,12 +223,17 @@ export function IssueExcelTable({
   onRowClick,
   onEdit,
   onDelete,
+  onModuleFilterToggle,
+  onClearModuleFilters,
   onLoadFullscreenIssues,
   fullscreenReloadKey,
   fullscreenFilters,
 }: IssueExcelTableProps) {
   const [isFullscreenOpen, setIsFullscreenOpen] = React.useState(false);
   const [hasRequestedFullscreenIssues, setHasRequestedFullscreenIssues] = React.useState(false);
+  const [fullscreenColumnVisibility, setFullscreenColumnVisibility] =
+    React.useState<VisibilityState>({});
+  const [expandedMainModuleIds, setExpandedMainModuleIds] = React.useState<string[]>([]);
   const lastFullscreenReloadKeyRef = React.useRef<string | null>(null);
   const loadFullscreenIssuesRef = React.useRef(onLoadFullscreenIssues);
 
@@ -286,17 +262,194 @@ export function IssueExcelTable({
       }),
     [actionPending, canEdit, onDelete, onEdit]
   );
+  const fullscreenColumnToggleItems = React.useMemo(
+    () =>
+      fullscreenColumns
+        .map((column) => {
+          const id = getColumnId(column);
+
+          return id
+            ? {
+                id,
+                label: getColumnLabel(column, id),
+              }
+            : null;
+        })
+        .filter((item): item is { id: string; label: string } => item !== null),
+    [fullscreenColumns]
+  );
   const workbookRows = hasRequestedFullscreenIssues ? fullscreenIssues : issues;
   const workbook = React.useMemo(
-    () => buildWorkbook(workbookRows, modules, selectedModuleFilters),
-    [workbookRows, modules, selectedModuleFilters]
+    () => buildWorkbook(workbookRows, modules),
+    [workbookRows, modules]
   );
-  const [selectedSheetId, setSelectedSheetId] = React.useState<string | null>(null);
-  const activeSheet =
-    workbook.sheets.find((sheet) => sheet.id === selectedSheetId) ??
-    workbook.sheets.find((sheet) => sheet.id === workbook.defaultSheetId) ??
-    workbook.sheets[0];
-  const activeSheetRows = activeSheet ? filterIssuesBySheet(workbookRows, activeSheet) : workbookRows;
+  const selectedModuleFilterSet = React.useMemo(
+    () => new Set(selectedModuleFilters),
+    [selectedModuleFilters]
+  );
+  const moduleById = React.useMemo(
+    () => new Map(modules.map((moduleItem) => [moduleItem.id, moduleItem])),
+    [modules]
+  );
+  const mainModules = React.useMemo(
+    () => modules.filter((moduleItem) => !moduleItem.parentModuleId),
+    [modules]
+  );
+  const subModulesByParentId = React.useMemo(() => {
+    const map = new Map<string, ProjectModuleListItem[]>();
+
+    for (const moduleItem of modules) {
+      if (!moduleItem.parentModuleId) {
+        continue;
+      }
+
+      const siblings = map.get(moduleItem.parentModuleId) ?? [];
+      siblings.push(moduleItem);
+      map.set(moduleItem.parentModuleId, siblings);
+    }
+
+    return map;
+  }, [modules]);
+  const selectedMainGroupIds = React.useMemo(() => {
+    const ids = new Set<string>();
+
+    for (const moduleId of selectedModuleFilters) {
+      if (moduleId === GENERAL_MODULE_FILTER_VALUE) {
+        continue;
+      }
+
+      const moduleItem = moduleById.get(moduleId);
+
+      if (moduleItem) {
+        ids.add(moduleItem.parentModuleId ?? moduleItem.id);
+      }
+    }
+
+    return ids;
+  }, [moduleById, selectedModuleFilters]);
+  const sheetById = React.useMemo(
+    () => new Map(workbook.sheets.map((sheet) => [sheet.id, sheet])),
+    [workbook.sheets]
+  );
+  const activeSheetRows = React.useMemo(
+    () => filterIssuesByModuleFilters(workbookRows, selectedModuleFilters),
+    [selectedModuleFilters, workbookRows]
+  );
+
+  function toggleMainModuleExpansion(moduleId: string) {
+    setExpandedMainModuleIds((currentIds) =>
+      currentIds.includes(moduleId)
+        ? currentIds.filter((id) => id !== moduleId)
+        : [...currentIds, moduleId]
+    );
+  }
+
+  function renderSheetButton(
+    sheet: IssueSheet,
+    options?: {
+      highlighted?: boolean;
+      active?: boolean;
+      nested?: boolean;
+      attachedLeft?: boolean;
+      attachedRight?: boolean;
+      onClick?: () => void;
+    }
+  ) {
+    const isActive = options?.active ?? false;
+
+    return (
+      <button
+        key={sheet.id}
+        type="button"
+        onClick={options?.onClick}
+        className={cn(
+          "inline-flex h-8 shrink-0 items-center gap-2 rounded-t-md border border-border/70 bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+          options?.nested && "h-7 rounded-none border-l-0 px-2 text-[11px]",
+          options?.nested && !options?.attachedRight && "rounded-r-md",
+          options?.attachedLeft && "rounded-l-none border-l-0",
+          options?.attachedRight && "rounded-r-none",
+          options?.highlighted &&
+            "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
+          isActive &&
+            "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 shadow-sm dark:text-emerald-300"
+        )}
+      >
+        <span className="max-w-[11rem] truncate">{sheet.label}</span>
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.68rem] tabular-nums text-muted-foreground">
+          {sheet.count}
+        </span>
+      </button>
+    );
+  }
+
+  function renderMainModuleSheetGroup(props: {
+    mainModule: ProjectModuleListItem;
+    mainSheet: IssueSheet;
+    subModules: ProjectModuleListItem[];
+    isExpanded: boolean;
+    hasSelectedInGroup: boolean;
+  }) {
+    const { mainModule, mainSheet, subModules, isExpanded, hasSelectedInGroup } = props;
+    const hasSubModules = subModules.length > 0;
+
+    return (
+      <div
+        key={`sheet-group-${mainModule.id}`}
+        className={cn(
+          "flex shrink-0 items-end gap-0 rounded-t-md",
+          hasSelectedInGroup && "bg-cyan-500/5"
+        )}
+      >
+        {renderSheetButton(mainSheet, {
+          active: selectedModuleFilterSet.has(mainModule.id),
+          highlighted: selectedModuleFilterSet.has(mainModule.id),
+          attachedRight: hasSubModules,
+          onClick: () => onModuleFilterToggle(mainModule.id),
+        })}
+
+        {hasSubModules ? (
+          <button
+            type="button"
+            onClick={() => toggleMainModuleExpansion(mainModule.id)}
+            className={cn(
+              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-tr-md border border-l-0 border-border/70 bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+              isExpanded && "rounded-r-none",
+              hasSelectedInGroup &&
+                "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
+            )}
+            aria-label={
+              isExpanded
+                ? `Collapse ${mainModule.name} sub modules`
+                : `Expand ${mainModule.name} sub modules`
+            }
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+          </button>
+        ) : null}
+
+        {isExpanded
+          ? subModules.map((subModule, index) => {
+              const subSheet = sheetById.get(`sub:${subModule.id}`);
+
+              return subSheet
+                ? renderSheetButton(subSheet, {
+                    active: selectedModuleFilterSet.has(subModule.id),
+                    highlighted: selectedModuleFilterSet.has(subModule.id),
+                    nested: true,
+                    attachedLeft: true,
+                    attachedRight: index < subModules.length - 1,
+                    onClick: () => onModuleFilterToggle(subModule.id),
+                  })
+                : null;
+            })
+          : null}
+      </div>
+    );
+  }
 
   function handleFullscreenOpenChange(open: boolean) {
     setIsFullscreenOpen(open);
@@ -408,6 +561,30 @@ export function IssueExcelTable({
               <Badge variant="outline">
                 {activeSheetRows.length} visible rows
               </Badge>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="secondary" size="sm">
+                    View
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {fullscreenColumnToggleItems.map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      className="capitalize"
+                      checked={fullscreenColumnVisibility[column.id] !== false}
+                      onCheckedChange={(checked) =>
+                        setFullscreenColumnVisibility((currentVisibility) => ({
+                          ...currentVisibility,
+                          [column.id]: Boolean(checked),
+                        }))
+                      }
+                    >
+                      {column.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 type="button"
                 variant="outline"
@@ -446,11 +623,14 @@ export function IssueExcelTable({
               onRowClick={onRowClick}
               sorting={sorting}
               onSortingChange={handleFullscreenSortingChange}
+              columnVisibility={fullscreenColumnVisibility}
+              onColumnVisibilityChange={setFullscreenColumnVisibility}
               pageIndex={0}
               pageSize={Math.max(activeSheetRows.length, 1)}
               pageCount={1}
               fillHeight
-              emptyMessage="No issues on this sheet."
+              emptyMessage="No issues match the selected module filters."
+              showColumnViewControl={false}
               toolbarExtras={
                 <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
                   {fullscreenIssuesError ? (
@@ -464,23 +644,38 @@ export function IssueExcelTable({
 
           <div className="border-t border-border/70 bg-muted/30 px-3 py-2">
             <div className="flex gap-1 overflow-x-auto pb-1">
-              {workbook.sheets.map((sheet) => (
-                <button
-                  key={sheet.id}
-                  type="button"
-                  onClick={() => setSelectedSheetId(sheet.id)}
-                  className={cn(
-                    "inline-flex h-8 shrink-0 items-center gap-2 rounded-t-md border border-border/70 bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                    sheet.id === activeSheet?.id &&
-                      "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 shadow-sm dark:text-emerald-300"
-                  )}
-                >
-                  <span className="max-w-[11rem] truncate">{sheet.label}</span>
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.68rem] tabular-nums text-muted-foreground">
-                    {sheet.count}
-                  </span>
-                </button>
-              ))}
+              {renderSheetButton(sheetById.get("__all__") ?? workbook.sheets[0], {
+                active: selectedModuleFilters.length === 0,
+                onClick: onClearModuleFilters,
+              })}
+              {sheetById.get("__general__")
+                ? renderSheetButton(sheetById.get("__general__")!, {
+                    active: selectedModuleFilterSet.has(GENERAL_MODULE_FILTER_VALUE),
+                    highlighted: selectedModuleFilterSet.has(GENERAL_MODULE_FILTER_VALUE),
+                    onClick: () => onModuleFilterToggle(GENERAL_MODULE_FILTER_VALUE),
+                  })
+                : null}
+
+              {mainModules.map((mainModule) => {
+                const mainSheet = sheetById.get(`main:${mainModule.id}`);
+                const subModules = subModulesByParentId.get(mainModule.id) ?? [];
+                const isExpanded =
+                  selectedMainGroupIds.has(mainModule.id) ||
+                  expandedMainModuleIds.includes(mainModule.id);
+                const hasSelectedInGroup = selectedMainGroupIds.has(mainModule.id);
+
+                if (!mainSheet) {
+                  return null;
+                }
+
+                return renderMainModuleSheetGroup({
+                  mainModule,
+                  mainSheet,
+                  subModules,
+                  isExpanded,
+                  hasSelectedInGroup,
+                });
+              })}
             </div>
           </div>
         </DialogContent>

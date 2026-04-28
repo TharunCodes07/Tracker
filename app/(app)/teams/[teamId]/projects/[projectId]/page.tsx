@@ -378,6 +378,8 @@ export default function ProjectIssuesPage() {
                 onRowClick={workspace.canEditProject ? workspace.openEditIssueDialog : undefined}
                 onEdit={workspace.openEditIssueDialog}
                 onDelete={workspace.setIssueToDelete}
+                onModuleFilterToggle={workspace.handleModuleFilterToggle}
+                onClearModuleFilters={workspace.handleClearModuleFilters}
                 sorting={workspace.sorting}
                 onSortingChange={workspace.handleSortingChange}
                 pageIndex={workspace.currentPageIndex}

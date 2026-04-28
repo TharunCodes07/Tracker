@@ -142,6 +142,8 @@ export type DataTableProps<TData, TValue> = {
 
     sorting?: SortingState;
     onSortingChange?: OnChangeFn<SortingState>;
+    columnVisibility?: VisibilityState;
+    onColumnVisibilityChange?: OnChangeFn<VisibilityState>;
 
     filterValue?: string;
     onFilterChange?: (value: string) => void;
@@ -232,6 +234,8 @@ export function DataTable<TData, TValue>({
 
     sorting: cSorting,
     onSortingChange: cOnSortingChange,
+    columnVisibility: cColumnVisibility,
+    onColumnVisibilityChange: cOnColumnVisibilityChange,
 
     filterValue: cFilterValue,
     onFilterChange,
@@ -270,7 +274,7 @@ export function DataTable<TData, TValue>({
     const pageCount = cPageCount ?? -1;
 
     const columnFilters = iColumnFilters;
-    const columnVisibility = iColumnVisibility;
+    const columnVisibility = cColumnVisibility ?? iColumnVisibility;
     const rowSelection = iRowSelection;
     const isExcelMode = visualMode === "excel";
     const fullTextColumnIdSet = React.useMemo(
@@ -386,7 +390,8 @@ export function DataTable<TData, TValue>({
 
         onColumnVisibilityChange: (updater) => {
             const next = typeof updater === "function" ? updater(columnVisibility) : updater;
-            iSetColumnVisibility(next);
+            if (cOnColumnVisibilityChange) cOnColumnVisibilityChange(next);
+            else iSetColumnVisibility(next);
         },
 
         onRowSelectionChange: (updater) => {
