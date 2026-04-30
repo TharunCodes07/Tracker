@@ -134,9 +134,6 @@ export function IssueDialog({
                   />
                 </Field>
               </div>
-              <FieldDescription className="mt-2">
-                Keep the issue statement and the handoff notes visible together while creating or editing.
-              </FieldDescription>
             </div>
 
             <div className="grid gap-4 rounded-xl border border-border/70 bg-background p-3 shadow-sm md:grid-cols-3">
