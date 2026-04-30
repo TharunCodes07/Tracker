@@ -6,6 +6,7 @@ import { Bell, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { TeamInviteNotificationAction } from "@/components/notifications/team-invite-notification-action";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -170,6 +171,14 @@ export function NotificationsMenu() {
                       <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
                         {notification.message}
                       </p>
+                      {notification.trigger === "team.invited" ? (
+                        <TeamInviteNotificationAction
+                          notificationId={notification.id}
+                          teamId={notification.teamId}
+                          className="mt-2 h-8"
+                          onAccepted={() => setOpen(false)}
+                        />
+                      ) : null}
                     </div>
                   </DropdownMenuItem>
 

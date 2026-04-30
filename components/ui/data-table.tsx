@@ -152,6 +152,8 @@ export type DataTableProps<TData, TValue> = {
 
     /** Additional elements to render in the toolbar after the filter input */
     toolbarExtras?: React.ReactNode;
+    /** Additional elements to render at the far end of the toolbar */
+    toolbarEndExtras?: React.ReactNode;
 
     visualMode?: DataTableVisualMode;
     fullTextColumnIds?: string[];
@@ -243,6 +245,7 @@ export function DataTable<TData, TValue>({
     onRowClick,
 
     toolbarExtras,
+    toolbarEndExtras,
     visualMode = "default",
     fullTextColumnIds = [],
     columnTextModes,
@@ -424,7 +427,8 @@ export function DataTable<TData, TValue>({
         getPaginationRowModel: getPaginationRowModel(),
     });
 
-    const showToolbarRow = showToolbar && (filterColumn || toolbarExtras || showColumnViewControl);
+    const showToolbarRow =
+        showToolbar && (filterColumn || toolbarExtras || showColumnViewControl || toolbarEndExtras);
 
     const resolveTextMode = (columnId: string, meta: DataTableColumnMeta) =>
         columnTextModes?.[columnId] ??
@@ -488,6 +492,8 @@ export function DataTable<TData, TValue>({
                         </DropdownMenuContent>
                     </DropdownMenu>
                 ) : null}
+
+                {toolbarEndExtras}
             </div>
             ) : null}
 

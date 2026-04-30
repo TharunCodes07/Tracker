@@ -37,6 +37,7 @@ import {
   type TeamInviteMemberInput,
   type TeamMemberListItem,
   type TeamMemberRole,
+  type TeamPendingInviteListItem,
   type TeamPendingJoinRequestListItem,
   type UpdateTeamMemberInput,
 } from "@/routes/teams/types";
@@ -47,6 +48,7 @@ interface TeamMembersDialogProps {
   teamName: string;
   members: TeamMemberListItem[];
   pendingRequests: TeamPendingJoinRequestListItem[];
+  pendingInvites: TeamPendingInviteListItem[];
   isLoading: boolean;
   canManageMemberAccess: boolean;
   canManageMemberRoles: boolean;
@@ -92,7 +94,9 @@ function getInviteCandidateStatusLabel(candidate: TeamInviteCandidate) {
     case "active":
       return "Member";
     case "pending":
-      return "Pending";
+      return "Requested";
+    case "invited":
+      return "Invited";
     case "none":
     default:
       return "Available";
@@ -105,6 +109,7 @@ export function TeamMembersDialog({
   teamName,
   members,
   pendingRequests,
+  pendingInvites,
   isLoading,
   canManageMemberAccess,
   canManageMemberRoles,
@@ -287,6 +292,30 @@ export function TeamMembersDialog({
                       Approve
                     </Button>
                   </div>
+                </div>
+              ))}
+            </section>
+          ) : null}
+
+          {canManageMemberAccess && pendingInvites.length > 0 ? (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <MailPlus className="h-4 w-4 text-sky-500" />
+                Pending invitations
+              </div>
+
+              {pendingInvites.map((invite) => (
+                <div
+                  key={invite.userId}
+                  className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/70 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="truncate font-medium text-foreground">{invite.name}</div>
+                    <div className="truncate text-sm text-muted-foreground">{invite.email}</div>
+                    <Badge variant="outline">{formatAccessLabel(invite.invitedAccessLevel)}</Badge>
+                  </div>
+
+                  <Badge variant="secondary" className="w-fit">Invite sent</Badge>
                 </div>
               ))}
             </section>

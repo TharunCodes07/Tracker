@@ -3,6 +3,7 @@ export const NOTIFICATION_TRIGGER_VALUES = [
   "project.created",
   "issue.created",
   "issue.assigned",
+  "issue.marked_for_review",
   "issue.ready_for_test",
   "issue.reopened",
 ] as const;
@@ -86,6 +87,15 @@ export interface IssueAssignedNotificationEvent extends NotificationEventBase {
   assigneeId: string;
 }
 
+export interface IssueMarkedForReviewNotificationEvent extends NotificationEventBase {
+  type: "issue.marked_for_review";
+  projectId: string;
+  issueId: string;
+  issueNo: number;
+  issueTitle: string;
+  reviewerId: string | null;
+}
+
 export interface IssueReadyForTestNotificationEvent extends NotificationEventBase {
   type: "issue.ready_for_test";
   projectId: string;
@@ -108,5 +118,6 @@ export type NotificationEvent =
   | ProjectCreatedNotificationEvent
   | IssueCreatedNotificationEvent
   | IssueAssignedNotificationEvent
+  | IssueMarkedForReviewNotificationEvent
   | IssueReadyForTestNotificationEvent
   | IssueReopenedNotificationEvent;

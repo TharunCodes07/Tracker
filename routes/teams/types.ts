@@ -11,7 +11,7 @@ export const TEAM_VISIBILITY_OPTIONS = [
 ] as const;
 export type TeamVisibility = (typeof TEAM_VISIBILITY_OPTIONS)[number]["value"];
 
-export type TeamMembershipStatus = "active" | "pending" | "none";
+export type TeamMembershipStatus = "active" | "pending" | "invited" | "none";
 
 export const TEAM_MEMBER_ROLE_OPTIONS = [
   { value: "developer", label: "Developer" },
@@ -47,6 +47,7 @@ export interface TeamListItem {
   membershipStatus: TeamMembershipStatus;
   canEdit: boolean;
   canRequestAccess: boolean;
+  canAcceptInvite: boolean;
 }
 
 export interface TeamMemberListItem {
@@ -66,6 +67,13 @@ export interface TeamPendingJoinRequestListItem {
   requestedAccessLevel: Exclude<TeamAccessLevel, "owner">;
 }
 
+export interface TeamPendingInviteListItem {
+  userId: string;
+  name: string;
+  email: string;
+  invitedAccessLevel: Exclude<TeamAccessLevel, "owner">;
+}
+
 export interface TeamInviteCandidate {
   userId: string;
   name: string;
@@ -77,6 +85,7 @@ export interface TeamMembersResponse {
   team: TeamListItem;
   members: TeamMemberListItem[];
   pendingRequests: TeamPendingJoinRequestListItem[];
+  pendingInvites: TeamPendingInviteListItem[];
 }
 
 export interface ListTeamsInput {
@@ -118,6 +127,11 @@ export interface TeamMutationResponse {
 }
 
 export interface JoinTeamMutationResponse {
+  teamId: string;
+  message: string;
+}
+
+export interface TeamInviteAcceptanceResponse {
   teamId: string;
   message: string;
 }

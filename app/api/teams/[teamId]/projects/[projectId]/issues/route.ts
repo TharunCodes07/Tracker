@@ -55,9 +55,9 @@ export async function POST(
       },
     ];
 
-    if (issue.status === "done") {
+    if (issue.status === "review") {
       notificationEvents.push({
-        type: "issue.ready_for_test",
+        type: "issue.marked_for_review",
         actorId: actor.id,
         actorName: actor.name ?? "",
         teamId,
@@ -65,6 +65,7 @@ export async function POST(
         issueId: issue.id,
         issueNo: issue.no,
         issueTitle: issue.title,
+        reviewerId: issue.reviewedBy,
       });
     }
 

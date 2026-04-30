@@ -62,9 +62,48 @@ interface IssueResolutionFilterControlProps {
   resolvedIssueCount: number;
   pendingTestIssueCount: number;
   reopenedIssueCount: number;
-  showViewModeToggle?: boolean;
+}
+
+interface IssueViewModeToggleProps {
   viewMode?: "grid" | "table";
-  onViewModeChange?: (value: "grid" | "table") => void;
+  onViewModeChange: (value: "grid" | "table") => void;
+  className?: string;
+}
+
+export function IssueViewModeToggle({
+  viewMode,
+  onViewModeChange,
+  className,
+}: IssueViewModeToggleProps) {
+  return (
+    <div
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-lg border border-border/60 bg-background p-0.5",
+        className
+      )}
+    >
+      <Button
+        type="button"
+        variant={viewMode === "grid" ? "secondary" : "ghost"}
+        size="sm"
+        className="h-7 rounded-md px-2.5"
+        onClick={() => onViewModeChange("grid")}
+      >
+        <LayoutGrid className="h-3.5 w-3.5" />
+        Cards
+      </Button>
+      <Button
+        type="button"
+        variant={viewMode === "table" ? "secondary" : "ghost"}
+        size="sm"
+        className="h-7 rounded-md px-2.5"
+        onClick={() => onViewModeChange("table")}
+      >
+        <Table2 className="h-3.5 w-3.5" />
+        Table
+      </Button>
+    </div>
+  );
 }
 
 export function IssueResolutionFilterControl({
@@ -77,9 +116,6 @@ export function IssueResolutionFilterControl({
   resolvedIssueCount,
   pendingTestIssueCount,
   reopenedIssueCount,
-  showViewModeToggle = false,
-  viewMode,
-  onViewModeChange,
 }: IssueResolutionFilterControlProps) {
   const options: Array<{
     value: IssueResolutionFilter;
@@ -118,30 +154,6 @@ export function IssueResolutionFilterControl({
         ))}
       </div>
 
-      {showViewModeToggle && onViewModeChange ? (
-        <div className="ml-auto inline-flex items-center rounded-lg border border-border/60 bg-background p-0.5">
-          <Button
-            type="button"
-            variant={viewMode === "grid" ? "secondary" : "ghost"}
-            size="sm"
-            className="h-7 rounded-md px-2.5"
-            onClick={() => onViewModeChange("grid")}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            Cards
-          </Button>
-          <Button
-            type="button"
-            variant={viewMode === "table" ? "secondary" : "ghost"}
-            size="sm"
-            className="h-7 rounded-md px-2.5"
-            onClick={() => onViewModeChange("table")}
-          >
-            <Table2 className="h-3.5 w-3.5" />
-            Table
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }

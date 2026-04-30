@@ -14,6 +14,7 @@ import { IssueCardView } from "@/components/issues/issue-card-view";
 import {
   IssueFilters,
   IssueResolutionFilterControl,
+  IssueViewModeToggle,
 } from "@/components/issues/issue-filters";
 import { IssueDialog } from "@/components/issues/issue-dialog";
 import { IssueExcelTable } from "@/components/issues/excel/issue-excel-table";
@@ -137,7 +138,10 @@ export default function ProjectIssuesPage() {
       resolvedIssueCount={workspace.resolvedIssueCount}
       pendingTestIssueCount={workspace.pendingTestIssueCount}
       reopenedIssueCount={workspace.reopenedIssueCount}
-      showViewModeToggle
+    />
+  );
+  const viewModeToggle = (
+    <IssueViewModeToggle
       viewMode={viewMode}
       onViewModeChange={setViewMode}
     />
@@ -275,6 +279,7 @@ export default function ProjectIssuesPage() {
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/25 p-2 shadow-sm">
                   {resolutionFilterControls}
+                  <div className="ml-auto">{viewModeToggle}</div>
                 </div>
                 <IssueCardView
                   issues={workspace.issues}
@@ -293,6 +298,7 @@ export default function ProjectIssuesPage() {
             ) : (
               <IssueExcelTable
                 resolutionControls={resolutionFilterControls}
+                viewModeToggle={viewModeToggle}
                 issues={workspace.issues}
                 fullscreenIssues={workspace.fullscreenIssues}
                 fullscreenIssuesError={workspace.fullscreenIssuesError}

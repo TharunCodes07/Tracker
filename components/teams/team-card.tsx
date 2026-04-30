@@ -6,6 +6,7 @@ import {
   Copy,
   Globe2,
   Lock,
+  MailCheck,
   PencilLine,
   ShieldCheck,
   Trash2,
@@ -30,6 +31,7 @@ interface TeamCardProps {
   onDelete: (team: TeamListItem) => void;
   onCopyCode: (code: string) => void;
   onRequestAccess: (team: TeamListItem) => void;
+  onAcceptInvite: (team: TeamListItem) => void;
   actionPending?: boolean;
   pendingRequestTeamId?: string | null;
 }
@@ -44,6 +46,7 @@ export function TeamCard({
   onDelete,
   onCopyCode,
   onRequestAccess,
+  onAcceptInvite,
   actionPending = false,
   pendingRequestTeamId = null,
 }: TeamCardProps) {
@@ -74,6 +77,8 @@ export function TeamCard({
                 </Badge>
               ) : team.membershipStatus === "pending" ? (
                 <Badge variant="secondary">Request pending</Badge>
+              ) : team.membershipStatus === "invited" ? (
+                <Badge variant="outline">Invited</Badge>
               ) : (
                 <Badge variant="secondary">Not joined</Badge>
               )}
@@ -191,6 +196,20 @@ export function TeamCard({
             </>
           ) : team.membershipStatus === "pending" ? (
             <Badge variant="secondary">Awaiting approval</Badge>
+          ) : team.membershipStatus === "invited" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isRequestPending}
+              onClick={(event) => {
+                stopCardClick(event);
+                onAcceptInvite(team);
+              }}
+            >
+              <MailCheck className="h-4 w-4" />
+              {isRequestPending ? "Accepting..." : "Accept invite"}
+            </Button>
           ) : team.canRequestAccess ? (
             <Button
               type="button"

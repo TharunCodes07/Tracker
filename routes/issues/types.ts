@@ -50,8 +50,8 @@ export type IssueStatus = (typeof ISSUE_STATUS_OPTIONS)[number]["value"];
 export type IssueResolutionFilter =
   | "all"
   | "open"
+  | "review"
   | "resolved"
-  | "resolved_pending_test"
   | "reopened";
 export type IssueAssigneeFilterValue = "current-user" | "unassigned";
 export const ISSUE_LIST_SORT_FIELDS = [
@@ -136,7 +136,7 @@ export interface IssueListSummary {
   totalIssues: number;
   openIssueCount: number;
   resolvedIssueCount: number;
-  pendingTestIssueCount: number;
+  reviewIssueCount: number;
   reopenedIssueCount: number;
   criticalIssueCount: number;
   hasUnclassifiedIssues: boolean;

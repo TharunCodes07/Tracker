@@ -56,6 +56,7 @@ import type {
   JoinTeamInput,
   JoinTeamMutationResponse,
   TeamDeleteResponse,
+  TeamInviteAcceptanceResponse,
   TeamListItem,
   TeamListPagination,
   TeamListSortDirection,
@@ -560,6 +561,28 @@ export default function TeamsPage() {
     });
   }
 
+  function handleAcceptInvite(team: TeamListItem) {
+    setPendingRequestTeamId(team.id);
+
+    startJoinTransition(async () => {
+      try {
+        const data = await requestJson<TeamInviteAcceptanceResponse>(
+          `/api/teams/${team.id}/invite`,
+          {
+            method: "PATCH",
+          }
+        );
+
+        refreshTeams();
+        toast.success(data.message);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not accept the team invitation.");
+      } finally {
+        setPendingRequestTeamId(null);
+      }
+    });
+  }
+
   function handleUpdateTeam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -621,6 +644,7 @@ export default function TeamsPage() {
     onDelete: openDeleteDialog,
     onCopyCode: copyJoinCode,
     onRequestAccess: handleRequestAccess,
+    onAcceptInvite: handleAcceptInvite,
     actionPending: isActionPending,
     pendingRequestTeamId,
   });
@@ -826,6 +850,7 @@ export default function TeamsPage() {
                   onDelete={openDeleteDialog}
                   onCopyCode={copyJoinCode}
                   onRequestAccess={handleRequestAccess}
+                  onAcceptInvite={handleAcceptInvite}
                   actionPending={isActionPending}
                   pendingRequestTeamId={pendingRequestTeamId}
                 />

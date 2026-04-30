@@ -4,7 +4,7 @@ import type { MouseEvent } from "react";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { Copy, Globe2, Lock, PencilLine, Trash2, UserPlus } from "lucide-react";
+import { Copy, Globe2, Lock, MailCheck, PencilLine, Trash2, UserPlus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ interface TeamTableColumnOptions {
   onDelete: (team: TeamListItem) => void;
   onCopyCode: (code: string) => void;
   onRequestAccess: (team: TeamListItem) => void;
+  onAcceptInvite: (team: TeamListItem) => void;
   actionPending?: boolean;
   pendingRequestTeamId?: string | null;
 }
@@ -29,6 +30,7 @@ export function getTeamTableColumns({
   onDelete,
   onCopyCode,
   onRequestAccess,
+  onAcceptInvite,
   actionPending = false,
   pendingRequestTeamId = null,
 }: TeamTableColumnOptions): ColumnDef<TeamListItem>[] {
@@ -52,6 +54,8 @@ export function getTeamTableColumns({
             </Badge>
             {row.original.membershipStatus === "pending" ? (
               <Badge variant="secondary">Pending</Badge>
+            ) : row.original.membershipStatus === "invited" ? (
+              <Badge variant="outline">Invited</Badge>
             ) : row.original.isOwner ? (
               <Badge variant="default">Owner</Badge>
             ) : row.original.membershipStatus === "active" ? (
@@ -123,7 +127,11 @@ export function getTeamTableColumns({
       header: ({ column }) => <DataTableColumnHeader column={column} title="Access" />,
       cell: ({ row }) => {
         if (row.original.membershipStatus === "pending") {
-          return <Badge variant="secondary">Pending</Badge>;
+          return <Badge variant="secondary">Request pending</Badge>;
+        }
+
+        if (row.original.membershipStatus === "invited") {
+          return <Badge variant="outline">Invited</Badge>;
         }
 
         if (row.original.membershipStatus !== "active" || !row.original.accessLevel) {
@@ -170,6 +178,8 @@ export function getTeamTableColumns({
           </div>
         ) : row.original.membershipStatus === "pending" ? (
           <Badge variant="secondary">Awaiting approval</Badge>
+        ) : row.original.membershipStatus === "invited" ? (
+          <Badge variant="outline">Invitation received</Badge>
         ) : (
           <span className="text-muted-foreground">Hidden</span>
         ),
@@ -240,8 +250,24 @@ export function getTeamTableColumns({
             <UserPlus className="h-3.5 w-3.5" />
             {pendingRequestTeamId === row.original.id ? "Requesting..." : "Request"}
           </Button>
+        ) : row.original.canAcceptInvite ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={(event) => {
+              stopRowClick(event);
+              onAcceptInvite(row.original);
+            }}
+            disabled={actionPending || pendingRequestTeamId === row.original.id}
+          >
+            <MailCheck className="h-3.5 w-3.5" />
+            {pendingRequestTeamId === row.original.id ? "Accepting..." : "Accept"}
+          </Button>
         ) : row.original.membershipStatus === "pending" ? (
           <span className="text-muted-foreground">Pending</span>
+        ) : row.original.membershipStatus === "invited" ? (
+          <span className="text-muted-foreground">Invited</span>
         ) : (
           <span className="text-muted-foreground">-</span>
         ),

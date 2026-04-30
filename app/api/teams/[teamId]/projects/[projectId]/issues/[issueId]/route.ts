@@ -41,9 +41,9 @@ export async function PATCH(
       });
     }
 
-    if (previousStatus !== "done" && issue.status === "done") {
+    if (previousStatus !== "review" && issue.status === "review") {
       notificationEvents.push({
-        type: "issue.ready_for_test",
+        type: "issue.marked_for_review",
         actorId: actor.id,
         actorName: actor.name ?? "",
         teamId,
@@ -51,6 +51,7 @@ export async function PATCH(
         issueId: issue.id,
         issueNo: issue.no,
         issueTitle: issue.title,
+        reviewerId: issue.reviewedBy,
       });
     }
 

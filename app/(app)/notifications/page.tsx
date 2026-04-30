@@ -10,6 +10,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { TeamInviteNotificationAction } from "@/components/notifications/team-invite-notification-action";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireServerSession } from "@/lib/auth-session";
@@ -68,6 +69,8 @@ function getNotificationAccentClassName(notification: NotificationListItem) {
       return "border-sky-400/30 bg-sky-400/10 text-sky-700 dark:text-sky-300";
     case "issue.ready_for_test":
       return "border-cyan-400/30 bg-cyan-400/10 text-cyan-700 dark:text-cyan-300";
+    case "issue.marked_for_review":
+      return "border-indigo-400/30 bg-indigo-400/10 text-indigo-700 dark:text-indigo-300";
     case "issue.reopened":
       return "border-amber-400/30 bg-amber-400/10 text-amber-700 dark:text-amber-300";
     case "issue.assigned":
@@ -86,6 +89,8 @@ function getNotificationLabel(notification: NotificationListItem) {
       return "Invite";
     case "issue.ready_for_test":
       return "Ready for test";
+    case "issue.marked_for_review":
+      return "Review";
     case "issue.reopened":
       return "Reopened";
     case "issue.assigned":
@@ -226,9 +231,8 @@ export default async function NotificationsPage({
         ) : (
           <div className="divide-y divide-border/60">
             {notificationCenter.notifications.map((notification) => (
-              <Link
+              <div
                 key={notification.id}
-                href={notification.href}
                 className="group flex flex-col gap-4 px-4 py-4 transition-colors hover:bg-accent/40 sm:px-5 lg:flex-row lg:items-start lg:justify-between"
               >
                 <div className="flex min-w-0 items-start gap-4">
@@ -274,12 +278,21 @@ export default async function NotificationsPage({
                       addSuffix: true,
                     })}
                   </div>
-                  <div className="inline-flex items-center gap-1 text-sm font-medium text-foreground">
-                    Open
-                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                  </div>
+                  {notification.trigger === "team.invited" ? (
+                    <TeamInviteNotificationAction
+                      notificationId={notification.id}
+                      teamId={notification.teamId}
+                    />
+                  ) : (
+                    <Button asChild variant="ghost" size="sm" className="shrink-0">
+                      <Link href={notification.href}>
+                        Open
+                        <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                      </Link>
+                    </Button>
+                  )}
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

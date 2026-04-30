@@ -27,6 +27,7 @@ import type {
   TeamMemberRole,
   TeamMembersResponse,
   TeamMembershipStatus,
+  TeamPendingInviteListItem,
   TeamPendingJoinRequestListItem,
   TeamsListResponse,
   TeamVisibility,
@@ -78,6 +79,7 @@ function normalizeTeamMembershipStatus(value: string | null | undefined): TeamMe
   switch (value) {
     case "active":
     case "pending":
+    case "invited":
       return value;
     default:
       return "none";
@@ -151,6 +153,22 @@ function toPendingJoinRequestListItem(row: {
   };
 }
 
+function toPendingInviteListItem(row: {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  accessLevel: string | null;
+}): TeamPendingInviteListItem {
+  const normalizedAccessLevel = normalizeTeamAccessLevel(row.accessLevel);
+
+  return {
+    userId: row.userId,
+    name: row.name ?? "Unknown invitee",
+    email: row.email ?? "No email",
+    invitedAccessLevel: normalizedAccessLevel === "owner" ? "edit" : normalizedAccessLevel,
+  };
+}
+
 function matchesKeyword(search: string, keyword: string) {
   return keyword.includes(search) || search.includes(keyword);
 }
@@ -210,6 +228,10 @@ function buildTeamSearchCondition(userId: string, search: string) {
     searchConditions.push(eq(actorMembership.membershipStatus, "pending"));
   }
 
+  if (matchesKeyword(loweredSearch, "invited") || matchesKeyword(loweredSearch, "invite")) {
+    searchConditions.push(eq(actorMembership.membershipStatus, "invited"));
+  }
+
   if (matchesKeyword(loweredSearch, "public")) {
     searchConditions.push(eq(teams.visibility, "public"));
   }
@@ -237,6 +259,7 @@ function buildTeamOrderBy(
 ) {
   const accessLevelExpression = sql<string>`case
     when ${actorMembership.membershipStatus} = 'pending' then 'pending'
+    when ${actorMembership.membershipStatus} = 'invited' then 'invited'
     else coalesce(${actorMembership.accessLevel}, '')
   end`;
   const direction = input.sortDirection;
@@ -383,6 +406,7 @@ function toTeamListItem(row: {
     membershipStatus,
     canEdit: isMember && canEdit,
     canRequestAccess: membershipStatus === "none",
+    canAcceptInvite: membershipStatus === "invited",
   };
 }
 
@@ -461,7 +485,7 @@ export async function listTeamMembersForUser(
     return null;
   }
 
-  const membershipStatuses = team.isOwner ? ["active", "pending"] : ["active"];
+  const membershipStatuses = team.isOwner ? ["active", "pending", "invited"] : ["active"];
 
   const [membershipRows, roleRows] = await Promise.all([
     db
@@ -523,10 +547,18 @@ export async function listTeamMembersForUser(
         .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }))
     : [];
 
+  const pendingInvites = team.isOwner
+    ? membershipRows
+        .filter((row) => row.membershipStatus === "invited")
+        .map(toPendingInviteListItem)
+        .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }))
+    : [];
+
   return {
     team,
     members,
     pendingRequests,
+    pendingInvites,
   };
 }
 
@@ -572,9 +604,10 @@ export async function searchTeamInviteCandidatesForUser(
   const pattern = `%${normalizedQuery}%`;
   const membershipOrder = sql<number>`case
     when ${candidateMembership.membershipStatus} is null then 0
-    when ${candidateMembership.membershipStatus} = 'pending' then 1
-    when ${candidateMembership.membershipStatus} = 'active' then 2
-    else 3
+    when ${candidateMembership.membershipStatus} = 'invited' then 1
+    when ${candidateMembership.membershipStatus} = 'pending' then 2
+    when ${candidateMembership.membershipStatus} = 'active' then 3
+    else 4
   end`;
 
   const rows = await db
@@ -599,7 +632,9 @@ export async function searchTeamInviteCandidatesForUser(
       name: row.name,
       email: row.email,
       membershipStatus:
-        row.membershipStatus === "active" || row.membershipStatus === "pending"
+        row.membershipStatus === "active" ||
+        row.membershipStatus === "pending" ||
+        row.membershipStatus === "invited"
           ? row.membershipStatus
           : "none",
     })),

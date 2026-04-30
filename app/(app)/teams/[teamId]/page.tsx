@@ -330,6 +330,7 @@ export default function TeamProjectsRoute() {
   const [isMembersOpen, setIsMembersOpen] = useState(false);
   const [members, setMembers] = useState<TeamMemberListItem[]>([]);
   const [pendingRequests, setPendingRequests] = useState<TeamMembersResponse["pendingRequests"]>([]);
+  const [pendingInvites, setPendingInvites] = useState<TeamMembersResponse["pendingInvites"]>([]);
   const [isMembersLoading, setIsMembersLoading] = useState(false);
   const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
   const [pendingJoinRequestUserId, setPendingJoinRequestUserId] = useState<string | null>(null);
@@ -583,6 +584,7 @@ export default function TeamProjectsRoute() {
       const data = await requestJson<TeamMembersResponse>(`/api/teams/${team.id}/members`);
       setMembers(data.members);
       setPendingRequests(data.pendingRequests);
+      setPendingInvites(data.pendingInvites);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load team members.");
     } finally {
@@ -601,6 +603,7 @@ export default function TeamProjectsRoute() {
       setInviteSearchError(null);
       setIsInviteSearchLoading(false);
       setInviteAccessLevel("edit");
+      setPendingInvites([]);
     }
   }
 
@@ -1180,6 +1183,7 @@ export default function TeamProjectsRoute() {
         teamName={team?.name ?? "this team"}
         members={members}
         pendingRequests={pendingRequests}
+        pendingInvites={pendingInvites}
         isLoading={isMembersLoading}
         canManageMemberAccess={canManageMemberAccess}
         canManageMemberRoles={canManageMemberRoles}

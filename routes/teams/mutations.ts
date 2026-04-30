@@ -307,6 +307,10 @@ export async function joinTeamForUser(actor: TeamActor, input: JoinTeamInput) {
     throw new RouteError("Your join request is already pending approval.", 409);
   }
 
+  if (existingMembership?.membershipStatus === "invited") {
+    throw new RouteError("You already have an invitation to this team.", 409);
+  }
+
   await db.insert(usersToTeams).values({
     userId: actor.id,
     teamId: team.id,
@@ -315,6 +319,48 @@ export async function joinTeamForUser(actor: TeamActor, input: JoinTeamInput) {
   });
 
   return team;
+}
+
+export async function acceptTeamInviteForUser(actor: TeamActor, teamId: string) {
+  const [membership] = await db
+    .select({
+      teamId: teams.id,
+      teamName: teams.name,
+      membershipStatus: usersToTeams.membershipStatus,
+    })
+    .from(usersToTeams)
+    .innerJoin(teams, eq(usersToTeams.teamId, teams.id))
+    .where(and(eq(usersToTeams.userId, actor.id), eq(usersToTeams.teamId, teamId)))
+    .limit(1);
+
+  if (!membership) {
+    throw new RouteError("Invitation not found.", 404);
+  }
+
+  if (membership.membershipStatus === "active") {
+    return {
+      id: membership.teamId,
+      name: membership.teamName,
+      alreadyActive: true,
+    };
+  }
+
+  if (membership.membershipStatus !== "invited") {
+    throw new RouteError("This team membership is not an invitation.", 409);
+  }
+
+  await db
+    .update(usersToTeams)
+    .set({
+      membershipStatus: "active",
+    })
+    .where(and(eq(usersToTeams.userId, actor.id), eq(usersToTeams.teamId, teamId)));
+
+  return {
+    id: membership.teamId,
+    name: membership.teamName,
+    alreadyActive: false,
+  };
 }
 
 export async function updateTeamForUser(
@@ -529,6 +575,13 @@ export async function inviteTeamMemberForUser(
 
   if (existingMembership?.membershipStatus === "pending") {
     throw new RouteError(
+      `${invitedUser.name ?? invitedUser.email} already requested access. Approve the request instead.`,
+      409
+    );
+  }
+
+  if (existingMembership?.membershipStatus === "invited") {
+    throw new RouteError(
       `${invitedUser.name ?? invitedUser.email} already has a pending invitation.`,
       409
     );
@@ -538,7 +591,7 @@ export async function inviteTeamMemberForUser(
     userId: invitedUser.id,
     teamId,
     accessLevel,
-    membershipStatus: "pending",
+    membershipStatus: "invited",
   });
 
   return {

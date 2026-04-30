@@ -129,6 +129,38 @@ async function buildIssueAssignedNotifications(
   ];
 }
 
+async function buildIssueMarkedForReviewNotifications(
+  event: Extract<NotificationEvent, { type: "issue.marked_for_review" }>
+) {
+  const recipientIds = new Set<string>();
+
+  if (event.reviewerId) {
+    recipientIds.add(event.reviewerId);
+  } else {
+    const testerIds = await listTeamRecipientIdsByRole(event.teamId, "tester");
+
+    testerIds.forEach((userId) => recipientIds.add(userId));
+  }
+
+  recipientIds.delete(event.actorId);
+
+  const actorName = normalizeActorName(event.actorName);
+  const issueLabel = `#${event.issueNo} ${event.issueTitle}`;
+
+  return Array.from(recipientIds).map(
+    (userId): CreateNotificationInput => ({
+      userId,
+      trigger: event.type,
+      teamId: event.teamId,
+      projectId: event.projectId,
+      issueId: event.issueId,
+      title: "Issue marked for review",
+      message: `${actorName} marked ${issueLabel} for review.`,
+      href: `/teams/${event.teamId}/projects/${event.projectId}`,
+    })
+  );
+}
+
 async function buildIssueReadyForTestNotifications(
   event: Extract<NotificationEvent, { type: "issue.ready_for_test" }>
 ) {
@@ -191,6 +223,8 @@ async function buildNotificationEntries(event: NotificationEvent) {
       return buildIssueCreatedNotifications(event);
     case "issue.assigned":
       return buildIssueAssignedNotifications(event);
+    case "issue.marked_for_review":
+      return buildIssueMarkedForReviewNotifications(event);
     case "issue.ready_for_test":
       return buildIssueReadyForTestNotifications(event);
     case "issue.reopened":

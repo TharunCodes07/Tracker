@@ -47,10 +47,12 @@ function parseSortDirection(value: string | null): IssueListSortDirection {
 function parseResolution(value: string | null): IssueResolutionFilter {
   switch (value) {
     case "open":
+    case "review":
     case "resolved":
-    case "resolved_pending_test":
     case "reopened":
       return value;
+    case "resolved_pending_test":
+      return "review";
     case "all":
     default:
       return "all";

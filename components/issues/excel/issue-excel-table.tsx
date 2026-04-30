@@ -63,6 +63,7 @@ interface IssueWorkbook {
 
 interface IssueExcelTableProps {
   resolutionControls?: React.ReactNode;
+  viewModeToggle?: React.ReactNode;
   issues: IssueListItem[];
   fullscreenIssues: IssueListItem[];
   fullscreenIssuesError?: string | null;
@@ -186,6 +187,7 @@ function buildWorkbook(
 
 export function IssueExcelTable({
   resolutionControls,
+  viewModeToggle,
   issues,
   fullscreenIssues,
   fullscreenIssuesError,
@@ -488,6 +490,7 @@ export function IssueExcelTable({
             </Button>
           </div>
         }
+        toolbarEndExtras={viewModeToggle}
       />
 
       <Dialog open={isFullscreenOpen} onOpenChange={handleFullscreenOpenChange}>
