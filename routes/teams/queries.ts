@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   ilike,
+  ne,
   or,
   sql,
   type SQL,
@@ -15,9 +16,11 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
 import { teamMemberRoles, teams, user, usersToTeams } from "@/db/schema";
+import { RouteError } from "@/routes/errors";
 
 import type {
   ListTeamsInput,
+  TeamInviteCandidate,
   TeamAccessLevel,
   TeamListItem,
   TeamMemberListItem,
@@ -539,4 +542,67 @@ export async function getTeamMemberForUser(
   }
 
   return teamMembers.members.find((member) => member.userId === memberUserId) ?? null;
+}
+
+export async function searchTeamInviteCandidatesForUser(
+  userId: string,
+  teamId: string,
+  query: string
+): Promise<{ candidates: TeamInviteCandidate[]; query: string } | null> {
+  const team = await getTeamForUser(userId, teamId);
+
+  if (!team) {
+    return null;
+  }
+
+  if (!team.isOwner) {
+    throw new RouteError("Only a team owner can search invite candidates.", 403);
+  }
+
+  const normalizedQuery = query.trim().slice(0, 120);
+
+  if (normalizedQuery.length < 2) {
+    return {
+      candidates: [],
+      query: normalizedQuery,
+    };
+  }
+
+  const candidateMembership = alias(usersToTeams, "candidate_membership");
+  const pattern = `%${normalizedQuery}%`;
+  const membershipOrder = sql<number>`case
+    when ${candidateMembership.membershipStatus} is null then 0
+    when ${candidateMembership.membershipStatus} = 'pending' then 1
+    when ${candidateMembership.membershipStatus} = 'active' then 2
+    else 3
+  end`;
+
+  const rows = await db
+    .select({
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      membershipStatus: candidateMembership.membershipStatus,
+    })
+    .from(user)
+    .leftJoin(
+      candidateMembership,
+      and(eq(candidateMembership.userId, user.id), eq(candidateMembership.teamId, teamId))
+    )
+    .where(and(ne(user.id, userId), or(ilike(user.email, pattern), ilike(user.name, pattern))))
+    .orderBy(asc(membershipOrder), asc(user.email))
+    .limit(8);
+
+  return {
+    candidates: rows.map((row) => ({
+      userId: row.userId,
+      name: row.name,
+      email: row.email,
+      membershipStatus:
+        row.membershipStatus === "active" || row.membershipStatus === "pending"
+          ? row.membershipStatus
+          : "none",
+    })),
+    query: normalizedQuery,
+  };
 }

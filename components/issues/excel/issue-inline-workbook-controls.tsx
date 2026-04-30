@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import { Check, Plus, X } from "lucide-react";
+import { Check, RotateCcw, X } from "lucide-react";
 
 import type { IssueFormValues } from "@/components/issues/issue-dialog";
 import {
@@ -128,7 +128,7 @@ export function SelectCell({
         >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
-        <SelectContent align="start" className="z-[60]">
+        <SelectContent align="start" className="z-60">
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
@@ -156,7 +156,7 @@ export function getStickyColumnClassName(columnId: string, isHeader = false) {
 export function TextCell({ value, fallback }: { value: string | null; fallback: string }) {
   return (
     <div
-      className="tracker-thin-scrollbar max-h-24 min-h-8 overflow-y-auto whitespace-pre-wrap text-left text-sm leading-5 text-foreground [overflow-wrap:anywhere]"
+      className="tracker-thin-scrollbar max-h-24 min-h-8 overflow-y-auto whitespace-pre-wrap text-left text-sm leading-5 text-foreground wrap-anywhere"
       title={value?.trim() ? value : fallback}
     >
       {value?.trim() ? value : <span className="text-muted-foreground">{fallback}</span>}
@@ -548,8 +548,17 @@ export function WorkbookToolbar({
   }
 
   if (editingIssue && editingValues) {
+    const isReopeningIssue = editingIssue.status === "done" && editingValues.status !== "done";
+
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/5 px-3 py-2">
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2",
+          isReopeningIssue
+            ? "border-rose-500/25 bg-rose-500/5"
+            : "border-cyan-500/25 bg-cyan-500/5"
+        )}
+      >
         <Badge variant="outline">Editing #{editingIssue.no}</Badge>
         <span className="min-w-0 truncate text-sm text-muted-foreground">{editingIssue.title}</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -559,8 +568,18 @@ export function WorkbookToolbar({
             onClick={onSaveEditedIssue}
             disabled={!canSaveDraft(editingValues) || isSaving}
           >
-            <Check className="h-3.5 w-3.5" />
-            {savingRowId === editingIssue.id ? "Saving" : "Save changes"}
+            {isReopeningIssue ? (
+              <RotateCcw className="h-3.5 w-3.5" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            {savingRowId === editingIssue.id
+              ? isReopeningIssue
+                ? "Reopening"
+                : "Saving"
+              : isReopeningIssue
+                ? "Reopen issue"
+                : "Save changes"}
           </Button>
           <Button
             type="button"
@@ -577,15 +596,12 @@ export function WorkbookToolbar({
     );
   }
 
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/25 px-3 py-2">
-      <Button type="button" size="sm" onClick={onStartNewIssue}>
-        <Plus className="h-3.5 w-3.5" />
-        New issue
-      </Button>
-      <span className="text-sm text-muted-foreground">
-        Click a cell to edit inline. Use the pencil icon for the full modal.
-      </span>
-    </div>
-  );
+  // return (
+  //   <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/25 px-3 py-2">
+  //     <Button type="button" size="sm" onClick={onStartNewIssue}>
+  //       <Plus className="h-3.5 w-3.5" />
+  //       New issue
+  //     </Button>
+  //   </div>
+  // );
 }

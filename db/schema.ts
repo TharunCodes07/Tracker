@@ -236,7 +236,7 @@ export const issues = pgTable(
     title: varchar('title', { length: 255 }).notNull(),
     description: text('description'),
     priority: varchar('priority', { length: 50 }).notNull(), // Low, Medium, High, Critical
-    status: varchar('status', { length: 50 }).notNull(), // Open, In Progress, Resolved, Closed
+    status: varchar('status', { length: 50 }).notNull(), // Open, In Progress, Review, Done
     assignedTo: uuid('assigned_to').references(() => user.id, { onDelete: 'set null' }),
     reviewedBy: uuid('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
     comments: text('comments'),

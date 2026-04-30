@@ -363,6 +363,8 @@ export function useProjectIssuesWorkspace() {
   const isLoading = isMetadataLoading || isIssuesLoading;
   const isSearchPending = searchValue.trim() !== debouncedSearchValue;
   const isEditingIssue = Boolean(editingIssue);
+  const isReopeningIssue =
+    editingIssue?.status === "done" && issueForm.status !== "done";
   const isIssueMutationPending = isCreatingIssue || isUpdatingIssue;
   const areIssueActionsPending = isUpdatingIssue || isDeletingIssue;
   const hasActiveFilters =
@@ -1383,6 +1385,7 @@ export function useProjectIssuesWorkspace() {
     issueForm,
     handleIssueFormChange,
     isEditingIssue,
+    isReopeningIssue,
     isIssueMutationPending,
     handleCreateIssue,
     handleUpdateIssue,

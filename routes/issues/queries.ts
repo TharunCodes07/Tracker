@@ -277,7 +277,7 @@ function buildProjectIssuesWhereClause(
   } else if (input.resolution === "resolved_pending_test") {
     conditions.push(and(eq(issues.status, "done"), isNull(issues.testedBy)) as SQL);
   } else if (input.resolution === "reopened") {
-    conditions.push(and(sql`${issues.reopenedBy} is not null`, ne(issues.status, "done")) as SQL);
+    conditions.push(and(sql`${issues.reopenedAt} is not null`, ne(issues.status, "done")) as SQL);
   }
 
   if (input.moduleFilters.length > 0) {
@@ -470,7 +470,7 @@ async function getProjectIssuesSummary(projectId: string): Promise<IssueListSumm
       openIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} <> 'done') as integer)`,
       resolvedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done') as integer)`,
       pendingTestIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done' and ${issues.testedBy} is null) as integer)`,
-      reopenedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.reopenedBy} is not null and ${issues.status} <> 'done') as integer)`,
+      reopenedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.reopenedAt} is not null and ${issues.status} <> 'done') as integer)`,
       criticalIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.priority} = 'critical') as integer)`,
       unclassifiedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.issueClassId} is null) as integer)`,
     })

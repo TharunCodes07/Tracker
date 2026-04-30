@@ -74,7 +74,10 @@ export async function PATCH(
 
     return NextResponse.json<IssueMutationResponse>({
       issue,
-      message: `${issue.title} has been updated.`,
+      message:
+        previousStatus === "done" && issue.status !== "done"
+          ? `${issue.title} has been reopened.`
+          : `${issue.title} has been updated.`,
     });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the issue request.");

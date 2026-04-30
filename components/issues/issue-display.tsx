@@ -94,14 +94,14 @@ export function getIssuePriorityFilterAccentClassName(priority: IssuePriority) {
 export function getIssuePriorityCardAccentClassName(priority: IssuePriority) {
   switch (priority) {
     case "critical":
-      return "via-red-500/60 to-orange-400/50";
+      return "border-l-4 border-l-red-500";
     case "high":
-      return "via-orange-500/60 to-amber-400/50";
+      return "border-l-4 border-l-orange-500";
     case "medium":
-      return "via-amber-500/60 to-cyan-400/40";
+      return "border-l-4 border-l-amber-500";
     case "low":
     default:
-      return "via-emerald-500/60 to-cyan-400/50";
+      return "border-l-4 border-l-emerald-500";
   }
 }
 

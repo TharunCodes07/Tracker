@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Search, Shapes, UserRound } from "lucide-react";
+import { AlertTriangle, LayoutGrid, Search, Shapes, Table2, UserRound } from "lucide-react";
 
 import { MultiSelectFilterMenu } from "@/components/issues/multi-select-filter-menu";
 import { ActiveFilterChip } from "@/components/issues/issue-workspace-parts";
@@ -36,6 +36,7 @@ interface IssueFiltersProps {
   onAssigneeFilterToggle: (value: string) => void;
   onClearAssigneeFilters: () => void;
   showIssueCount?: boolean;
+  showResolutionFilter?: boolean;
   resolutionFilter: IssueResolutionFilter;
   onResolutionFilterChange: (value: IssueResolutionFilter) => void;
   totalIssues: number;
@@ -49,6 +50,100 @@ interface IssueFiltersProps {
   visibleIssueCount: number;
   isUpdating: boolean;
   isSearchPending: boolean;
+}
+
+interface IssueResolutionFilterControlProps {
+  className?: string;
+  showCounts?: boolean;
+  resolutionFilter: IssueResolutionFilter;
+  onResolutionFilterChange: (value: IssueResolutionFilter) => void;
+  totalIssues: number;
+  openIssueCount: number;
+  resolvedIssueCount: number;
+  pendingTestIssueCount: number;
+  reopenedIssueCount: number;
+  showViewModeToggle?: boolean;
+  viewMode?: "grid" | "table";
+  onViewModeChange?: (value: "grid" | "table") => void;
+}
+
+export function IssueResolutionFilterControl({
+  className,
+  showCounts = true,
+  resolutionFilter,
+  onResolutionFilterChange,
+  totalIssues,
+  openIssueCount,
+  resolvedIssueCount,
+  pendingTestIssueCount,
+  reopenedIssueCount,
+  showViewModeToggle = false,
+  viewMode,
+  onViewModeChange,
+}: IssueResolutionFilterControlProps) {
+  const options: Array<{
+    value: IssueResolutionFilter;
+    label: string;
+    count: number;
+  }> = [
+    { value: "all", label: "All", count: totalIssues },
+    { value: "open", label: "Open", count: openIssueCount },
+    { value: "resolved_pending_test", label: "Review", count: pendingTestIssueCount },
+    { value: "reopened", label: "Reopened", count: reopenedIssueCount },
+    { value: "resolved", label: "Resolved", count: resolvedIssueCount },
+  ];
+
+  return (
+    <div
+      className={cn(
+        "flex max-w-full flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur",
+        className
+      )}
+    >
+      <div className="inline-flex max-w-full items-center overflow-x-auto rounded-lg bg-muted/40 p-0.5">
+        {options.map((option) => (
+          <Button
+            key={option.value}
+            type="button"
+            variant={resolutionFilter === option.value ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 rounded-md px-2.5"
+            onClick={() => onResolutionFilterChange(option.value)}
+          >
+            {option.label}
+            {showCounts ? (
+              <span className="text-xs text-muted-foreground">{option.count}</span>
+            ) : null}
+          </Button>
+        ))}
+      </div>
+
+      {showViewModeToggle && onViewModeChange ? (
+        <div className="ml-auto inline-flex items-center rounded-lg border border-border/60 bg-background p-0.5">
+          <Button
+            type="button"
+            variant={viewMode === "grid" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 rounded-md px-2.5"
+            onClick={() => onViewModeChange("grid")}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Cards
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "table" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 rounded-md px-2.5"
+            onClick={() => onViewModeChange("table")}
+          >
+            <Table2 className="h-3.5 w-3.5" />
+            Table
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function IssueFilters({
@@ -69,6 +164,7 @@ export function IssueFilters({
   onAssigneeFilterToggle,
   onClearAssigneeFilters,
   showIssueCount = true,
+  showResolutionFilter = true,
   resolutionFilter,
   onResolutionFilterChange,
   totalIssues,
@@ -103,12 +199,13 @@ export function IssueFilters({
           </div>
 
           <MultiSelectFilterMenu
-            label="Types"
+            label="Issue Types"
             icon={Shapes}
             options={issueTypeFilterOptions}
             selectedValues={selectedIssueTypeFilters}
             onToggle={onIssueTypeFilterToggle}
             onClear={onClearIssueTypeFilters}
+            className="flex-1 sm:flex-initial"
           />
           <MultiSelectFilterMenu
             label="Priority"
@@ -117,6 +214,7 @@ export function IssueFilters({
             selectedValues={selectedPriorityFilters}
             onToggle={onPriorityFilterToggle}
             onClear={onClearPriorityFilters}
+            className="flex-1 sm:flex-initial"
           />
           <MultiSelectFilterMenu
             label="Assignee"
@@ -125,50 +223,21 @@ export function IssueFilters({
             selectedValues={selectedAssigneeFilters}
             onToggle={onAssigneeFilterToggle}
             onClear={onClearAssigneeFilters}
+            className="flex-1 sm:flex-initial"
           />
 
-          <div className="inline-flex items-center rounded-2xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur">
-            <Button
-              type="button"
-              variant={resolutionFilter === "all" ? "secondary" : "ghost"}
-              className="h-8 rounded-xl px-2.5"
-              onClick={() => onResolutionFilterChange("all")}
-            >
-              All
-            </Button>
-            <Button
-              type="button"
-              variant={resolutionFilter === "open" ? "secondary" : "ghost"}
-              className="h-8 rounded-xl px-2.5"
-              onClick={() => onResolutionFilterChange("open")}
-            >
-              Open
-            </Button>
-            <Button
-              type="button"
-              variant={resolutionFilter === "resolved" ? "secondary" : "ghost"}
-              className="h-8 rounded-xl px-2.5"
-              onClick={() => onResolutionFilterChange("resolved")}
-            >
-              Resolved
-            </Button>
-            <Button
-              type="button"
-              variant={resolutionFilter === "resolved_pending_test" ? "secondary" : "ghost"}
-              className="h-8 rounded-xl px-2.5"
-              onClick={() => onResolutionFilterChange("resolved_pending_test")}
-            >
-              Awaiting review
-            </Button>
-            <Button
-              type="button"
-              variant={resolutionFilter === "reopened" ? "secondary" : "ghost"}
-              className="h-8 rounded-xl px-2.5"
-              onClick={() => onResolutionFilterChange("reopened")}
-            >
-              Reopened
-            </Button>
-          </div>
+          {showResolutionFilter ? (
+            <IssueResolutionFilterControl
+              showCounts={false}
+              resolutionFilter={resolutionFilter}
+              onResolutionFilterChange={onResolutionFilterChange}
+              totalIssues={totalIssues}
+              openIssueCount={openIssueCount}
+              resolvedIssueCount={resolvedIssueCount}
+              pendingTestIssueCount={pendingTestIssueCount}
+              reopenedIssueCount={reopenedIssueCount}
+            />
+          ) : null}
         </div>
 
         {showToolbarStatusRow ? (
@@ -250,53 +319,18 @@ export function IssueFilters({
         </div>
 
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="inline-flex w-full items-center rounded-2xl border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur sm:w-auto">
-            <Button
-              type="button"
-              variant={resolutionFilter === "all" ? "secondary" : "ghost"}
-              className="flex-1 rounded-xl sm:flex-none"
-              onClick={() => onResolutionFilterChange("all")}
-            >
-              All
-              <span className="text-xs text-muted-foreground">{totalIssues}</span>
-            </Button>
-            <Button
-              type="button"
-              variant={resolutionFilter === "open" ? "secondary" : "ghost"}
-              className="flex-1 rounded-xl sm:flex-none"
-              onClick={() => onResolutionFilterChange("open")}
-            >
-              Open
-              <span className="text-xs text-muted-foreground">{openIssueCount}</span>
-            </Button>
-            <Button
-              type="button"
-              variant={resolutionFilter === "resolved" ? "secondary" : "ghost"}
-              className="flex-1 rounded-xl sm:flex-none"
-              onClick={() => onResolutionFilterChange("resolved")}
-            >
-              Resolved
-              <span className="text-xs text-muted-foreground">{resolvedIssueCount}</span>
-            </Button>
-            <Button
-              type="button"
-              variant={resolutionFilter === "resolved_pending_test" ? "secondary" : "ghost"}
-              className="flex-1 rounded-xl sm:flex-none"
-              onClick={() => onResolutionFilterChange("resolved_pending_test")}
-            >
-              Awaiting review
-              <span className="text-xs text-muted-foreground">{pendingTestIssueCount}</span>
-            </Button>
-            <Button
-              type="button"
-              variant={resolutionFilter === "reopened" ? "secondary" : "ghost"}
-              className="flex-1 rounded-xl sm:flex-none"
-              onClick={() => onResolutionFilterChange("reopened")}
-            >
-              Reopened
-              <span className="text-xs text-muted-foreground">{reopenedIssueCount}</span>
-            </Button>
-          </div>
+          {showResolutionFilter ? (
+            <IssueResolutionFilterControl
+              className="w-full sm:w-auto"
+              resolutionFilter={resolutionFilter}
+              onResolutionFilterChange={onResolutionFilterChange}
+              totalIssues={totalIssues}
+              openIssueCount={openIssueCount}
+              resolvedIssueCount={resolvedIssueCount}
+              pendingTestIssueCount={pendingTestIssueCount}
+              reopenedIssueCount={reopenedIssueCount}
+            />
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-2">
             {activeFilterChips.map((filterChip) => (

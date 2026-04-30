@@ -62,6 +62,7 @@ interface IssueWorkbook {
 }
 
 interface IssueExcelTableProps {
+  resolutionControls?: React.ReactNode;
   issues: IssueListItem[];
   fullscreenIssues: IssueListItem[];
   fullscreenIssuesError?: string | null;
@@ -70,8 +71,6 @@ interface IssueExcelTableProps {
   issueClasses: IssueClassListItem[];
   members: TeamMemberListItem[];
   selectedModuleFilters: string[];
-  totalIssueCount: number;
-  visibleIssueCount: number;
   canEdit: boolean;
   actionPending?: boolean;
   sorting: SortingState;
@@ -179,13 +178,14 @@ function buildWorkbook(
 
   return {
     title: "Project workbook",
-    description:
-      "The fullscreen workbook groups general issues, direct main-module issues, and sub modules into sheets.",
+    description: "",
+      // "The fullscreen workbook groups general issues, direct main-module issues, and sub modules into sheets.",
     sheets,
   };
 }
 
 export function IssueExcelTable({
+  resolutionControls,
   issues,
   fullscreenIssues,
   fullscreenIssuesError,
@@ -194,8 +194,6 @@ export function IssueExcelTable({
   issueClasses,
   members,
   selectedModuleFilters,
-  totalIssueCount,
-  visibleIssueCount,
   canEdit,
   actionPending = false,
   sorting,
@@ -474,15 +472,10 @@ export function IssueExcelTable({
         onPageIndexChange={onPageIndexChange}
         onPageSizeChange={onPageSizeChange}
         maxTableHeight="min(68vh, 720px)"
+        toolbarClassName="flex-wrap"
         toolbarExtras={
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <Badge variant="secondary" className="gap-1.5">
-              <FileSpreadsheet className="h-3.5 w-3.5" />
-              Excel table
-            </Badge>
-            <Badge variant="outline">
-              {visibleIssueCount} of {totalIssueCount}
-            </Badge>
+            {resolutionControls}
             <Button
               type="button"
               variant="outline"

@@ -1,8 +1,13 @@
-import type { KeyboardEvent, ReactNode } from "react";
+import type { KeyboardEvent } from "react";
 
 import { ChevronLeft, ChevronRight, MapPin, UserCheck, UserRound } from "lucide-react";
 
-import { IssueReopenedBadge, IssueStatusBadge } from "@/components/issues/issue-display";
+import {
+  getIssuePriorityCardAccentClassName,
+  IssuePriorityBadge,
+  IssueReopenedBadge,
+  IssueStatusBadge,
+} from "@/components/issues/issue-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,28 +59,6 @@ function handleCardKeyDown(
   }
 }
 
-function IssueMetaItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="min-w-0 space-y-1">
-      <div className="flex items-center gap-1.5 text-xs font-medium uppercase text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-      <div className="truncate text-sm font-medium text-foreground" title={value}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
 export function IssueCardView({
   issues,
   totalIssueCount,
@@ -108,7 +91,6 @@ export function IssueCardView({
         {issues.map((issue) => {
           const isInteractive = canEdit && Boolean(onIssueClick);
           const assignedTo = issue.assignedToName ?? "Unassigned";
-          const testedBy = issue.testedByName ?? "Not tested";
 
           return (
             <Card
@@ -119,73 +101,87 @@ export function IssueCardView({
               onClick={isInteractive ? () => onIssueClick?.(issue) : undefined}
               onKeyDown={(event) => handleCardKeyDown(event, issue, onIssueClick)}
               className={cn(
-                "min-h-[238px] rounded-lg border-border/70 bg-background/85 py-0 shadow-sm",
+                "relative min-h-50 min-w-0 border-border/60 bg-card shadow-sm transition-shadow duration-200",
+                getIssuePriorityCardAccentClassName(issue.priority),
                 isInteractive &&
-                  "cursor-pointer transition-colors hover:border-foreground/20 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  "cursor-pointer hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               )}
             >
-              <CardHeader className="gap-3 border-b border-border/60 px-4 py-4">
+              <CardHeader className="gap-2 border-b border-border/40 px-4 py-3">
                 <div className="flex min-w-0 items-start justify-between gap-3">
-                  <Badge variant="secondary" className="font-mono">
+                  <Badge variant="secondary" className="font-mono text-xs">
                     #{issue.no}
                   </Badge>
-                  <div className="flex min-w-0 flex-wrap justify-end gap-1.5">
+                  <div className="flex min-w-0 flex-wrap justify-end gap-1">
+                    <IssuePriorityBadge priority={issue.priority} />
                     <IssueStatusBadge status={issue.status} />
                     {issue.reopenedAt ? <IssueReopenedBadge /> : null}
-                    {issue.development ? (
-                      <Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300">
-                        Development
-                      </Badge>
-                    ) : null}
-                    {issue.deployment ? (
-                      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-                        Deployment
-                      </Badge>
-                    ) : null}
                   </div>
                 </div>
 
-                <div className="min-w-0 space-y-2">
+                <div className="min-w-0 space-y-1.5">
                   <CardTitle
-                    className="line-clamp-2 text-base leading-snug [overflow-wrap:anywhere]"
+                    className="line-clamp-2 text-sm leading-snug font-medium wrap-anywhere"
                     title={issue.title}
                   >
                     {issue.title}
                   </CardTitle>
-                  <p
-                    className="line-clamp-3 text-sm leading-5 text-muted-foreground [overflow-wrap:anywhere]"
-                    title={issue.description ?? "No description added."}
-                  >
-                    {issue.description ?? "No description added."}
-                  </p>
+                  {issue.description && (
+                    <p
+                      className="line-clamp-1 text-xs leading-4 text-muted-foreground wrap-anywhere"
+                      title={issue.description}
+                    >
+                      {issue.description}
+                    </p>
+                  )}
                 </div>
               </CardHeader>
 
-              <CardContent className="grid gap-4 px-4 py-4">
-                <div className="flex min-w-0 flex-wrap gap-2">
-                  <Badge variant="outline" className="max-w-full">
+              <CardContent className="space-y-2.5 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
                     <span className="truncate">{getModuleLabel(issue)}</span>
                   </Badge>
+                  {issue.issueClassName && (
+                    <Badge variant="outline" className="text-xs">
+                      {issue.issueClassName}
+                    </Badge>
+                  )}
                 </div>
 
-                <IssueMetaItem
-                  icon={<MapPin className="h-3.5 w-3.5 text-cyan-500" />}
-                  label="Navigation"
-                  value={issue.navigation ?? "Not set"}
-                />
-
-                <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-                  <IssueMetaItem
-                    icon={<UserRound className="h-3.5 w-3.5 text-muted-foreground" />}
-                    label="Assigned to"
-                    value={assignedTo}
-                  />
-                  <IssueMetaItem
-                    icon={<UserCheck className="h-3.5 w-3.5 text-muted-foreground" />}
-                    label="Tested by"
-                    value={testedBy}
-                  />
+                <div className="space-y-1.5 text-xs">
+                  {issue.navigation && (
+                    <div className="flex items-start gap-2 min-w-0">
+                      <MapPin className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-muted-foreground">{issue.navigation}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <UserRound className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{assignedTo}</span>
+                  </div>
+                  {issue.reviewedByName && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <UserCheck className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{issue.reviewedByName}</span>
+                    </div>
+                  )}
                 </div>
+
+                {(issue.development || issue.deployment) && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {issue.development && (
+                      <Badge variant="outline" className="border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300 text-xs py-0">
+                        Dev
+                      </Badge>
+                    )}
+                    {issue.deployment && (
+                      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs py-0">
+                        Deploy
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
@@ -220,7 +216,7 @@ export function IssueCardView({
             <ChevronRight className="h-3.5 w-3.5" />
           </Button>
           <Select value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value))}>
-            <SelectTrigger size="sm" className="w-[112px]">
+            <SelectTrigger size="sm" className="w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent align="end">

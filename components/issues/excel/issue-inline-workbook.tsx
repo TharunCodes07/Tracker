@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { OnChangeFn, SortingState, VisibilityState } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, Check, PencilLine, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, PencilLine, RotateCcw, Trash2, X } from "lucide-react";
 
 import type { IssueFormValues } from "@/components/issues/issue-dialog";
 import {
@@ -301,6 +301,8 @@ export function IssueInlineWorkbook({
     }
 
     if (isEditing) {
+      const isReopeningIssue = issue.status === "done" && editingValues?.status !== "done";
+
       return (
         <div className="flex items-center justify-center gap-1">
           <Button
@@ -311,9 +313,13 @@ export function IssueInlineWorkbook({
               void saveEditedIssue(issue);
             }}
             disabled={!editingValues || !canSaveDraft(editingValues) || Boolean(savingRowId)}
-            aria-label={`Save ${issue.title}`}
+            aria-label={isReopeningIssue ? `Reopen ${issue.title}` : `Save ${issue.title}`}
           >
-            <Check className="h-3.5 w-3.5" />
+            {isReopeningIssue ? (
+              <RotateCcw className="h-3.5 w-3.5" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
           </Button>
           <Button
             type="button"

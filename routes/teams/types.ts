@@ -66,6 +66,13 @@ export interface TeamPendingJoinRequestListItem {
   requestedAccessLevel: Exclude<TeamAccessLevel, "owner">;
 }
 
+export interface TeamInviteCandidate {
+  userId: string;
+  name: string;
+  email: string;
+  membershipStatus: TeamMembershipStatus;
+}
+
 export interface TeamMembersResponse {
   team: TeamListItem;
   members: TeamMemberListItem[];
@@ -155,4 +162,9 @@ export interface TeamInviteMemberInput {
 export interface TeamInviteMemberResponse {
   memberUserId: string;
   message: string;
+}
+
+export interface TeamInviteSearchResponse {
+  candidates: TeamInviteCandidate[];
+  query: string;
 }

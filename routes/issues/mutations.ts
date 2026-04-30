@@ -1164,6 +1164,7 @@ export async function createIssue(
     ...input,
     testedBy: input.testedBy || (actorIsTester ? actor.id : null),
   });
+
   const nextIssueNo = await getNextIssueNo(projectId, validatedIssue.moduleId);
 
   const [createdIssue] = await db
@@ -1198,20 +1199,24 @@ export async function updateIssue(
     existingIssue.moduleId === validatedIssue.moduleId
       ? existingIssue.no
       : await getNextIssueNo(projectId, validatedIssue.moduleId);
-  const isTesterReopen =
-    existingIssue.status === "done" &&
-    validatedIssue.status !== "done" &&
-    (await actorHasTeamRole(actor, teamId, "tester"));
+  const isReopeningIssue = existingIssue.status === "done" && validatedIssue.status !== "done";
+  const isClosingReopenedIssue = validatedIssue.status === "done" && Boolean(existingIssue.reopenedAt);
 
   await db
     .update(issues)
     .set({
       ...validatedIssue,
       no: nextIssueNo,
-      ...(isTesterReopen
+      ...(isReopeningIssue
         ? {
             reopenedBy: actor.id,
             reopenedAt: new Date(),
+          }
+        : {}),
+      ...(isClosingReopenedIssue
+        ? {
+            reopenedBy: null,
+            reopenedAt: null,
           }
         : {}),
       updatedAt: new Date(),

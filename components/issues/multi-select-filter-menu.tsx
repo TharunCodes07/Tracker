@@ -29,6 +29,7 @@ interface MultiSelectFilterMenuProps {
   onToggle: (value: string) => void;
   onClear: () => void;
   disabled?: boolean;
+  className?: string;
 }
 
 export function MultiSelectFilterMenu({
@@ -39,6 +40,7 @@ export function MultiSelectFilterMenu({
   onToggle,
   onClear,
   disabled = false,
+  className,
 }: MultiSelectFilterMenuProps) {
   const selectedCount = selectedValues.length;
 
@@ -48,12 +50,16 @@ export function MultiSelectFilterMenu({
         <Button
           type="button"
           variant="outline"
-          className="justify-between rounded-2xl border-border/60 bg-background/80 shadow-sm backdrop-blur sm:min-w-[11rem]"
+          size="sm"
+          className={cn(
+            "w-full min-w-0 shrink justify-between rounded-2xl border-border/60 bg-background/80 shadow-sm backdrop-blur sm:w-auto sm:min-w-36",
+            className
+          )}
           disabled={disabled}
         >
-          <span className="flex items-center gap-2">
+          <span className="flex min-w-0 items-center gap-2">
             <Icon className="h-4 w-4" />
-            {label}
+            <span className="min-w-0 truncate">{label}</span>
           </span>
           {selectedCount > 0 ? (
             <span className="rounded-full bg-foreground/8 px-2 py-0.5 text-xs font-medium text-foreground">

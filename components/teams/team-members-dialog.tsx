@@ -33,6 +33,7 @@ import {
   TEAM_ACCESS_LEVEL_OPTIONS,
   TEAM_MEMBER_ROLE_OPTIONS,
   type TeamAccessLevel,
+  type TeamInviteCandidate,
   type TeamInviteMemberInput,
   type TeamMemberListItem,
   type TeamMemberRole,
@@ -52,12 +53,16 @@ interface TeamMembersDialogProps {
   pendingMemberId?: string | null;
   pendingJoinRequestUserId?: string | null;
   inviteEmail: string;
+  inviteCandidates: TeamInviteCandidate[];
+  inviteSearchPending: boolean;
+  inviteSearchError?: string | null;
   inviteAccessLevel: Exclude<TeamAccessLevel, "owner">;
   invitePending: boolean;
   onMemberChange: (memberUserId: string, input: UpdateTeamMemberInput) => void;
   onApproveRequest: (memberUserId: string) => void;
   onRejectRequest: (memberUserId: string) => void;
   onInviteEmailChange: (value: string) => void;
+  onInviteCandidateSelect: (candidate: TeamInviteCandidate) => void;
   onInviteAccessLevelChange: (value: TeamInviteMemberInput["accessLevel"]) => void;
   onInviteSubmit: () => void;
 }
@@ -82,6 +87,18 @@ function formatRoleLabel(role: TeamMemberRole) {
   return TEAM_MEMBER_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
 }
 
+function getInviteCandidateStatusLabel(candidate: TeamInviteCandidate) {
+  switch (candidate.membershipStatus) {
+    case "active":
+      return "Member";
+    case "pending":
+      return "Pending";
+    case "none":
+    default:
+      return "Available";
+  }
+}
+
 export function TeamMembersDialog({
   open,
   onOpenChange,
@@ -94,15 +111,26 @@ export function TeamMembersDialog({
   pendingMemberId = null,
   pendingJoinRequestUserId = null,
   inviteEmail,
+  inviteCandidates,
+  inviteSearchPending,
+  inviteSearchError = null,
   inviteAccessLevel,
   invitePending,
   onMemberChange,
   onApproveRequest,
   onRejectRequest,
   onInviteEmailChange,
+  onInviteCandidateSelect,
   onInviteAccessLevelChange,
   onInviteSubmit,
 }: TeamMembersDialogProps) {
+  const normalizedInviteEmail = inviteEmail.trim().toLowerCase();
+  const hasInviteSearchQuery = normalizedInviteEmail.length >= 2;
+  const selectedInviteCandidate = inviteCandidates.find(
+    (candidate) => candidate.email.toLowerCase() === normalizedInviteEmail
+  );
+  const canInviteSelectedCandidate = selectedInviteCandidate?.membershipStatus === "none";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-3xl">
@@ -129,14 +157,58 @@ export function TeamMembersDialog({
                   </label>
                   <Input
                     id="member-invite-email"
-                    type="email"
-                    autoComplete="email"
+                    type="search"
+                    autoComplete="off"
                     value={inviteEmail}
                     onChange={(event) => onInviteEmailChange(event.target.value)}
-                    placeholder="teammate@example.com"
+                    placeholder="Search by email"
                     disabled={invitePending}
                     className="h-9"
                   />
+                  <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
+                    {!hasInviteSearchQuery ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        Search for a user account to invite.
+                      </div>
+                    ) : inviteSearchPending ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Searching...</div>
+                    ) : inviteSearchError ? (
+                      <div className="px-3 py-2 text-xs text-destructive">{inviteSearchError}</div>
+                    ) : inviteCandidates.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        No matching user accounts.
+                      </div>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto p-1">
+                        {inviteCandidates.map((candidate) => {
+                          const isInvitable = candidate.membershipStatus === "none";
+                          const isSelected = candidate.email.toLowerCase() === normalizedInviteEmail;
+
+                          return (
+                            <button
+                              key={candidate.userId}
+                              type="button"
+                              className="flex w-full min-w-0 items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                              onClick={() => onInviteCandidateSelect(candidate)}
+                              disabled={invitePending || !isInvitable}
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate font-medium text-foreground">
+                                  {candidate.name}
+                                </span>
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  {candidate.email}
+                                </span>
+                              </span>
+                              <Badge variant={isSelected ? "default" : "outline"}>
+                                {getInviteCandidateStatusLabel(candidate)}
+                              </Badge>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="w-full space-y-2 sm:w-[156px]">
@@ -167,7 +239,7 @@ export function TeamMembersDialog({
                   type="button"
                   size="sm"
                   onClick={onInviteSubmit}
-                  disabled={invitePending || inviteEmail.trim().length === 0}
+                  disabled={invitePending || !canInviteSelectedCandidate}
                 >
                   <MailPlus className="h-4 w-4" />
                   {invitePending ? "Sending..." : "Send invite"}

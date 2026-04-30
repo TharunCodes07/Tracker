@@ -1,10 +1,38 @@
-import { after, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 
 import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
 import { dispatchNotificationEvents } from "@/routes/notifications/service";
 import type { NotificationEvent } from "@/routes/notifications/types";
 import { inviteTeamMemberForUser } from "@/routes/teams/mutations";
-import type { TeamInviteMemberInput, TeamInviteMemberResponse } from "@/routes/teams/types";
+import { searchTeamInviteCandidatesForUser } from "@/routes/teams/queries";
+import type {
+  TeamInviteMemberInput,
+  TeamInviteMemberResponse,
+  TeamInviteSearchResponse,
+} from "@/routes/teams/types";
+
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ teamId: string }> }
+) {
+  try {
+    const actor = await requireRouteUser(request);
+    const { teamId } = await context.params;
+    const searchResult = await searchTeamInviteCandidatesForUser(
+      actor.id,
+      teamId,
+      request.nextUrl.searchParams.get("query") ?? ""
+    );
+
+    if (!searchResult) {
+      return NextResponse.json({ message: "Team not found." }, { status: 404 });
+    }
+
+    return NextResponse.json<TeamInviteSearchResponse>(searchResult);
+  } catch (error) {
+    return handleRouteError(error, "Something went wrong while searching users.");
+  }
+}
 
 export async function POST(
   request: Request,

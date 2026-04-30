@@ -5,15 +5,16 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   Download,
-  LayoutGrid,
   MoreHorizontal,
   Plus,
-  Table2,
   Upload,
 } from "lucide-react";
 
 import { IssueCardView } from "@/components/issues/issue-card-view";
-import { IssueFilters } from "@/components/issues/issue-filters";
+import {
+  IssueFilters,
+  IssueResolutionFilterControl,
+} from "@/components/issues/issue-filters";
 import { IssueDialog } from "@/components/issues/issue-dialog";
 import { IssueExcelTable } from "@/components/issues/excel/issue-excel-table";
 import { useProjectIssuesWorkspace } from "@/components/issues/helpers/use-project-issues-workspace";
@@ -101,7 +102,7 @@ export default function ProjectIssuesPage() {
 
   if (workspace.isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <IssuePageSidebarController />
         <IssueWorkspaceLoading
           moduleSidebarCollapsed={workspace.isModuleSidebarCollapsed}
@@ -127,52 +128,80 @@ export default function ProjectIssuesPage() {
     );
   }
 
-  const issueSurfaceTitle =
-    workspace.resolutionFilter === "open"
-      ? "Open issues"
-      : workspace.resolutionFilter === "resolved"
-        ? "Resolved issues"
-        : workspace.resolutionFilter === "resolved_pending_test"
-          ? "Awaiting review"
-          : workspace.resolutionFilter === "reopened"
-            ? "Reopened issues"
-          : "All issues";
+  const resolutionFilterControls = (
+    <IssueResolutionFilterControl
+      resolutionFilter={workspace.resolutionFilter}
+      onResolutionFilterChange={workspace.handleResolutionFilterChange}
+      totalIssues={workspace.totalIssues}
+      openIssueCount={workspace.openIssueCount}
+      resolvedIssueCount={workspace.resolvedIssueCount}
+      pendingTestIssueCount={workspace.pendingTestIssueCount}
+      reopenedIssueCount={workspace.reopenedIssueCount}
+      showViewModeToggle
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+    />
+  );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <IssuePageSidebarController />
 
-      <section className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 shadow-sm sm:px-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Badge variant="secondary">{workspace.team.name}</Badge>
-              <Badge variant={workspace.team.canEdit ? "outline" : "secondary"}>
-                {workspace.team.canEdit ? "Edit access" : "Read access"}
+      <section className="rounded-xl border border-border/60 bg-card/80 p-3 shadow-sm">
+        <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-start">
+          <div className="min-w-0 2xl:w-72 2xl:shrink-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="truncate text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                {workspace.project.name}
+              </h1>
+              <Badge
+                variant={workspace.team.canEdit ? "outline" : "secondary"}
+                className="shrink-0"
+              >
+                {workspace.team.canEdit ? "Edit" : "Read-only"}
               </Badge>
             </div>
-
-            <div className="mt-2 min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight text-foreground">Issues</h1>
-              <p className="line-clamp-2 max-w-3xl text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{workspace.project.name}</span>
-                {" - "}
-                {workspace.project.description ??
-                  `${workspace.openIssueCount} open issues across ${workspace.modules.length} modules.`}
-              </p>
-            </div>
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              {workspace.team.name}
+              {workspace.project.description ? ` - ${workspace.project.description}` : ""}
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <Badge variant="outline" className="h-8 gap-1.5 px-3">
-              <span className="text-muted-foreground">Open</span>
-              <span className="font-semibold text-foreground">{workspace.openIssueCount}</span>
-            </Badge>
-            <Badge variant="outline" className="h-8 gap-1.5 px-3">
-              <span className="text-muted-foreground">Total</span>
-              <span className="font-semibold text-foreground">{workspace.totalIssues}</span>
-            </Badge>
+          <IssueFilters
+            variant="toolbar"
+            className="2xl:flex-nowrap"
+            searchValue={workspace.searchValue}
+            onSearchChange={workspace.handleSearchChange}
+            issueTypeFilterOptions={workspace.issueTypeFilterOptions}
+            selectedIssueTypeFilters={workspace.selectedIssueTypeFilters}
+            onIssueTypeFilterToggle={workspace.handleIssueTypeFilterToggle}
+            onClearIssueTypeFilters={workspace.handleClearIssueTypeFilters}
+            priorityFilterOptions={workspace.priorityFilterOptions}
+            selectedPriorityFilters={workspace.selectedPriorityFilters}
+            onPriorityFilterToggle={workspace.handlePriorityFilterToggle}
+            onClearPriorityFilters={workspace.handleClearPriorityFilters}
+            assigneeFilterOptions={workspace.assigneeFilterOptions}
+            selectedAssigneeFilters={workspace.selectedAssigneeFilters}
+            onAssigneeFilterToggle={workspace.handleAssigneeFilterToggle}
+            onClearAssigneeFilters={workspace.handleClearAssigneeFilters}
+            showIssueCount={false}
+            showResolutionFilter={false}
+            resolutionFilter={workspace.resolutionFilter}
+            onResolutionFilterChange={workspace.handleResolutionFilterChange}
+            totalIssues={workspace.totalIssues}
+            openIssueCount={workspace.openIssueCount}
+            resolvedIssueCount={workspace.resolvedIssueCount}
+            pendingTestIssueCount={workspace.pendingTestIssueCount}
+            reopenedIssueCount={workspace.reopenedIssueCount}
+            activeFilterChips={workspace.activeFilterChips}
+            hasActiveFilters={workspace.hasActiveFilters}
+            onClearFilters={workspace.handleClearFilters}
+            visibleIssueCount={workspace.pagination.totalItems}
+            isUpdating={workspace.isRefreshing}
+            isSearchPending={workspace.isSearchPending}
+          />
 
+          <div className="flex shrink-0 flex-wrap items-center gap-2 2xl:justify-end">
             {workspace.canEditProject ? (
               <Button type="button" onClick={workspace.openCreateIssueDialog}>
                 <Plus className="h-4 w-4" />
@@ -239,94 +268,31 @@ export default function ProjectIssuesPage() {
         </div>
       </section>
 
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 space-y-3">
-          <IssueFilters
-            className="rounded-2xl p-3 shadow-sm sm:p-4"
-            searchValue={workspace.searchValue}
-            onSearchChange={workspace.handleSearchChange}
-            issueTypeFilterOptions={workspace.issueTypeFilterOptions}
-            selectedIssueTypeFilters={workspace.selectedIssueTypeFilters}
-            onIssueTypeFilterToggle={workspace.handleIssueTypeFilterToggle}
-            onClearIssueTypeFilters={workspace.handleClearIssueTypeFilters}
-            priorityFilterOptions={workspace.priorityFilterOptions}
-            selectedPriorityFilters={workspace.selectedPriorityFilters}
-            onPriorityFilterToggle={workspace.handlePriorityFilterToggle}
-            onClearPriorityFilters={workspace.handleClearPriorityFilters}
-            assigneeFilterOptions={workspace.assigneeFilterOptions}
-            selectedAssigneeFilters={workspace.selectedAssigneeFilters}
-            onAssigneeFilterToggle={workspace.handleAssigneeFilterToggle}
-            onClearAssigneeFilters={workspace.handleClearAssigneeFilters}
-            resolutionFilter={workspace.resolutionFilter}
-            onResolutionFilterChange={workspace.handleResolutionFilterChange}
-            totalIssues={workspace.totalIssues}
-            openIssueCount={workspace.openIssueCount}
-            resolvedIssueCount={workspace.resolvedIssueCount}
-            pendingTestIssueCount={workspace.pendingTestIssueCount}
-            reopenedIssueCount={workspace.reopenedIssueCount}
-            activeFilterChips={workspace.activeFilterChips}
-            hasActiveFilters={workspace.hasActiveFilters}
-            onClearFilters={workspace.handleClearFilters}
-            visibleIssueCount={workspace.pagination.totalItems}
-            isUpdating={workspace.isRefreshing}
-            isSearchPending={workspace.isSearchPending}
-          />
-
-          <section className="rounded-2xl border border-border/60 bg-card/80 p-3 shadow-sm sm:p-4">
-            <div className="mb-4 flex flex-col gap-3 border-b border-border/60 pb-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-foreground">{issueSurfaceTitle}</h2>
-                <p className="text-sm text-muted-foreground">
-                  {workspace.pagination.totalItems}{" "}
-                  {workspace.pagination.totalItems === 1 ? "issue" : "issues"} in this view
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex items-center rounded-lg border border-border/60 bg-background/80 p-1">
-                  <Button
-                    type="button"
-                    variant={isCardView ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("grid")}
-                  >
-                    <LayoutGrid className="h-3.5 w-3.5" />
-                    Cards
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={isCardView ? "ghost" : "secondary"}
-                    size="sm"
-                    onClick={() => setViewMode("table")}
-                  >
-                    <Table2 className="h-3.5 w-3.5" />
-                    Table
-                  </Button>
-                </div>
-
-                <Badge variant="outline" className="w-fit">
-                  {workspace.pagination.totalItems}{" "}
-                  {workspace.pagination.totalItems === 1 ? "issue" : "issues"}
-                </Badge>
-              </div>
-            </div>
-
+          <section className="rounded-xl border border-border/60 bg-card/80 p-2 shadow-sm sm:p-3">
             {isCardView ? (
-              <IssueCardView
-                issues={workspace.issues}
-                totalIssueCount={workspace.pagination.totalItems}
-                pageIndex={workspace.currentPageIndex}
-                pageSize={workspace.pageSize}
-                pageCount={workspace.pagination.totalPages}
-                canEdit={workspace.canEditProject}
-                onIssueClick={
-                  workspace.canEditProject ? workspace.openEditIssueDialog : undefined
-                }
-                onPageIndexChange={workspace.setPageIndex}
-                onPageSizeChange={workspace.handlePageSizeChange}
-              />
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/25 p-2 shadow-sm">
+                  {resolutionFilterControls}
+                </div>
+                <IssueCardView
+                  issues={workspace.issues}
+                  totalIssueCount={workspace.pagination.totalItems}
+                  pageIndex={workspace.currentPageIndex}
+                  pageSize={workspace.pageSize}
+                  pageCount={workspace.pagination.totalPages}
+                  canEdit={workspace.canEditProject}
+                  onIssueClick={
+                    workspace.canEditProject ? workspace.openEditIssueDialog : undefined
+                  }
+                  onPageIndexChange={workspace.setPageIndex}
+                  onPageSizeChange={workspace.handlePageSizeChange}
+                />
+              </div>
             ) : (
               <IssueExcelTable
+                resolutionControls={resolutionFilterControls}
                 issues={workspace.issues}
                 fullscreenIssues={workspace.fullscreenIssues}
                 fullscreenIssuesError={workspace.fullscreenIssuesError}
@@ -335,8 +301,6 @@ export default function ProjectIssuesPage() {
                 issueClasses={workspace.issueClasses}
                 members={workspace.members}
                 selectedModuleFilters={workspace.selectedModuleFilters}
-                totalIssueCount={workspace.totalIssues}
-                visibleIssueCount={workspace.pagination.totalItems}
                 canEdit={workspace.canEditProject}
                 actionPending={workspace.areIssueActionsPending}
                 onRowClick={workspace.canEditProject ? workspace.openEditIssueDialog : undefined}
@@ -473,7 +437,13 @@ export default function ProjectIssuesPage() {
             ? "Update the issue details, ownership, and resolution state."
             : "Add a general issue or tie it to a project module, then assign the right teammates for build, review, and testing."
         }
-        submitLabel={workspace.isEditingIssue ? "Save changes" : "Create issue"}
+        submitLabel={
+          workspace.isReopeningIssue
+            ? "Reopen issue"
+            : workspace.isEditingIssue
+              ? "Save changes"
+              : "Create issue"
+        }
       />
 
       <AlertDialog

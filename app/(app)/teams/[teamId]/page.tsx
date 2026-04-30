@@ -64,7 +64,9 @@ import type {
 import type {
   TeamListItem,
   TeamAccessLevel,
+  TeamInviteCandidate,
   TeamInviteMemberResponse,
+  TeamInviteSearchResponse,
   TeamMemberListItem,
   TeamJoinRequestMutationResponse,
   TeamMemberMutationResponse,
@@ -332,6 +334,10 @@ export default function TeamProjectsRoute() {
   const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
   const [pendingJoinRequestUserId, setPendingJoinRequestUserId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
+  const debouncedInviteEmail = useDebouncedValue(inviteEmail.trim(), SEARCH_DEBOUNCE_MS);
+  const [inviteCandidates, setInviteCandidates] = useState<TeamInviteCandidate[]>([]);
+  const [isInviteSearchLoading, setIsInviteSearchLoading] = useState(false);
+  const [inviteSearchError, setInviteSearchError] = useState<string | null>(null);
   const [inviteAccessLevel, setInviteAccessLevel] = useState<Exclude<TeamAccessLevel, "owner">>(
     "edit"
   );
@@ -419,6 +425,68 @@ export default function TeamProjectsRoute() {
       abortController.abort();
     };
   }, [debouncedSearchValue, pageIndex, pageSize, sorting, reloadKey, teamId]);
+
+  useEffect(() => {
+    let isActive = true;
+    const abortController = new AbortController();
+    const query = debouncedInviteEmail;
+
+    if (!isMembersOpen || !team?.id || !team.isOwner || query.length < 2) {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const activeTeamId = team.id;
+
+    async function searchInviteCandidates() {
+      try {
+        await Promise.resolve();
+
+        if (!isActive) {
+          return;
+        }
+
+        setInviteCandidates([]);
+        setIsInviteSearchLoading(true);
+        setInviteSearchError(null);
+
+        const data = await requestJson<TeamInviteSearchResponse>(
+          `/api/teams/${activeTeamId}/members/invite?query=${encodeURIComponent(query)}`,
+          {
+            cache: "no-store",
+            signal: abortController.signal,
+          }
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setInviteCandidates(data.candidates);
+      } catch (error) {
+        if (!isActive || isAbortError(error)) {
+          return;
+        }
+
+        setInviteCandidates([]);
+        setInviteSearchError(
+          error instanceof Error ? error.message : "Could not search users."
+        );
+      } finally {
+        if (isActive) {
+          setIsInviteSearchLoading(false);
+        }
+      }
+    }
+
+    void searchInviteCandidates();
+
+    return () => {
+      isActive = false;
+      abortController.abort();
+    };
+  }, [debouncedInviteEmail, isMembersOpen, team?.id, team?.isOwner]);
 
   if (!hasTeamId) {
     return (
@@ -529,6 +597,9 @@ export default function TeamProjectsRoute() {
       void loadMembers();
     } else {
       setInviteEmail("");
+      setInviteCandidates([]);
+      setInviteSearchError(null);
+      setIsInviteSearchLoading(false);
       setInviteAccessLevel("edit");
     }
   }
@@ -563,6 +634,8 @@ export default function TeamProjectsRoute() {
         await loadMembers();
         refreshProjects();
         setInviteEmail("");
+        setInviteCandidates([]);
+        setInviteSearchError(null);
         toast.success(data.message);
       } catch (error) {
         toast.error(
@@ -1113,12 +1186,16 @@ export default function TeamProjectsRoute() {
         pendingMemberId={isUpdatingMemberSettings ? pendingMemberId : null}
         pendingJoinRequestUserId={isUpdatingMemberSettings ? pendingJoinRequestUserId : null}
         inviteEmail={inviteEmail}
+        inviteCandidates={inviteCandidates}
+        inviteSearchPending={isInviteSearchLoading}
+        inviteSearchError={inviteSearchError}
         inviteAccessLevel={inviteAccessLevel}
         invitePending={isUpdatingMemberSettings && pendingJoinRequestUserId === "invite"}
         onMemberChange={handleMemberChange}
         onApproveRequest={handleApproveJoinRequest}
         onRejectRequest={handleRejectJoinRequest}
         onInviteEmailChange={setInviteEmail}
+        onInviteCandidateSelect={(candidate) => setInviteEmail(candidate.email)}
         onInviteAccessLevelChange={(value) =>
           setInviteAccessLevel((value ?? "edit") as Exclude<TeamAccessLevel, "owner">)
         }
