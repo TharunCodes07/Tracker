@@ -47,7 +47,12 @@ export const ISSUE_EXCEL_HEADERS = [
 
 export type IssuePriority = (typeof ISSUE_PRIORITY_OPTIONS)[number]["value"];
 export type IssueStatus = (typeof ISSUE_STATUS_OPTIONS)[number]["value"];
-export type IssueResolutionFilter = "all" | "open" | "resolved" | "resolved_pending_test";
+export type IssueResolutionFilter =
+  | "all"
+  | "open"
+  | "resolved"
+  | "resolved_pending_test"
+  | "reopened";
 export type IssueAssigneeFilterValue = "current-user" | "unassigned";
 export const ISSUE_LIST_SORT_FIELDS = [
   "updatedAt",
@@ -110,6 +115,9 @@ export interface IssueListItem {
   remark: string | null;
   testedBy: string | null;
   testedByName: string | null;
+  reopenedBy: string | null;
+  reopenedByName: string | null;
+  reopenedAt: string | null;
   fixedDate: string | null;
   development: boolean;
   deployment: boolean;
@@ -129,6 +137,7 @@ export interface IssueListSummary {
   openIssueCount: number;
   resolvedIssueCount: number;
   pendingTestIssueCount: number;
+  reopenedIssueCount: number;
   criticalIssueCount: number;
   hasUnclassifiedIssues: boolean;
 }

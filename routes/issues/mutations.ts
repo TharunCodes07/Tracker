@@ -218,6 +218,9 @@ function toIssueListItem(row: {
   remark: string | null;
   testedBy: string | null;
   testedByName: string | null;
+  reopenedBy: string | null;
+  reopenedByName: string | null;
+  reopenedAt: Date | string | null;
   fixedDate: Date | string | null;
   development: boolean | null;
   deployment: boolean | null;
@@ -250,6 +253,9 @@ function toIssueListItem(row: {
     remark: row.remark,
     testedBy: row.testedBy,
     testedByName: row.testedByName,
+    reopenedBy: row.reopenedBy,
+    reopenedByName: row.reopenedByName,
+    reopenedAt: row.reopenedAt ? toIsoString(row.reopenedAt) : null,
     fixedDate: row.fixedDate ? toIsoString(row.fixedDate) : null,
     development: Boolean(row.development),
     deployment: Boolean(row.deployment),
@@ -325,6 +331,7 @@ async function getIssueRecord(projectId: string, issueId: string) {
   const assignedUser = alias(user, "assigned_user");
   const reviewedUser = alias(user, "reviewed_user");
   const testedUser = alias(user, "tested_user");
+  const reopenedUser = alias(user, "reopened_user");
   const createdUser = alias(user, "created_user");
   const parentModule = alias(projectModules, "parent_module");
 
@@ -368,6 +375,9 @@ async function getIssueRecord(projectId: string, issueId: string) {
       remark: issues.remark,
       testedBy: issues.testedBy,
       testedByName: testedUser.name,
+      reopenedBy: issues.reopenedBy,
+      reopenedByName: reopenedUser.name,
+      reopenedAt: issues.reopenedAt,
       fixedDate: issues.fixedDate,
       development: issues.development,
       deployment: issues.deployment,
@@ -383,6 +393,7 @@ async function getIssueRecord(projectId: string, issueId: string) {
     .leftJoin(assignedUser, eq(issues.assignedTo, assignedUser.id))
     .leftJoin(reviewedUser, eq(issues.reviewedBy, reviewedUser.id))
     .leftJoin(testedUser, eq(issues.testedBy, testedUser.id))
+    .leftJoin(reopenedUser, eq(issues.reopenedBy, reopenedUser.id))
     .leftJoin(createdUser, eq(issues.createdBy, createdUser.id))
     .where(and(eq(issues.projectId, projectId), eq(issues.id, issueId)))
     .limit(1);
@@ -430,6 +441,13 @@ async function assertUsersBelongToTeam(teamId: string, userIds: string[]) {
   if (rows.length !== normalizedUserIds.length) {
     throw new RouteError("Assignees, reviewers, and testers must belong to this team.");
   }
+}
+
+async function actorHasTeamRole(actor: IssueActor, teamId: string, role: "developer" | "tester") {
+  const teamMembers = await listTeamMembersForUser(actor.id, teamId);
+  const actorMembership = teamMembers?.members.find((member) => member.userId === actor.id);
+
+  return actorMembership?.roles.includes(role) ?? false;
 }
 
 async function validateIssueFields(
@@ -500,7 +518,7 @@ async function validateIssueFields(
     reviewedBy,
     comments,
     remark,
-    testedBy: status === "done" ? testedBy : null,
+    testedBy,
     fixedDate,
     development,
     deployment,
@@ -749,6 +767,10 @@ export async function importIssuesFromExcel(
     throw new RouteError("Team members could not be loaded.", 404);
   }
 
+  const actorIsTester =
+    teamMembers.members.find((member) => member.userId === actor.id)?.roles.includes("tester") ??
+    false;
+
   if (importedSheets.length === 0) {
     throw new RouteError("The uploaded Excel file does not contain any importable sheets.", 400);
   }
@@ -962,9 +984,7 @@ export async function importIssuesFromExcel(
         importedValues.assignedTo = assigneeMatch.userId;
       }
 
-      if (status !== "done") {
-        importedValues.testedBy = null;
-      } else if (testerMatch.state === "empty") {
+      if (testerMatch.state === "empty") {
         importedValues.testedBy = null;
       } else if (testerMatch.state === "matched") {
         importedValues.testedBy = testerMatch.userId;
@@ -993,7 +1013,7 @@ export async function importIssuesFromExcel(
           createdBy: actor.id,
           assignedTo: assigneeMatch.state === "matched" ? assigneeMatch.userId : null,
           testedBy:
-            status === "done" && testerMatch.state === "matched" ? testerMatch.userId : null,
+            testerMatch.state === "matched" ? testerMatch.userId : actorIsTester ? actor.id : null,
           fixedDate: fixedDate.state === "valid" ? fixedDate.value : null,
           navigation,
           title,
@@ -1139,7 +1159,11 @@ export async function createIssue(
   input: CreateIssueInput
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
-  const validatedIssue = await validateIssueFields(teamId, projectId, input);
+  const actorIsTester = await actorHasTeamRole(actor, teamId, "tester");
+  const validatedIssue = await validateIssueFields(teamId, projectId, {
+    ...input,
+    testedBy: input.testedBy || (actorIsTester ? actor.id : null),
+  });
   const nextIssueNo = await getNextIssueNo(projectId, validatedIssue.moduleId);
 
   const [createdIssue] = await db
@@ -1174,12 +1198,22 @@ export async function updateIssue(
     existingIssue.moduleId === validatedIssue.moduleId
       ? existingIssue.no
       : await getNextIssueNo(projectId, validatedIssue.moduleId);
+  const isTesterReopen =
+    existingIssue.status === "done" &&
+    validatedIssue.status !== "done" &&
+    (await actorHasTeamRole(actor, teamId, "tester"));
 
   await db
     .update(issues)
     .set({
       ...validatedIssue,
       no: nextIssueNo,
+      ...(isTesterReopen
+        ? {
+            reopenedBy: actor.id,
+            reopenedAt: new Date(),
+          }
+        : {}),
       updatedAt: new Date(),
     })
     .where(and(eq(issues.projectId, projectId), eq(issues.id, issueId)));

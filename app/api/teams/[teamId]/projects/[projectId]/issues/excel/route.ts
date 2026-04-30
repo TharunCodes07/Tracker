@@ -10,15 +10,17 @@ import {
 import { readListProjectIssuesInput } from "@/routes/issues/http";
 import { importIssuesFromExcel } from "@/routes/issues/mutations";
 import {
+  getProjectIssuesWorkspaceForUser,
   listProjectIssueWorkbookBundleForUser,
   listProjectIssuesForExcelForUser,
 } from "@/routes/issues/queries";
+import { MAIN_MODULE_ISSUES_SHEET_NAME } from "@/routes/issues/types";
 import type { IssueExcelImportResponse } from "@/routes/issues/types";
 
 export const runtime = "nodejs";
 
 function parseExportMode(value: string | null) {
-  return value === "bundle" ? "bundle" : "current";
+  return value === "bundle" || value === "template" ? value : "current";
 }
 
 function slugifyFileNamePart(value: string) {
@@ -40,6 +42,35 @@ export async function GET(
     const projectLabel = slugifyFileNamePart(
       request.nextUrl.searchParams.get("project") ?? projectId
     );
+
+    if (exportMode === "template") {
+      const workspace = await getProjectIssuesWorkspaceForUser(actor.id, teamId, projectId);
+
+      if (!workspace) {
+        return NextResponse.json({ message: "Project not found." }, { status: 404 });
+      }
+
+      const workbook = await buildIssueWorkbook([
+        {
+          sheetName: MAIN_MODULE_ISSUES_SHEET_NAME,
+          rows: [],
+        },
+        {
+          sheetName: "Sub Module",
+          rows: [],
+        },
+      ]);
+      const fileName = `${projectLabel || "project"}-issues-template.xlsx`;
+
+      return new NextResponse(workbook, {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${fileName}"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
 
     if (exportMode === "bundle") {
       const workbooks = await listProjectIssueWorkbookBundleForUser(

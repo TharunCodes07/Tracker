@@ -333,14 +333,10 @@ export function IssueDialog({
                 <Select
                   value={getOptionalValue(values.testedBy)}
                   onValueChange={(value) => onChange({ testedBy: normalizeOptionalValue(value) })}
-                  disabled={pending || values.status !== "done"}
+                  disabled={pending}
                 >
                   <SelectTrigger className="h-10 w-full">
-                    <SelectValue
-                      placeholder={
-                        values.status === "done" ? "No tester yet" : "Available when status is Done"
-                      }
-                    />
+                    <SelectValue placeholder="No tester yet" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE_VALUE}>No tester yet</SelectItem>

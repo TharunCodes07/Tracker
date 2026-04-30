@@ -8,6 +8,7 @@ import { PencilLine, Trash2 } from "lucide-react";
 
 import {
   IssuePriorityBadge,
+  IssueReopenedBadge,
   IssueStatusBadge,
 } from "@/components/issues/issue-display";
 import { Badge } from "@/components/ui/badge";
@@ -184,7 +185,12 @@ export function getIssueTableColumns({
     {
       accessorKey: "status",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-      cell: ({ row }) => <IssueStatusBadge status={row.original.status} />,
+      cell: ({ row }) => (
+        <div className="flex flex-col items-center gap-1">
+          <IssueStatusBadge status={row.original.status} />
+          {row.original.reopenedAt ? <IssueReopenedBadge /> : null}
+        </div>
+      ),
       size: 120,
       meta: {
         label: "Status",

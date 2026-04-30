@@ -177,7 +177,7 @@ export default async function DashboardPage() {
                     </div>
                     <div>
                       <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                        Awaiting test
+                        Awaiting review
                       </div>
                       <div
                         className={cn(
@@ -337,7 +337,7 @@ export default async function DashboardPage() {
         <div className="rounded-[28px] border border-border/60 bg-card/80 px-5 py-5 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <ShieldCheck className="h-4 w-4 text-cyan-500" />
-            Awaiting test
+            Awaiting review
           </div>
           <div className="mt-3 text-3xl font-semibold text-foreground">
             {overview.pendingTestIssues}

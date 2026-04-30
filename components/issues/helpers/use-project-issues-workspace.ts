@@ -70,6 +70,7 @@ const EMPTY_SUMMARY: IssueListSummary = {
   openIssueCount: 0,
   resolvedIssueCount: 0,
   pendingTestIssueCount: 0,
+  reopenedIssueCount: 0,
   criticalIssueCount: 0,
   hasUnclassifiedIssues: false,
 };
@@ -113,7 +114,7 @@ export function useProjectIssuesWorkspace() {
 
   const [searchValue, setSearchValue] = useState("");
   const debouncedSearchValue = useDebouncedValue(searchValue.trim(), SEARCH_DEBOUNCE_MS);
-  const [resolutionFilter, setResolutionFilter] = useState<IssueResolutionFilter>("all");
+  const [resolutionFilter, setResolutionFilter] = useState<IssueResolutionFilter>("open");
   const [selectedModuleFilters, setSelectedModuleFilters] = useState<string[]>([]);
   const [selectedIssueTypeFilters, setSelectedIssueTypeFilters] = useState<string[]>([]);
   const [selectedPriorityFilters, setSelectedPriorityFilters] = useState<IssuePriority[]>([]);
@@ -356,6 +357,7 @@ export function useProjectIssuesWorkspace() {
     [modules]
   );
   const currentUserId = currentUser?.userId ?? null;
+  const currentUserIsTester = currentUser?.roles.includes("tester") ?? false;
   const canEditProject = team?.canEdit ?? false;
   const currentPageIndex = Math.max(0, pagination.page - 1);
   const isLoading = isMetadataLoading || isIssuesLoading;
@@ -365,7 +367,7 @@ export function useProjectIssuesWorkspace() {
   const areIssueActionsPending = isUpdatingIssue || isDeletingIssue;
   const hasActiveFilters =
     searchValue.trim().length > 0 ||
-    resolutionFilter !== "all" ||
+    resolutionFilter !== "open" ||
     selectedModuleFilters.length > 0 ||
     selectedIssueTypeFilters.length > 0 ||
     selectedPriorityFilters.length > 0 ||
@@ -648,7 +650,10 @@ export function useProjectIssuesWorkspace() {
 
   function openCreateIssueDialog() {
     setEditingIssue(null);
-    setIssueForm(createEmptyIssueForm(issueForm.issueClassId || issueClasses[0]?.id || ""));
+    setIssueForm({
+      ...createEmptyIssueForm(issueForm.issueClassId || issueClasses[0]?.id || ""),
+      testedBy: currentUserIsTester ? currentUserId ?? "" : "",
+    });
     setIsIssueOpen(true);
   }
 
@@ -721,7 +726,7 @@ export function useProjectIssuesWorkspace() {
 
   function handleClearFilters() {
     setSearchValue("");
-    setResolutionFilter("all");
+    setResolutionFilter("open");
     setSelectedModuleFilters([]);
     setSelectedIssueTypeFilters([]);
     setSelectedPriorityFilters([]);
@@ -1043,6 +1048,53 @@ export function useProjectIssuesWorkspace() {
     });
   }
 
+  function handleDownloadIssuesExcelTemplate() {
+    if (!team || !project) {
+      return;
+    }
+
+    startExportIssuesTransition(async () => {
+      try {
+        const searchParams = new URLSearchParams({
+          mode: "template",
+          project: project.name,
+        });
+        const response = await fetch(
+          `/api/teams/${team.id}/projects/${project.id}/issues/excel?${searchParams.toString()}`,
+          {
+            cache: "no-store",
+          }
+        );
+        const errorPayload = !response.ok
+          ? ((await response.json().catch(() => null)) as { message?: string } | null)
+          : null;
+
+        if (!response.ok) {
+          throw new Error(errorPayload?.message ?? "Could not download the Excel template.");
+        }
+
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get("content-disposition") ?? "";
+        const fileNameMatch = /filename=\"([^\"]+)\"/i.exec(contentDisposition);
+        const fileName = fileNameMatch?.[1] ?? `${project.name}-issues-template.xlsx`;
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        link.href = objectUrl;
+        link.download = fileName;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+        toast.success("Excel template downloaded.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Could not download the Excel template."
+        );
+      }
+    });
+  }
+
   function handleImportIssuesFromFile(file: File, mainModuleId: string) {
     if (!team || !project) {
       return;
@@ -1264,6 +1316,7 @@ export function useProjectIssuesWorkspace() {
     openIssueCount: summary.openIssueCount,
     resolvedIssueCount: summary.resolvedIssueCount,
     pendingTestIssueCount: summary.pendingTestIssueCount,
+    reopenedIssueCount: summary.reopenedIssueCount,
     criticalIssueCount: summary.criticalIssueCount,
     sorting,
     handleSortingChange,
@@ -1346,6 +1399,7 @@ export function useProjectIssuesWorkspace() {
     fullscreenIssues,
     fullscreenIssuesError,
     handleExportIssuesToExcel,
+    handleDownloadIssuesExcelTemplate,
     handleImportIssuesFromFile,
     handleLoadFullscreenIssues,
     handlePageSizeChange,

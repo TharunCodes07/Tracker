@@ -7,6 +7,7 @@ import { Check, Plus, X } from "lucide-react";
 import type { IssueFormValues } from "@/components/issues/issue-dialog";
 import {
   IssuePriorityBadge,
+  IssueReopenedBadge,
   IssueStatusBadge,
 } from "@/components/issues/issue-display";
 import { Badge } from "@/components/ui/badge";
@@ -365,8 +366,7 @@ export function IssueDraftCell({
           label="Tested by"
           value={values.testedBy}
           onChange={(value) => patch({ testedBy: value })}
-          disabled={values.status !== "done"}
-          autoOpen={isTarget && values.status === "done"}
+          autoOpen={isTarget}
           options={[
             { value: SELECT_NONE_VALUE, label: "No tester" },
             ...members.map((member) => ({
@@ -448,7 +448,12 @@ export function IssueDisplayCell({
     case "priority":
       return <IssuePriorityBadge priority={issue.priority} />;
     case "status":
-      return <IssueStatusBadge status={issue.status} />;
+      return (
+        <div className="flex flex-col items-center gap-1">
+          <IssueStatusBadge status={issue.status} />
+          {issue.reopenedAt ? <IssueReopenedBadge /> : null}
+        </div>
+      );
     case "assignedToName":
       return <TextCell value={issue.assignedToName} fallback="Unassigned" />;
     case "reviewedByName":

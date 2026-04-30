@@ -154,3 +154,18 @@ export function IssueStatusBadge({
     </Badge>
   );
 }
+
+export function IssueReopenedBadge({ className }: { className?: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "gap-1.5 border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+        className
+      )}
+    >
+      <span className="size-1.5 rounded-full bg-current/70" />
+      Reopened
+    </Badge>
+  );
+}

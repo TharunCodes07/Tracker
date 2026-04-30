@@ -42,6 +42,7 @@ interface IssueFiltersProps {
   openIssueCount: number;
   resolvedIssueCount: number;
   pendingTestIssueCount: number;
+  reopenedIssueCount: number;
   activeFilterChips: IssueWorkspaceFilterChip[];
   hasActiveFilters: boolean;
   onClearFilters: () => void;
@@ -74,6 +75,7 @@ export function IssueFilters({
   openIssueCount,
   resolvedIssueCount,
   pendingTestIssueCount,
+  reopenedIssueCount,
   activeFilterChips,
   hasActiveFilters,
   onClearFilters,
@@ -156,7 +158,15 @@ export function IssueFilters({
               className="h-8 rounded-xl px-2.5"
               onClick={() => onResolutionFilterChange("resolved_pending_test")}
             >
-              Awaiting test
+              Awaiting review
+            </Button>
+            <Button
+              type="button"
+              variant={resolutionFilter === "reopened" ? "secondary" : "ghost"}
+              className="h-8 rounded-xl px-2.5"
+              onClick={() => onResolutionFilterChange("reopened")}
+            >
+              Reopened
             </Button>
           </div>
         </div>
@@ -274,8 +284,17 @@ export function IssueFilters({
               className="flex-1 rounded-xl sm:flex-none"
               onClick={() => onResolutionFilterChange("resolved_pending_test")}
             >
-              Awaiting test
+              Awaiting review
               <span className="text-xs text-muted-foreground">{pendingTestIssueCount}</span>
+            </Button>
+            <Button
+              type="button"
+              variant={resolutionFilter === "reopened" ? "secondary" : "ghost"}
+              className="flex-1 rounded-xl sm:flex-none"
+              onClick={() => onResolutionFilterChange("reopened")}
+            >
+              Reopened
+              <span className="text-xs text-muted-foreground">{reopenedIssueCount}</span>
             </Button>
           </div>
 

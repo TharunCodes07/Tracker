@@ -5,11 +5,14 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   Download,
+  LayoutGrid,
+  MoreHorizontal,
   Plus,
-  Sparkles,
+  Table2,
   Upload,
 } from "lucide-react";
 
+import { IssueCardView } from "@/components/issues/issue-card-view";
 import { IssueFilters } from "@/components/issues/issue-filters";
 import { IssueDialog } from "@/components/issues/issue-dialog";
 import { IssueExcelTable } from "@/components/issues/excel/issue-excel-table";
@@ -40,6 +43,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EntityDialog } from "@/components/ui/entity-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -49,13 +59,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { usePersistedViewMode } from "@/hooks/use-persisted-view-mode";
+
+const ISSUES_VIEW_STORAGE_KEY = "tracker:project-issues:view-mode";
 
 export default function ProjectIssuesPage() {
   const workspace = useProjectIssuesWorkspace();
+  const { viewMode, setViewMode } = usePersistedViewMode(ISSUES_VIEW_STORAGE_KEY, "table");
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importMainModuleId, setImportMainModuleId] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
+  const isCardView = viewMode === "grid";
 
   useEffect(() => {
     if (!workspace.team || !workspace.project) {
@@ -112,167 +127,122 @@ export default function ProjectIssuesPage() {
     );
   }
 
+  const issueSurfaceTitle =
+    workspace.resolutionFilter === "open"
+      ? "Open issues"
+      : workspace.resolutionFilter === "resolved"
+        ? "Resolved issues"
+        : workspace.resolutionFilter === "resolved_pending_test"
+          ? "Awaiting review"
+          : workspace.resolutionFilter === "reopened"
+            ? "Reopened issues"
+          : "All issues";
+
   return (
     <div className="space-y-4">
       <IssuePageSidebarController />
 
-      <section className="rounded-[28px] border border-border/60 bg-card/80 px-5 py-4 shadow-sm sm:px-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge
-                variant="outline"
-                className="border-emerald-400/30 bg-emerald-400/10 text-emerald-600 dark:text-emerald-300"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Project issues
-              </Badge>
+      <section className="rounded-2xl border border-border/60 bg-card/80 px-4 py-3 shadow-sm sm:px-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Badge variant="secondary">{workspace.team.name}</Badge>
               <Badge variant={workspace.team.canEdit ? "outline" : "secondary"}>
                 {workspace.team.canEdit ? "Edit access" : "Read access"}
               </Badge>
             </div>
 
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                  {workspace.project.name}
-                </h1>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1">
-                    {workspace.totalIssues} issues
-                  </span>
-                  <span className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1">
-                    {workspace.modules.length} modules
-                  </span>
-                  <span className="rounded-full border border-border/60 bg-background/70 px-2.5 py-1">
-                    {workspace.issueClasses.length} types
-                  </span>
-                </div>
-              </div>
-
-              <p className="max-w-2xl text-sm text-muted-foreground">
+            <div className="mt-2 min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">Issues</h1>
+              <p className="line-clamp-2 max-w-3xl text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{workspace.project.name}</span>
+                {" - "}
                 {workspace.project.description ??
-                  "Filter, sort, and manage issues across the project workspace."}
+                  `${workspace.openIssueCount} open issues across ${workspace.modules.length} modules.`}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 xl:items-end">
-            <div className="flex flex-wrap gap-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Open</span>
-                <span className="font-semibold text-amber-600 dark:text-amber-300">
-                  {workspace.openIssueCount}
-                </span>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Resolved</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-300">
-                  {workspace.resolvedIssueCount}
-                </span>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Awaiting test</span>
-                <span className="font-semibold text-cyan-600 dark:text-cyan-300">
-                  {workspace.pendingTestIssueCount}
-                </span>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Critical</span>
-                <span className="font-semibold text-rose-600 dark:text-rose-300">
-                  {workspace.criticalIssueCount}
-                </span>
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <Badge variant="outline" className="h-8 gap-1.5 px-3">
+              <span className="text-muted-foreground">Open</span>
+              <span className="font-semibold text-foreground">{workspace.openIssueCount}</span>
+            </Badge>
+            <Badge variant="outline" className="h-8 gap-1.5 px-3">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-semibold text-foreground">{workspace.totalIssues}</span>
+            </Badge>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsExportOpen(true)}
-                disabled={workspace.isExportingIssues}
-              >
-                <Download className="h-4 w-4" />
-                {workspace.isExportingIssues ? "Exporting..." : "Export Excel"}
+            {workspace.canEditProject ? (
+              <Button type="button" onClick={workspace.openCreateIssueDialog}>
+                <Plus className="h-4 w-4" />
+                New issue
               </Button>
-              {workspace.canEditProject ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setImportMainModuleId((currentValue) =>
-                        currentValue || workspace.mainModules[0]?.id || ""
-                      );
-                      setImportFile(null);
-                      setIsImportOpen(true);
-                    }}
-                    disabled={workspace.isImportingIssues}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {workspace.isImportingIssues ? "Importing..." : "Import Excel"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => workspace.openModuleDialog()}
-                  >
-                    <Plus className="h-4 w-4" />
-                    New module
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={workspace.openIssueClassDialog}
-                  >
-                    <Plus className="h-4 w-4" />
-                    New type
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={workspace.openCreateIssueDialog}
-                    className="bg-linear-to-r from-emerald-400 to-cyan-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.24)] hover:opacity-90"
-                  >
-                    <Plus className="h-4 w-4" />
-                    New issue
-                  </Button>
-                </>
-              ) : (
-                <Badge variant="outline" className="w-fit">
-                  Read-only as team member
-                </Badge>
-              )}
-            </div>
+            ) : (
+              <Badge variant="outline" className="h-8 px-3">
+                Read-only
+              </Badge>
+            )}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline">
+                  <MoreHorizontal className="h-4 w-4" />
+                  Manage
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem
+                  onSelect={() => setIsExportOpen(true)}
+                  disabled={workspace.isExportingIssues}
+                >
+                  <Download className="h-4 w-4" />
+                  {workspace.isExportingIssues ? "Exporting..." : "Export Excel"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={workspace.handleDownloadIssuesExcelTemplate}
+                  disabled={workspace.isExportingIssues}
+                >
+                  <Download className="h-4 w-4" />
+                  Download template
+                </DropdownMenuItem>
+
+                {workspace.canEditProject ? (
+                  <>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setImportMainModuleId((currentValue) =>
+                          currentValue || workspace.mainModules[0]?.id || ""
+                        );
+                        setImportFile(null);
+                        setIsImportOpen(true);
+                      }}
+                      disabled={workspace.isImportingIssues}
+                    >
+                      <Upload className="h-4 w-4" />
+                      {workspace.isImportingIssues ? "Importing..." : "Import Excel"}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => workspace.openModuleDialog()}>
+                      <Plus className="h-4 w-4" />
+                      New module
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={workspace.openIssueClassDialog}>
+                      <Plus className="h-4 w-4" />
+                      New Issue type
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </section>
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
-        <aside
-          className={
-            workspace.isModuleSidebarCollapsed
-              ? "transition-[width] duration-200 lg:w-19 lg:self-stretch"
-              : "transition-[width] duration-200 lg:w-[18rem] lg:self-stretch"
-          }
-        >
-          <ModuleNavigationSidebar
-            modules={workspace.modules}
-            totalIssues={workspace.totalIssues}
-            moduleIssueCountById={workspace.moduleIssueCountById}
-            selectedModuleFilters={workspace.selectedModuleFilters}
-            collapsed={workspace.isModuleSidebarCollapsed}
-            canEditProject={workspace.canEditProject}
-            onCollapsedChange={workspace.setIsModuleSidebarCollapsed}
-            onToggleModule={workspace.handleModuleFilterToggle}
-            onClearSelection={workspace.handleClearModuleFilters}
-            onCreateMainModule={() => workspace.openModuleDialog()}
-            onCreateSubModule={workspace.openModuleDialog}
-          />
-        </aside>
-
-        <div className="min-w-0 flex-1 space-y-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+        <div className="min-w-0 flex-1 space-y-3">
           <IssueFilters
+            className="rounded-2xl p-3 shadow-sm sm:p-4"
             searchValue={workspace.searchValue}
             onSearchChange={workspace.handleSearchChange}
             issueTypeFilterOptions={workspace.issueTypeFilterOptions}
@@ -293,6 +263,7 @@ export default function ProjectIssuesPage() {
             openIssueCount={workspace.openIssueCount}
             resolvedIssueCount={workspace.resolvedIssueCount}
             pendingTestIssueCount={workspace.pendingTestIssueCount}
+            reopenedIssueCount={workspace.reopenedIssueCount}
             activeFilterChips={workspace.activeFilterChips}
             hasActiveFilters={workspace.hasActiveFilters}
             onClearFilters={workspace.handleClearFilters}
@@ -301,13 +272,36 @@ export default function ProjectIssuesPage() {
             isSearchPending={workspace.isSearchPending}
           />
 
-          <section className="rounded-[28px] border border-border/60 bg-card/80 p-4 shadow-sm">
-              <div className="mb-4 flex flex-col gap-3 border-b border-border/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">Issue table</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Dense view for scanning owners, types, priority, and resolution state.
-                  </p>
+          <section className="rounded-2xl border border-border/60 bg-card/80 p-3 shadow-sm sm:p-4">
+            <div className="mb-4 flex flex-col gap-3 border-b border-border/60 pb-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-foreground">{issueSurfaceTitle}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {workspace.pagination.totalItems}{" "}
+                  {workspace.pagination.totalItems === 1 ? "issue" : "issues"} in this view
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center rounded-lg border border-border/60 bg-background/80 p-1">
+                  <Button
+                    type="button"
+                    variant={isCardView ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("grid")}
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    Cards
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={isCardView ? "ghost" : "secondary"}
+                    size="sm"
+                    onClick={() => setViewMode("table")}
+                  >
+                    <Table2 className="h-3.5 w-3.5" />
+                    Table
+                  </Button>
                 </div>
 
                 <Badge variant="outline" className="w-fit">
@@ -315,7 +309,23 @@ export default function ProjectIssuesPage() {
                   {workspace.pagination.totalItems === 1 ? "issue" : "issues"}
                 </Badge>
               </div>
+            </div>
 
+            {isCardView ? (
+              <IssueCardView
+                issues={workspace.issues}
+                totalIssueCount={workspace.pagination.totalItems}
+                pageIndex={workspace.currentPageIndex}
+                pageSize={workspace.pageSize}
+                pageCount={workspace.pagination.totalPages}
+                canEdit={workspace.canEditProject}
+                onIssueClick={
+                  workspace.canEditProject ? workspace.openEditIssueDialog : undefined
+                }
+                onPageIndexChange={workspace.setPageIndex}
+                onPageSizeChange={workspace.handlePageSizeChange}
+              />
+            ) : (
               <IssueExcelTable
                 issues={workspace.issues}
                 fullscreenIssues={workspace.fullscreenIssues}
@@ -370,6 +380,7 @@ export default function ProjectIssuesPage() {
                     openIssueCount={workspace.openIssueCount}
                     resolvedIssueCount={workspace.resolvedIssueCount}
                     pendingTestIssueCount={workspace.pendingTestIssueCount}
+                    reopenedIssueCount={workspace.reopenedIssueCount}
                     activeFilterChips={workspace.activeFilterChips}
                     hasActiveFilters={workspace.hasActiveFilters}
                     onClearFilters={workspace.handleClearFilters}
@@ -379,8 +390,31 @@ export default function ProjectIssuesPage() {
                   />
                 }
               />
+            )}
           </section>
         </div>
+
+        <aside
+          className={
+            workspace.isModuleSidebarCollapsed
+              ? "transition-[width] duration-200 xl:w-19 xl:self-stretch"
+              : "transition-[width] duration-200 xl:w-[18rem] xl:self-stretch"
+          }
+        >
+          <ModuleNavigationSidebar
+            modules={workspace.modules}
+            totalIssues={workspace.totalIssues}
+            moduleIssueCountById={workspace.moduleIssueCountById}
+            selectedModuleFilters={workspace.selectedModuleFilters}
+            collapsed={workspace.isModuleSidebarCollapsed}
+            canEditProject={workspace.canEditProject}
+            onCollapsedChange={workspace.setIsModuleSidebarCollapsed}
+            onToggleModule={workspace.handleModuleFilterToggle}
+            onClearSelection={workspace.handleClearModuleFilters}
+            onCreateMainModule={() => workspace.openModuleDialog()}
+            onCreateSubModule={workspace.openModuleDialog}
+          />
+        </aside>
       </div>
 
       <ProjectModuleDialog

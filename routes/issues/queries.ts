@@ -136,6 +136,9 @@ function toIssueListItem(row: {
   remark: string | null;
   testedBy: string | null;
   testedByName: string | null;
+  reopenedBy: string | null;
+  reopenedByName: string | null;
+  reopenedAt: Date | string | null;
   fixedDate: Date | string | null;
   development: boolean | null;
   deployment: boolean | null;
@@ -168,6 +171,9 @@ function toIssueListItem(row: {
     remark: row.remark,
     testedBy: row.testedBy,
     testedByName: row.testedByName,
+    reopenedBy: row.reopenedBy,
+    reopenedByName: row.reopenedByName,
+    reopenedAt: row.reopenedAt ? toIsoString(row.reopenedAt) : null,
     fixedDate: row.fixedDate ? toIsoString(row.fixedDate) : null,
     development: Boolean(row.development),
     deployment: Boolean(row.deployment),
@@ -270,6 +276,8 @@ function buildProjectIssuesWhereClause(
     conditions.push(eq(issues.status, "done"));
   } else if (input.resolution === "resolved_pending_test") {
     conditions.push(and(eq(issues.status, "done"), isNull(issues.testedBy)) as SQL);
+  } else if (input.resolution === "reopened") {
+    conditions.push(and(sql`${issues.reopenedBy} is not null`, ne(issues.status, "done")) as SQL);
   }
 
   if (input.moduleFilters.length > 0) {
@@ -462,6 +470,7 @@ async function getProjectIssuesSummary(projectId: string): Promise<IssueListSumm
       openIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} <> 'done') as integer)`,
       resolvedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done') as integer)`,
       pendingTestIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done' and ${issues.testedBy} is null) as integer)`,
+      reopenedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.reopenedBy} is not null and ${issues.status} <> 'done') as integer)`,
       criticalIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.priority} = 'critical') as integer)`,
       unclassifiedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.issueClassId} is null) as integer)`,
     })
@@ -473,6 +482,7 @@ async function getProjectIssuesSummary(projectId: string): Promise<IssueListSumm
     openIssueCount: Number(summaryRow?.openIssueCount ?? 0),
     resolvedIssueCount: Number(summaryRow?.resolvedIssueCount ?? 0),
     pendingTestIssueCount: Number(summaryRow?.pendingTestIssueCount ?? 0),
+    reopenedIssueCount: Number(summaryRow?.reopenedIssueCount ?? 0),
     criticalIssueCount: Number(summaryRow?.criticalIssueCount ?? 0),
     hasUnclassifiedIssues: Number(summaryRow?.unclassifiedIssueCount ?? 0) > 0,
   };
@@ -539,6 +549,7 @@ async function getProjectIssueRows(
   const assignedUser = alias(user, "assigned_user");
   const reviewedUser = alias(user, "reviewed_user");
   const testedUser = alias(user, "tested_user");
+  const reopenedUser = alias(user, "reopened_user");
   const createdUser = alias(user, "created_user");
   const parentModule = alias(projectModules, "parent_module");
 
@@ -582,6 +593,9 @@ async function getProjectIssueRows(
       remark: issues.remark,
       testedBy: issues.testedBy,
       testedByName: testedUser.name,
+      reopenedBy: issues.reopenedBy,
+      reopenedByName: reopenedUser.name,
+      reopenedAt: issues.reopenedAt,
       fixedDate: issues.fixedDate,
       development: issues.development,
       deployment: issues.deployment,
@@ -597,6 +611,7 @@ async function getProjectIssueRows(
     .leftJoin(assignedUser, eq(issues.assignedTo, assignedUser.id))
     .leftJoin(reviewedUser, eq(issues.reviewedBy, reviewedUser.id))
     .leftJoin(testedUser, eq(issues.testedBy, testedUser.id))
+    .leftJoin(reopenedUser, eq(issues.reopenedBy, reopenedUser.id))
     .leftJoin(createdUser, eq(issues.createdBy, createdUser.id))
     .where(
       buildProjectIssuesWhereClause(projectId, currentUserId, input, {
