@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
-import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
+import type { VisibilityState } from "@tanstack/react-table";
 import {
   ChevronDown,
   ChevronRight,
@@ -14,6 +14,11 @@ import {
 } from "lucide-react";
 
 import { getIssueTableColumns } from "@/components/issues/issue-table-columns";
+import type { IssueFormValues } from "@/components/issues/issue-dialog";
+import {
+  ISSUE_INLINE_WORKBOOK_COLUMNS,
+  IssueInlineWorkbook,
+} from "@/components/issues/excel/issue-inline-workbook";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -34,9 +39,11 @@ import {
 import { cn } from "@/lib/utils";
 import {
   GENERAL_MODULE_FILTER_VALUE,
+  type IssueClassListItem,
   type IssueListItem,
   type ProjectModuleListItem,
 } from "@/routes/issues/types";
+import type { TeamMemberListItem } from "@/routes/teams/types";
 
 type IssueSheetKind = "all" | "general" | "main" | "sub";
 
@@ -60,6 +67,8 @@ interface IssueExcelTableProps {
   fullscreenIssuesError?: string | null;
   isFullscreenIssuesLoading?: boolean;
   modules: ProjectModuleListItem[];
+  issueClasses: IssueClassListItem[];
+  members: TeamMemberListItem[];
   selectedModuleFilters: string[];
   totalIssueCount: number;
   visibleIssueCount: number;
@@ -75,39 +84,13 @@ interface IssueExcelTableProps {
   onRowClick?: (issue: IssueListItem) => void;
   onEdit: (issue: IssueListItem) => void;
   onDelete: (issue: IssueListItem) => void;
+  onCreateInlineIssue: (values: IssueFormValues) => Promise<boolean>;
+  onUpdateInlineIssue: (issue: IssueListItem, values: IssueFormValues) => Promise<boolean>;
   onModuleFilterToggle: (value: string) => void;
   onClearModuleFilters: () => void;
   onLoadFullscreenIssues: (sortingOverride?: SortingState) => void;
   fullscreenReloadKey: string;
   fullscreenFilters?: React.ReactNode;
-}
-
-type IssueColumnMeta = {
-  label?: string;
-};
-
-function getColumnId(column: ColumnDef<IssueListItem>) {
-  return (
-    column.id ??
-    ("accessorKey" in column && typeof column.accessorKey === "string"
-      ? column.accessorKey
-      : null)
-  );
-}
-
-function getColumnLabel(column: ColumnDef<IssueListItem>, columnId: string) {
-  const meta = (column.meta ?? {}) as IssueColumnMeta;
-
-  if (meta.label?.trim()) {
-    return meta.label;
-  }
-
-  return columnId
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^./, (char) => char.toUpperCase());
 }
 
 function filterIssuesBySheet(issues: IssueListItem[], sheet: Omit<IssueSheet, "count">) {
@@ -208,6 +191,8 @@ export function IssueExcelTable({
   fullscreenIssuesError,
   isFullscreenIssuesLoading = false,
   modules,
+  issueClasses,
+  members,
   selectedModuleFilters,
   totalIssueCount,
   visibleIssueCount,
@@ -223,6 +208,8 @@ export function IssueExcelTable({
   onRowClick,
   onEdit,
   onDelete,
+  onCreateInlineIssue,
+  onUpdateInlineIssue,
   onModuleFilterToggle,
   onClearModuleFilters,
   onLoadFullscreenIssues,
@@ -251,32 +238,15 @@ export function IssueExcelTable({
       }),
     [actionPending, canEdit, onDelete, onEdit]
   );
-  const fullscreenColumns = React.useMemo(
-    () =>
-      getIssueTableColumns({
-        canEdit,
-        onEdit,
-        onDelete,
-        actionPending,
-        issueTextMode: "full",
-      }),
-    [actionPending, canEdit, onDelete, onEdit]
-  );
   const fullscreenColumnToggleItems = React.useMemo(
     () =>
-      fullscreenColumns
-        .map((column) => {
-          const id = getColumnId(column);
-
-          return id
-            ? {
-                id,
-                label: getColumnLabel(column, id),
-              }
-            : null;
-        })
-        .filter((item): item is { id: string; label: string } => item !== null),
-    [fullscreenColumns]
+      ISSUE_INLINE_WORKBOOK_COLUMNS
+        .filter((column) => column.id !== "actions")
+        .map((column) => ({
+          id: column.id,
+          label: column.label,
+        })),
+    []
   );
   const workbookRows = hasRequestedFullscreenIssues ? fullscreenIssues : issues;
   const workbook = React.useMemo(
@@ -604,41 +574,32 @@ export function IssueExcelTable({
             </div>
           </div>
 
-          <div className="min-h-0 overflow-hidden p-3">
-            <DataTable
-              columns={fullscreenColumns}
-              data={activeSheetRows}
-              visualMode="excel"
-              showRowNumbers
-              showPagination={false}
-              fullTextColumnIds={["no"]}
-              columnTextModes={{
-                moduleName: "wrap",
-                assignedToName: "wrap",
-                reviewedByName: "wrap",
-                testedByName: "wrap",
-              }}
+          <div className="flex min-h-0 flex-col gap-3 overflow-hidden p-3">
+            {(fullscreenIssuesError || fullscreenFilters) ? (
+              <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 rounded-xl border border-border/70 bg-muted/25 p-2 shadow-sm">
+                {fullscreenIssuesError ? (
+                  <Badge variant="destructive">{fullscreenIssuesError}</Badge>
+                ) : null}
+                {fullscreenFilters}
+              </div>
+            ) : null}
+            <IssueInlineWorkbook
+              issues={activeSheetRows}
+              modules={modules}
+              issueClasses={issueClasses}
+              members={members}
+              canEdit={canEdit}
+              actionPending={actionPending}
               isLoading={isFullscreenIssuesLoading}
-              skeletonRowCount={12}
-              onRowClick={onRowClick}
               sorting={sorting}
               onSortingChange={handleFullscreenSortingChange}
               columnVisibility={fullscreenColumnVisibility}
-              onColumnVisibilityChange={setFullscreenColumnVisibility}
-              pageIndex={0}
-              pageSize={Math.max(activeSheetRows.length, 1)}
-              pageCount={1}
-              fillHeight
+              onCreateIssue={onCreateInlineIssue}
+              onUpdateIssue={onUpdateInlineIssue}
+              onOpenModalEdit={onEdit}
+              onDeleteIssue={onDelete}
+              selectedModuleFilters={selectedModuleFilters}
               emptyMessage="No issues match the selected module filters."
-              showColumnViewControl={false}
-              toolbarExtras={
-                <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-                  {fullscreenIssuesError ? (
-                    <Badge variant="destructive">{fullscreenIssuesError}</Badge>
-                  ) : null}
-                  {fullscreenFilters}
-                </div>
-              }
             />
           </div>
 

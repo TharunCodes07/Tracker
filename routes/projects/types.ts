@@ -52,7 +52,6 @@ export interface TeamProjectsSummary {
 export interface UserProjectsSummary {
   totalProjects: number;
   editableProjects: number;
-  teamCount: number;
 }
 
 export interface ProjectListPagination {

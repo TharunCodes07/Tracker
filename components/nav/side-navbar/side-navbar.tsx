@@ -265,9 +265,9 @@ export function AppSidebar() {
                                                 asChild
                                                 isActive={isItemActive(project.href)}
                                                 tooltip={`${project.projectName} • ${project.teamName}`}
-                                                className="group/item transition-all duration-200 hover:bg-sidebar-accent/80"
+                                                className="group/item mx-1 h-auto min-h-12 py-1 transition-all duration-200 hover:bg-sidebar-accent/80"
                                             >
-                                                <Link href={project.href} className="flex items-center min-w-0">
+                                                <Link href={project.href} className="flex min-w-0 items-center gap-2">
                                                     <FolderKanban
                                                         className={`h-4 w-4 transition-colors ${
                                                             isItemActive(project.href)
@@ -275,7 +275,7 @@ export function AppSidebar() {
                                                                 : "text-cyan-500 group-hover/item:text-sidebar-accent-foreground"
                                                         }`}
                                                     />
-                                                    <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
+                                                    <div className="flex min-w-0 flex-1 flex-col leading-tight group-data-[collapsible=icon]:hidden">
                                                         <span className="truncate font-medium">
                                                             {project.projectName}
                                                         </span>

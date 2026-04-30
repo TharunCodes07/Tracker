@@ -322,6 +322,8 @@ export default function ProjectIssuesPage() {
                 fullscreenIssuesError={workspace.fullscreenIssuesError}
                 isFullscreenIssuesLoading={workspace.isLoadingFullscreenIssues}
                 modules={workspace.modules}
+                issueClasses={workspace.issueClasses}
+                members={workspace.members}
                 selectedModuleFilters={workspace.selectedModuleFilters}
                 totalIssueCount={workspace.totalIssues}
                 visibleIssueCount={workspace.pagination.totalItems}
@@ -330,6 +332,8 @@ export default function ProjectIssuesPage() {
                 onRowClick={workspace.canEditProject ? workspace.openEditIssueDialog : undefined}
                 onEdit={workspace.openEditIssueDialog}
                 onDelete={workspace.setIssueToDelete}
+                onCreateInlineIssue={workspace.handleCreateInlineIssue}
+                onUpdateInlineIssue={workspace.handleUpdateInlineIssue}
                 onModuleFilterToggle={workspace.handleModuleFilterToggle}
                 onClearModuleFilters={workspace.handleClearModuleFilters}
                 sorting={workspace.sorting}

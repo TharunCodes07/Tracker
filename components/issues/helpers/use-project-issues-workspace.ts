@@ -1107,6 +1107,66 @@ export function useProjectIssuesWorkspace() {
     });
   }
 
+  async function handleCreateInlineIssue(values: IssueFormValues) {
+    if (!team || !project) {
+      return false;
+    }
+
+    if (!values.issueClassId) {
+      toast.error("Choose an issue type first.");
+      return false;
+    }
+
+    try {
+      const data = await requestJson<IssueMutationResponse>(
+        `/api/teams/${team.id}/projects/${project.id}/issues`,
+        {
+          method: "POST",
+          body: JSON.stringify(createIssuePayload(values)),
+        }
+      );
+
+      setFullscreenIssues((currentIssues) => [data.issue, ...currentIssues]);
+      markIssueDataChanged();
+      refreshIssues(0);
+      toast.success(data.message);
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create the issue.");
+      return false;
+    }
+  }
+
+  async function handleUpdateInlineIssue(issue: IssueListItem, values: IssueFormValues) {
+    if (!team || !project) {
+      return false;
+    }
+
+    if (!values.issueClassId) {
+      toast.error("Choose an issue type first.");
+      return false;
+    }
+
+    try {
+      const data = await requestJson<IssueMutationResponse>(
+        `/api/teams/${team.id}/projects/${project.id}/issues/${issue.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(createIssuePayload(values)),
+        }
+      );
+
+      replaceIssueInLoadedRows(data.issue);
+      markIssueDataChanged();
+      refreshIssues();
+      toast.success(data.message);
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update the issue.");
+      return false;
+    }
+  }
+
   function handleLoadFullscreenIssues(sortingOverride?: SortingState) {
     if (!team || !project) {
       return;
@@ -1273,6 +1333,8 @@ export function useProjectIssuesWorkspace() {
     isIssueMutationPending,
     handleCreateIssue,
     handleUpdateIssue,
+    handleCreateInlineIssue,
+    handleUpdateInlineIssue,
     issueToDelete,
     setIssueToDelete,
     isDeletingIssue,

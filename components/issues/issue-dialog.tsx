@@ -103,9 +103,43 @@ export function IssueDialog({
         </DialogHeader>
 
         <form className="flex min-h-0 min-w-0 flex-col overflow-hidden" onSubmit={onSubmit}>
-          <div className="tracker-thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          <div className="tracker-thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-muted/20 px-4 py-4">
           <FieldGroup>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-border/70 bg-background p-3 shadow-sm">
+              <div className="grid gap-3 lg:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="issue-title">Issue</FieldLabel>
+                  <Textarea
+                    id="issue-title"
+                    value={values.title}
+                    onChange={(event) => onChange({ title: event.target.value })}
+                    placeholder="Login button breaks after redirect"
+                    rows={5}
+                    disabled={pending}
+                    required
+                    className="min-h-32 resize-y"
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="issue-description">Description</FieldLabel>
+                  <Textarea
+                    id="issue-description"
+                    value={values.description}
+                    onChange={(event) => onChange({ description: event.target.value })}
+                    placeholder="Describe the issue, reproduction notes, or expected outcome."
+                    rows={5}
+                    disabled={pending}
+                    className="min-h-32 resize-y"
+                  />
+                </Field>
+              </div>
+              <FieldDescription className="mt-2">
+                Keep the issue statement and the handoff notes visible together while creating or editing.
+              </FieldDescription>
+            </div>
+
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-background p-3 shadow-sm md:grid-cols-3">
               <Field>
                 <FieldLabel htmlFor="issue-navigation">Navigation</FieldLabel>
                 <Input
@@ -118,36 +152,6 @@ export function IssueDialog({
                 />
               </Field>
 
-              <Field>
-                <FieldLabel htmlFor="issue-title">Issue</FieldLabel>
-                <Input
-                  id="issue-title"
-                  value={values.title}
-                  onChange={(event) => onChange({ title: event.target.value })}
-                  placeholder="Login button breaks after redirect"
-                  autoComplete="off"
-                  disabled={pending}
-                  required
-                />
-              </Field>
-            </div>
-
-            <Field>
-              <FieldLabel htmlFor="issue-description">Description</FieldLabel>
-              <Textarea
-                id="issue-description"
-                value={values.description}
-                onChange={(event) => onChange({ description: event.target.value })}
-                placeholder="Describe the issue, reproduction notes, or expected outcome."
-                rows={5}
-                disabled={pending}
-              />
-              <FieldDescription>
-                Add reproduction notes, expected behavior, or handoff details for the team.
-              </FieldDescription>
-            </Field>
-
-            <div className="grid gap-4 md:grid-cols-3">
               <Field>
                 <FieldLabel>Main module</FieldLabel>
                 <Select
@@ -173,7 +177,9 @@ export function IssueDialog({
                   </SelectContent>
                 </Select>
               </Field>
+            </div>
 
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-background p-3 shadow-sm md:grid-cols-3">
               <Field>
                 <FieldLabel>Sub module</FieldLabel>
                 <Select
@@ -222,9 +228,6 @@ export function IssueDialog({
                   </SelectContent>
                 </Select>
               </Field>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
               <Field>
                 <FieldLabel>Priority</FieldLabel>
                 <Select
@@ -244,7 +247,9 @@ export function IssueDialog({
                   </SelectContent>
                 </Select>
               </Field>
+            </div>
 
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-background p-3 shadow-sm md:grid-cols-3">
               <Field>
                 <FieldLabel>Status</FieldLabel>
                 <Select
@@ -275,9 +280,6 @@ export function IssueDialog({
                   disabled={pending}
                 />
               </Field>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
               <Field>
                 <FieldLabel>Assigned to</FieldLabel>
                 <Select
@@ -300,7 +302,9 @@ export function IssueDialog({
                   </SelectContent>
                 </Select>
               </Field>
+            </div>
 
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-background p-3 shadow-sm md:grid-cols-3">
               <Field>
                 <FieldLabel>Reviewed by</FieldLabel>
                 <Select
@@ -350,7 +354,7 @@ export function IssueDialog({
               </Field>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 rounded-xl border border-border/70 bg-background p-3 shadow-sm md:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="issue-comments">Comments</FieldLabel>
                 <Textarea
@@ -377,7 +381,7 @@ export function IssueDialog({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field orientation="horizontal" className="justify-between rounded-2xl border border-border/60 bg-background/55 px-4 py-3">
+              <Field orientation="horizontal" className="justify-between rounded-xl border border-border/70 bg-background px-4 py-3 shadow-sm">
                 <div className="space-y-1">
                   <FieldLabel htmlFor="issue-development">Development</FieldLabel>
                   <FieldDescription>Mark whether the fix is completed in development.</FieldDescription>
@@ -390,7 +394,7 @@ export function IssueDialog({
                 />
               </Field>
 
-              <Field orientation="horizontal" className="justify-between rounded-2xl border border-border/60 bg-background/55 px-4 py-3">
+              <Field orientation="horizontal" className="justify-between rounded-xl border border-border/70 bg-background px-4 py-3 shadow-sm">
                 <div className="space-y-1">
                   <FieldLabel htmlFor="issue-deployment">Deployment</FieldLabel>
                   <FieldDescription>Mark whether the fix has been deployed.</FieldDescription>

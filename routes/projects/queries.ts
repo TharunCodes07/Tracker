@@ -198,7 +198,6 @@ async function getUserProjectsSummary(userId: string) {
           end
         ) as integer
       )`,
-      teamCount: sql<number>`cast(count(distinct ${teamsToProjects.teamId}) as integer)`,
     })
     .from(usersToTeams)
     .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
@@ -207,7 +206,6 @@ async function getUserProjectsSummary(userId: string) {
   return {
     totalProjects: Number(summaryRow?.totalProjects ?? 0),
     editableProjects: Number(summaryRow?.editableProjects ?? 0),
-    teamCount: Number(summaryRow?.teamCount ?? 0),
   };
 }
 

@@ -68,7 +68,6 @@ const EMPTY_PAGINATION: ProjectListPagination = {
 const EMPTY_SUMMARY: UserProjectsSummary = {
   totalProjects: 0,
   editableProjects: 0,
-  teamCount: 0,
 };
 const PROJECT_GRID_SORT_OPTIONS: Array<{
   value: string;
@@ -593,18 +592,6 @@ export default function ProjectsPage() {
                 )}
               </div>
 
-              <div className="h-auto w-px bg-border/60" />
-
-              <div className="min-w-[11rem] px-4 py-3">
-                <div className="text-sm text-muted-foreground">Teams represented</div>
-                {isLoading ? (
-                  <Skeleton className="mt-2 h-8 w-14" />
-                ) : (
-                  <div className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-                    {summary.teamCount}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
