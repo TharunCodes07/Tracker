@@ -69,7 +69,7 @@ const EMPTY_SUMMARY: IssueListSummary = {
   totalIssues: 0,
   openIssueCount: 0,
   resolvedIssueCount: 0,
-  pendingTestIssueCount: 0,
+  reviewIssueCount: 0,
   reopenedIssueCount: 0,
   criticalIssueCount: 0,
   hasUnclassifiedIssues: false,
@@ -369,7 +369,7 @@ export function useProjectIssuesWorkspace() {
   const areIssueActionsPending = isUpdatingIssue || isDeletingIssue;
   const hasActiveFilters =
     searchValue.trim().length > 0 ||
-    resolutionFilter !== "open" ||
+    resolutionFilter !== "all" ||
     selectedModuleFilters.length > 0 ||
     selectedIssueTypeFilters.length > 0 ||
     selectedPriorityFilters.length > 0 ||
@@ -728,7 +728,7 @@ export function useProjectIssuesWorkspace() {
 
   function handleClearFilters() {
     setSearchValue("");
-    setResolutionFilter("open");
+    setResolutionFilter("all");
     setSelectedModuleFilters([]);
     setSelectedIssueTypeFilters([]);
     setSelectedPriorityFilters([]);
@@ -1317,7 +1317,7 @@ export function useProjectIssuesWorkspace() {
     totalIssues: summary.totalIssues,
     openIssueCount: summary.openIssueCount,
     resolvedIssueCount: summary.resolvedIssueCount,
-    pendingTestIssueCount: summary.pendingTestIssueCount,
+    reviewIssueCount: summary.reviewIssueCount,
     reopenedIssueCount: summary.reopenedIssueCount,
     criticalIssueCount: summary.criticalIssueCount,
     sorting,

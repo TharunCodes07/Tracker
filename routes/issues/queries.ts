@@ -271,11 +271,11 @@ function buildProjectIssuesWhereClause(
   const conditions: SQL[] = [eq(issues.projectId, projectId)];
 
   if (input.resolution === "open") {
-    conditions.push(ne(issues.status, "done"));
+    conditions.push(inArray(issues.status, ["open", "in_progress"]));
+  } else if (input.resolution === "review") {
+    conditions.push(eq(issues.status, "review"));
   } else if (input.resolution === "resolved") {
     conditions.push(eq(issues.status, "done"));
-  } else if (input.resolution === "resolved_pending_test") {
-    conditions.push(and(eq(issues.status, "done"), isNull(issues.testedBy)) as SQL);
   } else if (input.resolution === "reopened") {
     conditions.push(and(sql`${issues.reopenedAt} is not null`, ne(issues.status, "done")) as SQL);
   }
@@ -467,9 +467,9 @@ async function getProjectIssuesSummary(projectId: string): Promise<IssueListSumm
   const [summaryRow] = await db
     .select({
       totalIssues: count(issues.id),
-      openIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} <> 'done') as integer)`,
+      openIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} in ('open', 'in_progress')) as integer)`,
       resolvedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done') as integer)`,
-      pendingTestIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done' and ${issues.testedBy} is null) as integer)`,
+      reviewIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'review') as integer)`,
       reopenedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.reopenedAt} is not null and ${issues.status} <> 'done') as integer)`,
       criticalIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.priority} = 'critical') as integer)`,
       unclassifiedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.issueClassId} is null) as integer)`,
@@ -481,7 +481,7 @@ async function getProjectIssuesSummary(projectId: string): Promise<IssueListSumm
     totalIssues: Number(summaryRow?.totalIssues ?? 0),
     openIssueCount: Number(summaryRow?.openIssueCount ?? 0),
     resolvedIssueCount: Number(summaryRow?.resolvedIssueCount ?? 0),
-    pendingTestIssueCount: Number(summaryRow?.pendingTestIssueCount ?? 0),
+    reviewIssueCount: Number(summaryRow?.reviewIssueCount ?? 0),
     reopenedIssueCount: Number(summaryRow?.reopenedIssueCount ?? 0),
     criticalIssueCount: Number(summaryRow?.criticalIssueCount ?? 0),
     hasUnclassifiedIssues: Number(summaryRow?.unclassifiedIssueCount ?? 0) > 0,

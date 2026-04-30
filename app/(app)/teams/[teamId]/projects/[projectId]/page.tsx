@@ -136,7 +136,7 @@ export default function ProjectIssuesPage() {
       totalIssues={workspace.totalIssues}
       openIssueCount={workspace.openIssueCount}
       resolvedIssueCount={workspace.resolvedIssueCount}
-      pendingTestIssueCount={workspace.pendingTestIssueCount}
+      reviewIssueCount={workspace.reviewIssueCount}
       reopenedIssueCount={workspace.reopenedIssueCount}
     />
   );
@@ -195,7 +195,7 @@ export default function ProjectIssuesPage() {
             totalIssues={workspace.totalIssues}
             openIssueCount={workspace.openIssueCount}
             resolvedIssueCount={workspace.resolvedIssueCount}
-            pendingTestIssueCount={workspace.pendingTestIssueCount}
+            reviewIssueCount={workspace.reviewIssueCount}
             reopenedIssueCount={workspace.reopenedIssueCount}
             activeFilterChips={workspace.activeFilterChips}
             hasActiveFilters={workspace.hasActiveFilters}
@@ -349,7 +349,7 @@ export default function ProjectIssuesPage() {
                     totalIssues={workspace.totalIssues}
                     openIssueCount={workspace.openIssueCount}
                     resolvedIssueCount={workspace.resolvedIssueCount}
-                    pendingTestIssueCount={workspace.pendingTestIssueCount}
+                    reviewIssueCount={workspace.reviewIssueCount}
                     reopenedIssueCount={workspace.reopenedIssueCount}
                     activeFilterChips={workspace.activeFilterChips}
                     hasActiveFilters={workspace.hasActiveFilters}

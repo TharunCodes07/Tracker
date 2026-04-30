@@ -42,7 +42,7 @@ interface IssueFiltersProps {
   totalIssues: number;
   openIssueCount: number;
   resolvedIssueCount: number;
-  pendingTestIssueCount: number;
+  reviewIssueCount: number;
   reopenedIssueCount: number;
   activeFilterChips: IssueWorkspaceFilterChip[];
   hasActiveFilters: boolean;
@@ -60,7 +60,7 @@ interface IssueResolutionFilterControlProps {
   totalIssues: number;
   openIssueCount: number;
   resolvedIssueCount: number;
-  pendingTestIssueCount: number;
+  reviewIssueCount: number;
   reopenedIssueCount: number;
 }
 
@@ -114,7 +114,7 @@ export function IssueResolutionFilterControl({
   totalIssues,
   openIssueCount,
   resolvedIssueCount,
-  pendingTestIssueCount,
+  reviewIssueCount,
   reopenedIssueCount,
 }: IssueResolutionFilterControlProps) {
   const options: Array<{
@@ -124,9 +124,9 @@ export function IssueResolutionFilterControl({
   }> = [
     { value: "all", label: "All", count: totalIssues },
     { value: "open", label: "Open", count: openIssueCount },
-    { value: "resolved_pending_test", label: "Review", count: pendingTestIssueCount },
-    { value: "reopened", label: "Reopened", count: reopenedIssueCount },
+    { value: "review", label: "Review", count: reviewIssueCount },
     { value: "resolved", label: "Resolved", count: resolvedIssueCount },
+    { value: "reopened", label: "Reopened", count: reopenedIssueCount },
   ];
 
   return (
@@ -182,7 +182,7 @@ export function IssueFilters({
   totalIssues,
   openIssueCount,
   resolvedIssueCount,
-  pendingTestIssueCount,
+  reviewIssueCount,
   reopenedIssueCount,
   activeFilterChips,
   hasActiveFilters,
@@ -246,7 +246,7 @@ export function IssueFilters({
               totalIssues={totalIssues}
               openIssueCount={openIssueCount}
               resolvedIssueCount={resolvedIssueCount}
-              pendingTestIssueCount={pendingTestIssueCount}
+              reviewIssueCount={reviewIssueCount}
               reopenedIssueCount={reopenedIssueCount}
             />
           ) : null}
@@ -339,7 +339,7 @@ export function IssueFilters({
               totalIssues={totalIssues}
               openIssueCount={openIssueCount}
               resolvedIssueCount={resolvedIssueCount}
-              pendingTestIssueCount={pendingTestIssueCount}
+              reviewIssueCount={reviewIssueCount}
               reopenedIssueCount={reopenedIssueCount}
             />
           ) : null}
