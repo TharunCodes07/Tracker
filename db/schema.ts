@@ -2,6 +2,7 @@ import {
   foreignKey,
   boolean,
   index,
+  integer,
   pgTable,
   primaryKey,
   serial,
@@ -263,6 +264,34 @@ export const issues = pgTable(
     index('issues_created_by_idx').on(table.createdBy),
     index('issues_status_idx').on(table.status),
     index('issues_priority_idx').on(table.priority),
+  ]
+);
+
+export const issueMedia = pgTable(
+  'issue_media',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    issueId: uuid('issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    mediaType: varchar('media_type', { length: 16 }).notNull(),
+    bucket: text('bucket').notNull(),
+    objectKey: text('object_key').notNull(),
+    originalName: varchar('original_name', { length: 255 }).notNull(),
+    mimeType: varchar('mime_type', { length: 127 }).notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    createdBy: uuid('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('issue_media_project_id_idx').on(table.projectId),
+    index('issue_media_issue_id_idx').on(table.issueId),
+    index('issue_media_media_type_idx').on(table.mediaType),
+    index('issue_media_created_by_idx').on(table.createdBy),
   ]
 );
 

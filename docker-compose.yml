@@ -17,6 +17,71 @@ services:
       timeout: 5s
       retries: 5
 
+  seaweed-master:
+    image: chrislusf/seaweedfs:latest
+    container_name: tracker-seaweed-master
+    restart: unless-stopped
+    command: "master -ip=seaweed-master"
+    ports:
+      - "7641:9333"
+    volumes:
+      - seaweed_master_data:/data
+
+  seaweed-volume:
+    image: chrislusf/seaweedfs:latest
+    container_name: tracker-seaweed-volume
+    restart: unless-stopped
+    command: 'volume -mserver="seaweed-master:9333" -ip=seaweed-volume -port=8080'
+    depends_on:
+      - seaweed-master
+    ports:
+      - "7642:8080"
+    volumes:
+      - seaweed_volume_data:/data
+
+  seaweed-filer:
+    image: chrislusf/seaweedfs:latest
+    container_name: tracker-seaweed-filer
+    restart: unless-stopped
+    command: 'filer -master="seaweed-master:9333"'
+    depends_on:
+      - seaweed-master
+      - seaweed-volume
+    ports:
+      - "7643:8888"
+    volumes:
+      - seaweed_filer_data:/data
+
+  seaweed-s3:
+    image: chrislusf/seaweedfs:latest
+    container_name: tracker-seaweed-s3
+    restart: unless-stopped
+    command: 's3 -filer="seaweed-filer:8888" -port=8333 -ip.bind=0.0.0.0 -config=/etc/seaweedfs/s3.json'
+    depends_on:
+      - seaweed-filer
+    ports:
+      - "7644:8333"
+    volumes:
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+
+  seaweed-s3-init:
+    image: amazon/aws-cli:2
+    container_name: tracker-seaweed-s3-init
+    depends_on:
+      - seaweed-s3
+    environment:
+      AWS_ACCESS_KEY_ID: ${SEAWEED_ACCESS_KEY:-tracker}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEED_SECRET_KEY:-tracker-secret-123}
+      AWS_DEFAULT_REGION: ${SEAWEED_S3_REGION:-us-east-1}
+      SEAWEED_BUCKET: ${SEAWEED_BUCKET:-tracker-uploads}
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      until aws --endpoint-url http://seaweed-s3:8333 s3api list-buckets >/dev/null 2>&1; do
+        sleep 2;
+      done;
+      aws --endpoint-url http://seaweed-s3:8333 s3api head-bucket --bucket "$$SEAWEED_BUCKET" >/dev/null 2>&1 ||
+      aws --endpoint-url http://seaweed-s3:8333 s3 mb "s3://$$SEAWEED_BUCKET"
+
   app:
     build:
       context: .
@@ -26,14 +91,25 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      seaweed-s3-init:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://postgres:postgres@db:5432/tracker
       NEXT_PUBLIC_BETTER_AUTH_URL: http://localhost:3000
       BETTER_AUTH_URL: http://localhost:3000
-      BETTER_AUTH_SECRET: change-me
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me}
+      SEAWEED_S3_ENDPOINT: http://seaweed-s3:8333
+      SEAWEED_S3_PUBLIC_ENDPOINT: ${SEAWEED_S3_PUBLIC_ENDPOINT:-http://localhost:7644}
+      SEAWEED_S3_REGION: ${SEAWEED_S3_REGION:-us-east-1}
+      SEAWEED_ACCESS_KEY: ${SEAWEED_ACCESS_KEY:-tracker}
+      SEAWEED_SECRET_KEY: ${SEAWEED_SECRET_KEY:-tracker-secret-123}
+      SEAWEED_BUCKET: ${SEAWEED_BUCKET:-tracker-uploads}
     ports:
       - "3000:3000"
 
 volumes:
   postgres_data:
+  seaweed_master_data:
+  seaweed_volume_data:
+  seaweed_filer_data:

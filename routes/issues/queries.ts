@@ -22,6 +22,7 @@ import { issueClasses, issues, projectModules, user } from "@/db/schema";
 import { getProjectForTeam } from "@/routes/projects/queries";
 import { listTeamMembersForUser } from "@/routes/teams/queries";
 
+import { listIssueMediaForIssueIds } from "./media";
 import {
   DEFAULT_ISSUE_CLASS_DEFINITIONS,
   GENERAL_MODULE_FILTER_VALUE,
@@ -34,6 +35,7 @@ import {
   type IssueExcelSheet,
   type IssueExcelWorkbook,
   type IssueListItem,
+  type IssueMediaListItem,
   type IssueListSummary,
   type IssueModuleCount,
   type IssuePriority,
@@ -146,7 +148,7 @@ function toIssueListItem(row: {
   createdByName: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
-}): IssueListItem {
+}, media: IssueMediaListItem[] = []): IssueListItem {
   return {
     id: row.id,
     no: Number(row.no ?? 0),
@@ -179,6 +181,7 @@ function toIssueListItem(row: {
     deployment: Boolean(row.deployment),
     createdBy: row.createdBy,
     createdByName: row.createdByName,
+    media,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
   };
@@ -808,9 +811,14 @@ export async function listProjectIssuesForUser(
     ...input,
     page,
   });
+  const issueMediaByIssueId = await listIssueMediaForIssueIds(
+    issueRows.map((issueRow) => issueRow.id)
+  );
 
   return {
-    issues: issueRows.map(toIssueListItem),
+    issues: issueRows.map((issueRow) =>
+      toIssueListItem(issueRow, issueMediaByIssueId.get(issueRow.id) ?? [])
+    ),
     summary,
     moduleCounts,
     pagination: {

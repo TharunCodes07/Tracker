@@ -28,6 +28,11 @@ export const ISSUE_STATUS_OPTIONS = [
   { value: "review", label: "In Review" },
   { value: "done", label: "Done" },
 ] as const;
+export const ISSUE_MEDIA_TYPES = ["image", "video"] as const;
+export const ISSUE_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+export const ISSUE_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+export const ISSUE_IMAGE_ACCEPT = "image/*";
+export const ISSUE_VIDEO_ACCEPT = "video/*";
 export const ISSUE_EXCEL_HEADERS = [
   "No",
   "Main Module",
@@ -47,6 +52,7 @@ export const ISSUE_EXCEL_HEADERS = [
 
 export type IssuePriority = (typeof ISSUE_PRIORITY_OPTIONS)[number]["value"];
 export type IssueStatus = (typeof ISSUE_STATUS_OPTIONS)[number]["value"];
+export type IssueMediaType = (typeof ISSUE_MEDIA_TYPES)[number];
 export type IssueResolutionFilter =
   | "all"
   | "open"
@@ -91,6 +97,25 @@ export interface IssueClassListItem {
   updatedAt: string;
 }
 
+export interface IssueMediaListItem {
+  id: string;
+  mediaType: IssueMediaType;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UploadedIssueMediaInput {
+  mediaType: IssueMediaType;
+  bucket: string;
+  objectKey: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 export interface IssueListItem {
   id: string;
   no: number;
@@ -123,6 +148,7 @@ export interface IssueListItem {
   deployment: boolean;
   createdBy: string | null;
   createdByName: string | null;
+  media: IssueMediaListItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -194,6 +220,11 @@ export interface IssueMutationResponse {
   message: string;
 }
 
+export interface IssueMediaUploadResponse {
+  media: UploadedIssueMediaInput;
+  message: string;
+}
+
 export interface IssueDeleteResponse {
   deletedIssueId: string;
   message: string;
@@ -226,9 +257,13 @@ export interface CreateIssueInput {
   fixedDate?: string | null;
   development?: boolean;
   deployment?: boolean;
+  media?: UploadedIssueMediaInput[];
+  removeMediaIds?: string[];
 }
 
-export type UpdateIssueInput = CreateIssueInput;
+export interface UpdateIssueInput extends CreateIssueInput {
+  mediaChanged?: boolean;
+}
 
 export interface IssueExcelRow {
   rowNumber?: number;

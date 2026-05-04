@@ -21,6 +21,8 @@ import {
   createEmptyIssueForm,
   createIssueFormFromIssue,
   createIssuePayload,
+  hasIssueFormChanges,
+  hasIssueMediaChanges,
   normalizeSorting,
   requestJson,
   sortIssueClasses,
@@ -46,6 +48,8 @@ import {
   type IssueListItem,
   type IssueListPagination,
   type IssueListSummary,
+  type IssueMediaUploadResponse,
+  type IssueMediaType,
   type IssueMutationResponse,
   type IssuePriority,
   type IssueResolutionFilter,
@@ -54,6 +58,7 @@ import {
   type ProjectIssuesWorkspaceResponse,
   type ProjectModuleListItem,
   type ProjectModuleMutationResponse,
+  type UploadedIssueMediaInput,
 } from "@/routes/issues/types";
 import type { TeamMemberListItem, TeamListItem } from "@/routes/teams/types";
 
@@ -89,6 +94,18 @@ function createEmptySubModuleDraft(): SubModuleDraft {
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+function getMediaTypeForFile(file: File): IssueMediaType | null {
+  if (file.type.startsWith("image/")) {
+    return "image";
+  }
+
+  if (file.type.startsWith("video/")) {
+    return "video";
+  }
+
+  return null;
 }
 
 export function useProjectIssuesWorkspace() {
@@ -890,6 +907,45 @@ export function useProjectIssuesWorkspace() {
     });
   }
 
+  async function uploadIssueMediaFiles(values: IssueFormValues): Promise<UploadedIssueMediaInput[]> {
+    if (!team || !project) {
+      return [];
+    }
+
+    const uploads: UploadedIssueMediaInput[] = [];
+
+    for (const file of values.mediaFiles) {
+      const mediaType = getMediaTypeForFile(file);
+
+      if (!mediaType) {
+        toast.error(`${file.name} is not an image or video.`);
+        continue;
+      }
+
+      const formData = new FormData();
+
+      formData.set("mediaType", mediaType);
+      formData.set("file", file);
+
+      const response = await fetch(`/api/teams/${team.id}/projects/${project.id}/issue-media`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json().catch(() => null)) as
+        | IssueMediaUploadResponse
+        | { message?: string }
+        | null;
+
+      if (!response.ok || !data || !("media" in data)) {
+        throw new Error(data?.message ?? `Could not upload ${file.name}.`);
+      }
+
+      uploads.push(data.media);
+    }
+
+    return uploads;
+  }
+
   function handleCreateIssue(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -904,11 +960,14 @@ export function useProjectIssuesWorkspace() {
 
     startCreateIssueTransition(async () => {
       try {
+        const uploadedMedia = hasIssueMediaChanges(issueForm)
+          ? await uploadIssueMediaFiles(issueForm)
+          : [];
         const data = await requestJson<IssueMutationResponse>(
           `/api/teams/${team.id}/projects/${project.id}/issues`,
           {
             method: "POST",
-            body: JSON.stringify(createIssuePayload(issueForm)),
+            body: JSON.stringify(createIssuePayload(issueForm, uploadedMedia)),
           }
         );
 
@@ -934,17 +993,28 @@ export function useProjectIssuesWorkspace() {
       return;
     }
 
+    if (!hasIssueFormChanges(editingIssue, issueForm)) {
+      closeIssueDialog(false);
+      toast.info("No changes to save.");
+      return;
+    }
+
     startUpdateIssueTransition(async () => {
       try {
+        const mediaChanged = hasIssueMediaChanges(issueForm);
+        const uploadedMedia = mediaChanged ? await uploadIssueMediaFiles(issueForm) : [];
         const data = await requestJson<IssueMutationResponse>(
           `/api/teams/${team.id}/projects/${project.id}/issues/${editingIssue.id}`,
           {
             method: "PATCH",
-            body: JSON.stringify(createIssuePayload(issueForm)),
+            body: JSON.stringify(createIssuePayload(issueForm, uploadedMedia, { mediaChanged })),
           }
         );
+        const updatedIssue = mediaChanged
+          ? data.issue
+          : { ...data.issue, media: editingIssue.media };
 
-        replaceIssueInLoadedRows(data.issue);
+        replaceIssueInLoadedRows(updatedIssue);
         markIssueDataChanged();
         closeIssueDialog(false);
         refreshIssues(0);
@@ -1172,11 +1242,14 @@ export function useProjectIssuesWorkspace() {
     }
 
     try {
+      const uploadedMedia = hasIssueMediaChanges(values)
+        ? await uploadIssueMediaFiles(values)
+        : [];
       const data = await requestJson<IssueMutationResponse>(
         `/api/teams/${team.id}/projects/${project.id}/issues`,
         {
           method: "POST",
-          body: JSON.stringify(createIssuePayload(values)),
+          body: JSON.stringify(createIssuePayload(values, uploadedMedia)),
         }
       );
 
@@ -1201,16 +1274,24 @@ export function useProjectIssuesWorkspace() {
       return false;
     }
 
+    if (!hasIssueFormChanges(issue, values)) {
+      toast.info("No changes to save.");
+      return true;
+    }
+
     try {
+      const mediaChanged = hasIssueMediaChanges(values);
+      const uploadedMedia = mediaChanged ? await uploadIssueMediaFiles(values) : [];
       const data = await requestJson<IssueMutationResponse>(
         `/api/teams/${team.id}/projects/${project.id}/issues/${issue.id}`,
         {
           method: "PATCH",
-          body: JSON.stringify(createIssuePayload(values)),
+          body: JSON.stringify(createIssuePayload(values, uploadedMedia, { mediaChanged })),
         }
       );
+      const updatedIssue = mediaChanged ? data.issue : { ...data.issue, media: issue.media };
 
-      replaceIssueInLoadedRows(data.issue);
+      replaceIssueInLoadedRows(updatedIssue);
       markIssueDataChanged();
       refreshIssues();
       toast.success(data.message);

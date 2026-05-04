@@ -34,8 +34,10 @@ services:
   seaweed-s3:
     image: chrislusf/seaweedfs:latest
     container_name: seaweed-s3
-    command: 's3 -filer="seaweed-filer:8888" -port=8333'
+    command: 's3 -filer="seaweed-filer:8888" -port=8333 -ip.bind=0.0.0.0 -config=/etc/seaweedfs/s3.json'
     depends_on:
       - seaweed-filer
     ports:
       - "7644:8333"
+    volumes:
+      - ./s3.json:/etc/seaweedfs/s3.json:ro

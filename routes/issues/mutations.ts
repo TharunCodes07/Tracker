@@ -4,12 +4,25 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db";
-import { issueClasses, issues, projectModules, user, usersToTeams } from "@/db/schema";
+import {
+  issueClasses,
+  issues,
+  projectModules,
+  teamsToProjects,
+  user,
+  usersToTeams,
+} from "@/db/schema";
 import { RouteError } from "@/routes/errors";
 import { getProjectForTeam } from "@/routes/projects/queries";
 import { getTeamForUser, listTeamMembersForUser } from "@/routes/teams/queries";
 import type { TeamMemberListItem } from "@/routes/teams/types";
 
+import {
+  deleteIssueMediaObjectsForIssue,
+  listIssueMediaForIssueId,
+  updateIssueMediaRecords,
+  validateIssueMediaMutationInput,
+} from "./media";
 import { ensureDefaultIssueClassesForProject } from "./queries";
 import {
   GENERAL_MODULE_FILTER_VALUE,
@@ -23,6 +36,7 @@ import {
   type IssueExcelImportResponse,
   type IssueExcelSheet,
   type IssueListItem,
+  type IssueMediaListItem,
   type IssuePriority,
   type IssueStatus,
   type ProjectModuleListItem,
@@ -43,6 +57,25 @@ export interface UpdateIssueResult {
   issue: IssueListItem;
   previousAssignedTo: string | null;
   previousStatus: IssueStatus;
+}
+
+interface IssueUpdateContext {
+  no: number;
+  moduleId: string | null;
+  issueClassId: string | null;
+  assignedTo: string | null;
+  reviewedBy: string | null;
+  testedBy: string | null;
+  status: IssueStatus;
+  reopenedAt: Date | string | null;
+}
+
+interface ValidateIssueFieldsOptions {
+  ensureDefaultIssueClasses?: boolean;
+  existingIssue?: Pick<
+    IssueUpdateContext,
+    "moduleId" | "issueClassId" | "assignedTo" | "reviewedBy" | "testedBy"
+  >;
 }
 
 function toIsoString(value: Date | string) {
@@ -228,7 +261,7 @@ function toIssueListItem(row: {
   createdByName: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
-}): IssueListItem {
+}, media: IssueMediaListItem[] = []): IssueListItem {
   return {
     id: row.id,
     no: Number(row.no ?? 0),
@@ -261,6 +294,7 @@ function toIssueListItem(row: {
     deployment: Boolean(row.deployment),
     createdBy: row.createdBy,
     createdByName: row.createdByName,
+    media,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
   };
@@ -327,7 +361,16 @@ async function getIssueClassRecord(projectId: string, issueClassId: string) {
   return issueClass ? toIssueClassListItem(issueClass) : null;
 }
 
-async function getIssueRecord(projectId: string, issueId: string) {
+interface GetIssueRecordOptions {
+  includeMedia?: boolean;
+  media?: IssueMediaListItem[];
+}
+
+async function getIssueRecord(
+  projectId: string,
+  issueId: string,
+  options: GetIssueRecordOptions = {}
+) {
   const assignedUser = alias(user, "assigned_user");
   const reviewedUser = alias(user, "reviewed_user");
   const testedUser = alias(user, "tested_user");
@@ -398,24 +441,122 @@ async function getIssueRecord(projectId: string, issueId: string) {
     .where(and(eq(issues.projectId, projectId), eq(issues.id, issueId)))
     .limit(1);
 
-  return issue ? toIssueListItem(issue) : null;
+  if (!issue) {
+    return null;
+  }
+
+  const media =
+    options.media ??
+    (options.includeMedia === false ? [] : await listIssueMediaForIssueId(issue.id));
+
+  return toIssueListItem(issue, media);
 }
 
 async function requireIssueInEditableProject(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  issueId: string
+  issueId: string,
+  options?: GetIssueRecordOptions
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
 
-  const issue = await getIssueRecord(projectId, issueId);
+  const issue = await getIssueRecord(projectId, issueId, options);
 
   if (!issue) {
     throw new RouteError("Issue not found.", 404);
   }
 
   return issue;
+}
+
+function canEditWithAccessLevel(accessLevel: string | null) {
+  return accessLevel === "owner" || accessLevel === "edit";
+}
+
+async function requireIssueUpdateContext(
+  actor: IssueActor,
+  teamId: string,
+  projectId: string,
+  issueId: string
+): Promise<IssueUpdateContext> {
+  const [context] = await db
+    .select({
+      accessLevel: usersToTeams.accessLevel,
+      no: issues.no,
+      moduleId: issues.moduleId,
+      issueClassId: issues.issueClassId,
+      assignedTo: issues.assignedTo,
+      reviewedBy: issues.reviewedBy,
+      testedBy: issues.testedBy,
+      status: issues.status,
+      reopenedAt: issues.reopenedAt,
+    })
+    .from(usersToTeams)
+    .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
+    .innerJoin(
+      issues,
+      and(eq(issues.projectId, teamsToProjects.projectId), eq(issues.id, issueId))
+    )
+    .where(
+      and(
+        eq(usersToTeams.userId, actor.id),
+        eq(usersToTeams.teamId, teamId),
+        eq(usersToTeams.membershipStatus, "active"),
+        eq(teamsToProjects.projectId, projectId),
+        eq(issues.projectId, projectId)
+      )
+    )
+    .limit(1);
+
+  if (context) {
+    if (!canEditWithAccessLevel(context.accessLevel)) {
+      throw new RouteError("You only have read access to this team.", 403);
+    }
+
+    return {
+      no: Number(context.no ?? 0),
+      moduleId: context.moduleId,
+      issueClassId: context.issueClassId,
+      assignedTo: context.assignedTo,
+      reviewedBy: context.reviewedBy,
+      testedBy: context.testedBy,
+      status: context.status as IssueStatus,
+      reopenedAt: context.reopenedAt,
+    };
+  }
+
+  const [membership] = await db
+    .select({ accessLevel: usersToTeams.accessLevel })
+    .from(usersToTeams)
+    .where(
+      and(
+        eq(usersToTeams.userId, actor.id),
+        eq(usersToTeams.teamId, teamId),
+        eq(usersToTeams.membershipStatus, "active")
+      )
+    )
+    .limit(1);
+
+  if (!membership) {
+    throw new RouteError("Team not found.", 404);
+  }
+
+  if (!canEditWithAccessLevel(membership.accessLevel)) {
+    throw new RouteError("You only have read access to this team.", 403);
+  }
+
+  const [projectLink] = await db
+    .select({ projectId: teamsToProjects.projectId })
+    .from(teamsToProjects)
+    .where(and(eq(teamsToProjects.teamId, teamId), eq(teamsToProjects.projectId, projectId)))
+    .limit(1);
+
+  if (!projectLink) {
+    throw new RouteError("Project not found.", 404);
+  }
+
+  throw new RouteError("Issue not found.", 404);
 }
 
 async function assertUsersBelongToTeam(teamId: string, userIds: string[]) {
@@ -453,9 +594,12 @@ async function actorHasTeamRole(actor: IssueActor, teamId: string, role: "develo
 async function validateIssueFields(
   teamId: string,
   projectId: string,
-  input: CreateIssueInput | UpdateIssueInput
+  input: CreateIssueInput | UpdateIssueInput,
+  options: ValidateIssueFieldsOptions = {}
 ) {
-  await ensureDefaultIssueClassesForProject(projectId);
+  if (options.ensureDefaultIssueClasses !== false) {
+    await ensureDefaultIssueClassesForProject(projectId);
+  }
 
   const title = normalizeName(input.title, "Issue title", ISSUE_TITLE_MAX_LENGTH);
   const description = normalizeDescription(input.description);
@@ -481,32 +625,47 @@ async function validateIssueFields(
     throw new RouteError("Choose an issue class.");
   }
 
-  if (moduleId) {
-    const [moduleRecord] = await db
+  const moduleChanged = moduleId !== options.existingIssue?.moduleId;
+  const issueClassChanged = issueClassId !== options.existingIssue?.issueClassId;
+  const moduleRecordPromise = moduleId && moduleChanged
+    ? db
       .select({ id: projectModules.id })
       .from(projectModules)
       .where(and(eq(projectModules.projectId, projectId), eq(projectModules.id, moduleId)))
-      .limit(1);
+      .limit(1)
+    : Promise.resolve(moduleId ? [{ id: moduleId }] : []);
 
-    if (!moduleRecord) {
-      throw new RouteError("Choose a valid project module.");
-    }
+  const issueClassPromise = issueClassChanged
+    ? db
+      .select({ id: issueClasses.id })
+      .from(issueClasses)
+      .where(and(eq(issueClasses.projectId, projectId), eq(issueClasses.id, issueClassId)))
+      .limit(1)
+    : Promise.resolve([{ id: issueClassId }]);
+
+  const teamUserIds = [
+    assignedTo !== options.existingIssue?.assignedTo ? assignedTo : null,
+    reviewedBy !== options.existingIssue?.reviewedBy ? reviewedBy : null,
+    testedBy !== options.existingIssue?.testedBy ? testedBy : null,
+  ].filter(
+    (value): value is string => Boolean(value)
+  );
+
+  const [moduleRows, issueClassRows] = await Promise.all([
+    moduleRecordPromise,
+    issueClassPromise,
+    assertUsersBelongToTeam(teamId, teamUserIds),
+  ]);
+  const [moduleRecord] = moduleRows;
+  const [issueClass] = issueClassRows;
+
+  if (moduleId && !moduleRecord) {
+    throw new RouteError("Choose a valid project module.");
   }
-
-  const [issueClass] = await db
-    .select({ id: issueClasses.id })
-    .from(issueClasses)
-    .where(and(eq(issueClasses.projectId, projectId), eq(issueClasses.id, issueClassId)))
-    .limit(1);
 
   if (!issueClass) {
     throw new RouteError("Choose a valid issue class.");
   }
-
-  await assertUsersBelongToTeam(
-    teamId,
-    [assignedTo, reviewedBy, testedBy].filter((value): value is string => Boolean(value))
-  );
 
   return {
     navigation,
@@ -525,6 +684,10 @@ async function validateIssueFields(
     priority,
     status,
   };
+}
+
+function hasIssueMediaChangeInput(input: UpdateIssueInput) {
+  return Boolean(input.mediaChanged === true || input.media?.length || input.removeMediaIds?.length);
 }
 
 function normalizeLookupValue(value: string) {
@@ -1164,6 +1327,11 @@ export async function createIssue(
     ...input,
     testedBy: input.testedBy || (actorIsTester ? actor.id : null),
   });
+  const hasMediaUploads = Boolean(input.media?.length);
+
+  if (hasMediaUploads) {
+    validateIssueMediaMutationInput(teamId, projectId, input.media);
+  }
 
   const nextIssueNo = await getNextIssueNo(projectId, validatedIssue.moduleId);
 
@@ -1176,6 +1344,16 @@ export async function createIssue(
       createdBy: actor.id,
     })
     .returning({ id: issues.id });
+
+  if (hasMediaUploads) {
+    await updateIssueMediaRecords({
+      actor,
+      teamId,
+      projectId,
+      issueId: createdIssue.id,
+      uploadedMedia: input.media,
+    });
+  }
 
   const issue = await getIssueRecord(projectId, createdIssue.id);
 
@@ -1193,8 +1371,16 @@ export async function updateIssue(
   issueId: string,
   input: UpdateIssueInput
 ): Promise<UpdateIssueResult> {
-  const existingIssue = await requireIssueInEditableProject(actor, teamId, projectId, issueId);
-  const validatedIssue = await validateIssueFields(teamId, projectId, input);
+  const mediaChanged = hasIssueMediaChangeInput(input);
+  const existingIssue = await requireIssueUpdateContext(actor, teamId, projectId, issueId);
+  const validatedIssue = await validateIssueFields(teamId, projectId, input, {
+    ensureDefaultIssueClasses: false,
+    existingIssue,
+  });
+
+  if (mediaChanged) {
+    validateIssueMediaMutationInput(teamId, projectId, input.media, input.removeMediaIds);
+  }
   const nextIssueNo =
     existingIssue.moduleId === validatedIssue.moduleId
       ? existingIssue.no
@@ -1223,7 +1409,18 @@ export async function updateIssue(
     })
     .where(and(eq(issues.projectId, projectId), eq(issues.id, issueId)));
 
-  const issue = await getIssueRecord(projectId, issueId);
+  if (mediaChanged) {
+    await updateIssueMediaRecords({
+      actor,
+      teamId,
+      projectId,
+      issueId,
+      uploadedMedia: input.media,
+      removeMediaIds: input.removeMediaIds,
+    });
+  }
+
+  const issue = await getIssueRecord(projectId, issueId, { includeMedia: mediaChanged });
 
   if (!issue) {
     throw new RouteError("Issue was updated but could not be loaded.", 500);
@@ -1242,8 +1439,11 @@ export async function deleteIssue(
   projectId: string,
   issueId: string
 ) {
-  const issue = await requireIssueInEditableProject(actor, teamId, projectId, issueId);
+  const issue = await requireIssueInEditableProject(actor, teamId, projectId, issueId, {
+    includeMedia: false,
+  });
 
+  await deleteIssueMediaObjectsForIssue(projectId, issueId);
   await db
     .delete(issues)
     .where(and(eq(issues.projectId, projectId), eq(issues.id, issueId)));

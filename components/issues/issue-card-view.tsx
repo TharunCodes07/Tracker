@@ -8,6 +8,7 @@ import {
   IssueReopenedBadge,
   IssueStatusBadge,
 } from "@/components/issues/issue-display";
+import { IssueMediaSummary } from "@/components/issues/issue-media";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -148,6 +149,12 @@ export function IssueCardView({
                     </Badge>
                   )}
                 </div>
+
+                <IssueMediaSummary
+                  issueId={issue.id}
+                  media={issue.media}
+                  className="justify-start"
+                />
 
                 <div className="space-y-1.5 text-xs">
                   {issue.navigation && (

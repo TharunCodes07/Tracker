@@ -2,6 +2,7 @@
 
 import type * as React from "react";
 
+import { IssueMediaPicker } from "@/components/issues/issue-media";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,6 +19,7 @@ import {
   ISSUE_PRIORITY_OPTIONS,
   ISSUE_STATUS_OPTIONS,
   type IssueClassListItem,
+  type IssueMediaListItem,
   type IssuePriority,
   type IssueStatus,
   type ProjectModuleListItem,
@@ -35,6 +37,7 @@ import type { TeamMemberListItem } from "@/routes/teams/types";
 const NONE_VALUE = "__none__";
 
 export interface IssueFormValues {
+  issueId: string;
   navigation: string;
   title: string;
   description: string;
@@ -51,6 +54,9 @@ export interface IssueFormValues {
   fixedDate: string;
   development: boolean;
   deployment: boolean;
+  media: IssueMediaListItem[];
+  mediaFiles: File[];
+  removeMediaIds: string[];
 }
 
 interface IssueDialogProps {
@@ -400,6 +406,15 @@ export function IssueDialog({
                 />
               </Field>
             </div>
+
+            <IssueMediaPicker
+              issueId={values.issueId}
+              media={values.media}
+              mediaFiles={values.mediaFiles}
+              removeMediaIds={values.removeMediaIds}
+              disabled={pending}
+              onChange={onChange}
+            />
 
           </FieldGroup>
           </div>

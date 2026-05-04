@@ -12,7 +12,9 @@ import type {
   IssueListSortField,
   IssuePriority,
   IssueResolutionFilter,
+  UpdateIssueInput,
   ProjectModuleListItem,
+  UploadedIssueMediaInput,
 } from "@/routes/issues/types";
 
 export const DEFAULT_SORTING: SortingState = [{ id: "updatedAt", desc: true }];
@@ -57,6 +59,7 @@ export function requestJson<TResponse>(input: RequestInfo, init?: RequestInit) {
 
 export function createEmptyIssueForm(defaultIssueClassId = ""): IssueFormValues {
   return {
+    issueId: "",
     navigation: "",
     title: "",
     description: "",
@@ -73,6 +76,9 @@ export function createEmptyIssueForm(defaultIssueClassId = ""): IssueFormValues 
     fixedDate: "",
     development: false,
     deployment: false,
+    media: [],
+    mediaFiles: [],
+    removeMediaIds: [],
   };
 }
 
@@ -81,6 +87,7 @@ export function createIssueFormFromIssue(
   defaultIssueClassId = ""
 ): IssueFormValues {
   return {
+    issueId: issue.id,
     navigation: issue.navigation ?? "",
     title: issue.title,
     description: issue.description ?? "",
@@ -97,10 +104,48 @@ export function createIssueFormFromIssue(
     fixedDate: toDateInputValue(issue.fixedDate),
     development: issue.development,
     deployment: issue.deployment,
+    media: issue.media,
+    mediaFiles: [],
+    removeMediaIds: [],
   };
 }
 
-export function createIssuePayload(values: IssueFormValues): CreateIssueInput {
+export function hasIssueMediaChanges(values: IssueFormValues) {
+  return values.mediaFiles.length > 0 || values.removeMediaIds.length > 0;
+}
+
+function normalizeComparableText(value: string | null | undefined) {
+  return value?.trim() ?? "";
+}
+
+export function hasIssueFormChanges(issue: IssueListItem, values: IssueFormValues) {
+  const moduleId = values.subModuleId || values.mainModuleId || "";
+
+  return (
+    normalizeComparableText(values.navigation) !== normalizeComparableText(issue.navigation) ||
+    normalizeComparableText(values.title) !== normalizeComparableText(issue.title) ||
+    normalizeComparableText(values.description) !== normalizeComparableText(issue.description) ||
+    moduleId !== (issue.moduleId ?? "") ||
+    values.issueClassId !== (issue.issueClassId ?? "") ||
+    values.priority !== issue.priority ||
+    values.status !== issue.status ||
+    values.assignedTo !== (issue.assignedTo ?? "") ||
+    values.reviewedBy !== (issue.reviewedBy ?? "") ||
+    normalizeComparableText(values.comments) !== normalizeComparableText(issue.comments) ||
+    normalizeComparableText(values.remark) !== normalizeComparableText(issue.remark) ||
+    values.testedBy !== (issue.testedBy ?? "") ||
+    values.fixedDate !== toDateInputValue(issue.fixedDate) ||
+    values.development !== issue.development ||
+    values.deployment !== issue.deployment ||
+    hasIssueMediaChanges(values)
+  );
+}
+
+export function createIssuePayload(
+  values: IssueFormValues,
+  uploadedMedia: UploadedIssueMediaInput[] = [],
+  options: { mediaChanged?: boolean } = {}
+): CreateIssueInput | UpdateIssueInput {
   return {
     navigation: values.navigation || null,
     title: values.title,
@@ -117,6 +162,9 @@ export function createIssuePayload(values: IssueFormValues): CreateIssueInput {
     fixedDate: values.fixedDate || null,
     development: values.development,
     deployment: values.deployment,
+    ...(uploadedMedia.length > 0 ? { media: uploadedMedia } : {}),
+    ...(values.removeMediaIds.length > 0 ? { removeMediaIds: values.removeMediaIds } : {}),
+    ...(options.mediaChanged ? { mediaChanged: true } : {}),
   };
 }
 

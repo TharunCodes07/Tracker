@@ -11,6 +11,7 @@ import {
   IssueReopenedBadge,
   IssueStatusBadge,
 } from "@/components/issues/issue-display";
+import { IssueMediaSummary } from "@/components/issues/issue-media";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
@@ -158,6 +159,18 @@ export function getIssueTableColumns({
       size: 120,
       meta: {
         label: "Type",
+      },
+    },
+    {
+      id: "media",
+      header: () => <div className="text-center">Media</div>,
+      cell: ({ row }) => (
+        <IssueMediaSummary issueId={row.original.id} media={row.original.media} compact />
+      ),
+      enableSorting: false,
+      size: 96,
+      meta: {
+        label: "Media",
       },
     },
     {

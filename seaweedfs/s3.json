@@ -1,0 +1,20 @@
+{
+  "identities": [
+    {
+      "name": "tracker-admin",
+      "credentials": [
+        {
+          "accessKey": "tracker",
+          "secretKey": "tracker-secret-123"
+        }
+      ],
+      "actions": [
+        "Admin",
+        "Read",
+        "Write",
+        "List",
+        "Tagging"
+      ]
+    }
+  ]
+}
