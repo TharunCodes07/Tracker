@@ -18,6 +18,12 @@ cp .env.example .env
 
 Set a real `BETTER_AUTH_SECRET` before sharing or deploying the app.
 
+For local development against the Postgres container, use:
+
+```env
+DATABASE_URL=postgres://postgres:postgres@localhost:7650/tracker
+```
+
 For local development with SeaweedFS running in Docker, keep:
 
 ```env
@@ -57,7 +63,7 @@ Keep the keys in this file aligned with `.env`.
 
 ## Run With Docker
 
-This starts Postgres, SeaweedFS, creates the S3 bucket, and runs the app:
+Use the root compose file as the one-stop startup path. It starts Postgres, syncs the database schema, starts the full SeaweedFS stack, and runs the app:
 
 ```bash
 docker compose up --build
@@ -75,7 +81,7 @@ Open:
 Start Postgres and SeaweedFS:
 
 ```bash
-docker compose up -d db seaweed-master seaweed-volume seaweed-filer seaweed-s3 seaweed-s3-init
+docker compose up -d db seaweed-master seaweed-volume seaweed-filer seaweed-s3
 ```
 
 Install dependencies and sync the database:
@@ -98,3 +104,4 @@ Open `http://localhost:3000`.
 - Issue images and videos are stored in SeaweedFS.
 - Postgres stores only media metadata.
 - Uploaded media is opened through a signed SeaweedFS URL, so the file does not stream through the Next.js app.
+- `seaweedfs/docker-compose.yaml` is only for running SeaweedFS by itself; the root `docker-compose.yml` already includes SeaweedFS for normal app startup.

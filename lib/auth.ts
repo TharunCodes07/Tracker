@@ -9,7 +9,13 @@ const authBaseURL =
   process.env.NEXT_PUBLIC_BETTER_AUTH_URL ??
   "http://localhost:3000";
 
-const authSecret = process.env.BETTER_AUTH_SECRET;
+const isProductionBuild =
+  process.env.NEXT_PHASE === "phase-production-build" ||
+  process.env.npm_lifecycle_event === "build";
+
+const authSecret =
+  process.env.BETTER_AUTH_SECRET ??
+  (isProductionBuild ? "build-time-only-better-auth-secret" : undefined);
 
 if (!authSecret) {
   throw new Error("BETTER_AUTH_SECRET is required.");

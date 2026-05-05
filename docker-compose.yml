@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "7650:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -64,24 +64,6 @@ services:
     volumes:
       - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
 
-  seaweed-s3-init:
-    image: amazon/aws-cli:2
-    container_name: tracker-seaweed-s3-init
-    depends_on:
-      - seaweed-s3
-    environment:
-      AWS_ACCESS_KEY_ID: ${SEAWEED_ACCESS_KEY:-tracker}
-      AWS_SECRET_ACCESS_KEY: ${SEAWEED_SECRET_KEY:-tracker-secret-123}
-      AWS_DEFAULT_REGION: ${SEAWEED_S3_REGION:-us-east-1}
-      SEAWEED_BUCKET: ${SEAWEED_BUCKET:-tracker-uploads}
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      until aws --endpoint-url http://seaweed-s3:8333 s3api list-buckets >/dev/null 2>&1; do
-        sleep 2;
-      done;
-      aws --endpoint-url http://seaweed-s3:8333 s3api head-bucket --bucket "$$SEAWEED_BUCKET" >/dev/null 2>&1 ||
-      aws --endpoint-url http://seaweed-s3:8333 s3 mb "s3://$$SEAWEED_BUCKET"
-
   app:
     build:
       context: .
@@ -91,8 +73,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      seaweed-s3-init:
-        condition: service_completed_successfully
+      seaweed-s3:
+        condition: service_started
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://postgres:postgres@db:5432/tracker
@@ -107,6 +89,7 @@ services:
       SEAWEED_BUCKET: ${SEAWEED_BUCKET:-tracker-uploads}
     ports:
       - "3000:3000"
+    command: ["sh", "-c", "pnpm db:push && pnpm start"]
 
 volumes:
   postgres_data:
