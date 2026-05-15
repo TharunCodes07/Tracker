@@ -45,6 +45,31 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
+    disableSignUp: true,
+  },
+  user: {
+    additionalFields: {
+      role: {
+        type: "string",
+        defaultValue: "USER",
+        input: false,
+      },
+      status: {
+        type: "string",
+        defaultValue: "ACTIVE",
+        input: false,
+      },
+      organizationId: {
+        type: "string",
+        required: false,
+        input: false,
+      },
+      mustChangePassword: {
+        type: "boolean",
+        defaultValue: false,
+        input: false,
+      },
+    },
   },
   plugins: [nextCookies()],
   secret: authSecret,

@@ -5,106 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1776405017932,
-      "tag": "0000_lazy_jetstream",
+      "when": 1778784431361,
+      "tag": "0000_blue_manta",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1776405475331,
-      "tag": "0001_odd_norman_osborn",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1776419413775,
-      "tag": "0002_even_quasar",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1776423498541,
-      "tag": "0003_fresh_ultragirl",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1776501912069,
-      "tag": "0004_sloppy_zaladane",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1776512502065,
-      "tag": "0005_misty_mariko_yashida",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1776513560615,
-      "tag": "0006_red_mimic",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1776583460045,
-      "tag": "0007_shallow_polaris",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1776612280517,
-      "tag": "0008_true_terrax",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1776676352499,
-      "tag": "0009_woozy_vampiro",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1776680409443,
-      "tag": "0010_clean_hobgoblin",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1776844407386,
-      "tag": "0011_fuzzy_stryfe",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1777527342225,
-      "tag": "0012_bored_mister_sinister",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1777544710502,
-      "tag": "0013_team_invites_status",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1777616378930,
-      "tag": "0014_issue_media",
+      "when": 1778784431362,
+      "tag": "0001_organization_rls",
       "breakpoints": true
     }
   ]

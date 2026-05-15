@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
+import { handleRouteError, readJsonBody, withRouteOrganization } from "@/routes/http";
 import {
   deleteProjectForTeam,
   updateProjectForTeam,
@@ -16,14 +16,15 @@ export async function PATCH(
   context: { params: Promise<{ teamId: string; projectId: string }> }
 ) {
   try {
-    const actor = await requireRouteUser(request);
-    const { teamId, projectId } = await context.params;
-    const body = await readJsonBody<UpdateProjectInput>(request);
-    const project = await updateProjectForTeam(actor, teamId, projectId, body);
+    return await withRouteOrganization(request, async (actor) => {
+      const { teamId, projectId } = await context.params;
+      const body = await readJsonBody<UpdateProjectInput>(request);
+      const project = await updateProjectForTeam(actor, teamId, projectId, body);
 
-    return NextResponse.json<ProjectMutationResponse>({
-      project,
-      message: `${project.name} has been updated.`,
+      return NextResponse.json<ProjectMutationResponse>({
+        project,
+        message: `${project.name} has been updated.`,
+      });
     });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the project request.");
@@ -35,13 +36,14 @@ export async function DELETE(
   context: { params: Promise<{ teamId: string; projectId: string }> }
 ) {
   try {
-    const actor = await requireRouteUser(request);
-    const { teamId, projectId } = await context.params;
-    const deletedProject = await deleteProjectForTeam(actor, teamId, projectId);
+    return await withRouteOrganization(request, async (actor) => {
+      const { teamId, projectId } = await context.params;
+      const deletedProject = await deleteProjectForTeam(actor, teamId, projectId);
 
-    return NextResponse.json<ProjectDeleteResponse>({
-      deletedProjectId: deletedProject.id,
-      message: `${deletedProject.name} has been removed.`,
+      return NextResponse.json<ProjectDeleteResponse>({
+        deletedProjectId: deletedProject.id,
+        message: `${deletedProject.name} has been removed.`,
+      });
     });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the project request.");

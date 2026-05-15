@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowRight, LoaderCircle } from "lucide-react";
@@ -31,9 +30,8 @@ const authCopy = {
     title: "Sign in to Tracker",
     description: "Use your email and password to continue to the workspace.",
     cta: "Sign In",
-    alternateLabel: "Need an account?",
-    alternateHref: "/signup",
-    alternateAction: "Create one",
+    alternateLabel: "Need access?",
+    alternateAction: "Ask an administrator to create your account.",
   },
   signup: {
     eyebrow: "Get Started",
@@ -41,8 +39,7 @@ const authCopy = {
     description: "Set up access for your team and start tracking work in one place.",
     cta: "Create Account",
     alternateLabel: "Already have an account?",
-    alternateHref: "/login",
-    alternateAction: "Sign in",
+    alternateAction: "Sign in from the login page.",
   },
 } as const;
 
@@ -237,13 +234,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         </form>
 
         <p className="mt-6 text-sm text-muted-foreground">
-          {copy.alternateLabel}{" "}
-          <Link
-            className="font-medium text-foreground underline-offset-4 transition-colors hover:text-emerald-500 hover:underline"
-            href={copy.alternateHref}
-          >
-            {copy.alternateAction}
-          </Link>
+          <span className="font-medium text-foreground">{copy.alternateLabel}</span>{" "}
+          {copy.alternateAction}
         </p>
       </CardContent>
     </Card>

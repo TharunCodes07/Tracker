@@ -64,6 +64,7 @@ export function ModuleNavigationSidebar({
     () => modules.filter((projectModule) => projectModule.parentModuleId === null),
     [modules]
   );
+
   const subModulesByParentId = useMemo(() => {
     const map = new Map<string, ProjectModuleListItem[]>();
 
@@ -220,11 +221,7 @@ export function ModuleNavigationSidebar({
             onClick={() => onCollapsedChange(!collapsed)}
             aria-label={collapsed ? "Expand modules sidebar" : "Collapse modules sidebar"}
           >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
         </div>
       </div>
@@ -346,11 +343,13 @@ export function ModuleNavigationSidebar({
                   selectedParentModuleIds.has(mainModule.id) ||
                   expandedMainModuleIds.includes(mainModule.id);
 
+                const hasSubModules = subModules.length > 0;
+
                 return (
                   <div key={mainModule.id} className="space-y-1.5">
                     <div
                       className={cn(
-                        "group flex items-center gap-1.5 rounded-xl border px-2.5 py-2 transition-colors",
+                        "group flex items-center gap-1.5 rounded-xl border px-2.5 py-2 transition-colors hover:bg-accent/60",
                         isMainModuleActive
                           ? "border-cyan-400/35 bg-cyan-400/12 text-foreground"
                           : "border-border/60 bg-background/55 text-foreground"
@@ -361,46 +360,59 @@ export function ModuleNavigationSidebar({
                         onClick={() => onToggleModule(mainModule.id)}
                         className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
                       >
-                        <div className="min-w-0 truncate text-sm font-medium">{mainModule.name}</div>
-                        <Badge variant={isMainModuleActive ? "secondary" : "outline"}>
+                        <div className="min-w-0 truncate text-sm font-medium">
+                          {mainModule.name}
+                        </div>
+
+                        <Badge
+                          variant={isMainModuleActive ? "secondary" : "outline"}
+                          className="shrink-0"
+                        >
                           {moduleIssueCountById.get(mainModule.id) ?? 0}
                         </Badge>
                       </button>
 
-                      {subModules.length > 0 ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="rounded-lg"
-                          onClick={() => toggleMainModuleExpansion(mainModule.id)}
-                          aria-label={
-                            isMainModuleExpanded
-                              ? `Collapse ${mainModule.name}`
-                              : `Expand ${mainModule.name}`
-                          }
-                        >
-                          <ChevronDown
-                            className={cn(
-                              "h-4 w-4 transition-transform",
-                              isMainModuleExpanded ? "rotate-180" : ""
-                            )}
-                          />
-                        </Button>
-                      ) : null}
+                      <div
+                        className={cn(
+                          "flex h-8 shrink-0 items-center justify-end overflow-hidden transition-[width] duration-200 ease-out",
+                          canEditProject ? "w-8 group-hover:w-[68px] focus-within:w-[68px]" : "w-8"
+                        )}
+                      >
+                        {canEditProject ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="shrink-0 rounded-lg opacity-0 -translate-x-1 scale-95 transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 group-hover:scale-100 focus-visible:opacity-100 focus-visible:translate-x-0 focus-visible:scale-100"
+                            onClick={() => onCreateSubModule(mainModule.id)}
+                            aria-label={`Create sub module under ${mainModule.name}`}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        ) : null}
 
-                      {canEditProject ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="rounded-lg opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                          onClick={() => onCreateSubModule(mainModule.id)}
-                          aria-label={`Create sub module under ${mainModule.name}`}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      ) : null}
+                        {hasSubModules ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="shrink-0 rounded-lg"
+                            onClick={() => toggleMainModuleExpansion(mainModule.id)}
+                            aria-label={
+                              isMainModuleExpanded
+                                ? `Collapse ${mainModule.name}`
+                                : `Expand ${mainModule.name}`
+                            }
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 transition-transform duration-200",
+                                isMainModuleExpanded ? "rotate-180" : ""
+                              )}
+                            />
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
 
                     {subModules.length > 0 && isMainModuleExpanded ? (
@@ -423,6 +435,7 @@ export function ModuleNavigationSidebar({
                               <div className="min-w-0 truncate text-sm text-muted-foreground">
                                 {subModule.name}
                               </div>
+
                               <Badge variant={isSubModuleActive ? "secondary" : "outline"}>
                                 {moduleIssueCountById.get(subModule.id) ?? 0}
                               </Badge>

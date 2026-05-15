@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/nav/side-navbar/side-navbar";
 import { NavigationControls } from "@/components/nav/controls/navigation-controls";
 import { DynamicBreadcrumb } from "@/components/nav/dynamic-breadcrumb";
 import { NotificationsMenu } from "@/components/nav/notifications-menu";
+import { AuthGuard } from "@/components/auth/auth-guard";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { requireServerSession } from "@/lib/auth-session";
 
@@ -31,7 +32,7 @@ export default async function AppModuleLayout({
           <div className="flex-1 overflow-auto">
             <div className="flex flex-col gap-4 p-4">
               <TooltipProvider>
-                {children}
+                <AuthGuard>{children}</AuthGuard>
               </TooltipProvider>
             </div>
           </div>

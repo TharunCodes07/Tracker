@@ -9,7 +9,7 @@ import type {
   TeamMutationResponse,
   TeamsListResponse,
 } from "@/routes/teams/types";
-import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
+import { handleRouteError, readJsonBody, withRouteOrganization } from "@/routes/http";
 import { createTeamForUser } from "@/routes/teams/mutations";
 import { listTeamsForUser } from "@/routes/teams/queries";
 
@@ -59,11 +59,12 @@ function readListTeamsInput(request: NextRequest): ListTeamsInput {
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await requireRouteUser(request);
-    const listInput = readListTeamsInput(request);
-    const teams = await listTeamsForUser(actor.id, listInput);
+    return await withRouteOrganization(request, async (actor) => {
+      const listInput = readListTeamsInput(request);
+      const teams = await listTeamsForUser(actor.id, listInput);
 
-    return NextResponse.json<TeamsListResponse>(teams);
+      return NextResponse.json<TeamsListResponse>(teams);
+    });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the team request.");
   }
@@ -71,19 +72,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: Request) {
   try {
-    const actor = await requireRouteUser(request);
-    const body = await readJsonBody<CreateTeamInput>(request);
-    const team = await createTeamForUser(actor, body);
+    return await withRouteOrganization(request, async (actor) => {
+      const body = await readJsonBody<CreateTeamInput>(request);
+      const team = await createTeamForUser(actor, body);
 
-    return NextResponse.json<TeamMutationResponse>(
-      {
-        team,
-        message: `${team.name} is ready.`,
-      },
-      {
-        status: 201,
-      }
-    );
+      return NextResponse.json<TeamMutationResponse>(
+        {
+          team,
+          message: `${team.name} is ready.`,
+        },
+        {
+          status: 201,
+        }
+      );
+    });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the team request.");
   }

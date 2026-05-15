@@ -29,6 +29,7 @@ const TEAM_DESCRIPTION_MAX_LENGTH = 280;
 
 export interface TeamActor {
   id: string;
+  organizationId?: string | null;
 }
 
 function normalizeTeamName(name: string) {
@@ -555,6 +556,10 @@ export async function inviteTeamMemberForUser(
 
   if (!invitedUser) {
     throw new RouteError("No user account matches that email address.", 404);
+  }
+
+  if (actor.organizationId && invitedUser.organizationId !== actor.organizationId) {
+    throw new RouteError("No user account matches that email address in this organization.", 404);
   }
 
   if (invitedUser.id === actor.id) {

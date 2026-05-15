@@ -1,6 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 
-import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
+import { withOrganizationScope } from "@/db";
+import { handleRouteError, readJsonBody, withRouteOrganization } from "@/routes/http";
 import { readListProjectIssuesInput } from "@/routes/issues/http";
 import { createIssue } from "@/routes/issues/mutations";
 import { listProjectIssuesForUser } from "@/routes/issues/queries";
@@ -17,16 +18,17 @@ export async function GET(
   context: { params: Promise<{ teamId: string; projectId: string }> }
 ) {
   try {
-    const actor = await requireRouteUser(request);
-    const { teamId, projectId } = await context.params;
-    const listInput = readListProjectIssuesInput(request);
-    const projectIssues = await listProjectIssuesForUser(actor.id, teamId, projectId, listInput);
+    return await withRouteOrganization(request, async (actor) => {
+      const { teamId, projectId } = await context.params;
+      const listInput = readListProjectIssuesInput(request);
+      const projectIssues = await listProjectIssuesForUser(actor.id, teamId, projectId, listInput);
 
-    if (!projectIssues) {
-      return NextResponse.json({ message: "Project not found." }, { status: 404 });
-    }
+      if (!projectIssues) {
+        return NextResponse.json({ message: "Project not found." }, { status: 404 });
+      }
 
-    return NextResponse.json<ProjectIssuesListResponse>(projectIssues);
+      return NextResponse.json<ProjectIssuesListResponse>(projectIssues);
+    });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the issue request.");
   }
@@ -37,63 +39,66 @@ export async function POST(
   context: { params: Promise<{ teamId: string; projectId: string }> }
 ) {
   try {
-    const actor = await requireRouteUser(request);
-    const { teamId, projectId } = await context.params;
-    const body = await readJsonBody<CreateIssueInput>(request);
-    const issue = await createIssue(actor, teamId, projectId, body);
-    const notificationEvents: NotificationEvent[] = [
-      {
-        type: "issue.created",
-        actorId: actor.id,
-        actorName: actor.name ?? "",
-        teamId,
-        projectId,
-        issueId: issue.id,
-        issueNo: issue.no,
-        issueTitle: issue.title,
-        assignedTo: issue.assignedTo,
-      },
-    ];
+    return await withRouteOrganization(request, async (actor) => {
+      const { teamId, projectId } = await context.params;
+      const body = await readJsonBody<CreateIssueInput>(request);
+      const issue = await createIssue(actor, teamId, projectId, body);
+      const notificationEvents: NotificationEvent[] = [
+        {
+          type: "issue.created",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          assignedTo: issue.assignedTo,
+        },
+      ];
 
-    if (issue.status === "review") {
-      notificationEvents.push({
-        type: "issue.marked_for_review",
-        actorId: actor.id,
-        actorName: actor.name ?? "",
-        teamId,
-        projectId,
-        issueId: issue.id,
-        issueNo: issue.no,
-        issueTitle: issue.title,
-        reviewerId: issue.reviewedBy,
-      });
-    }
-
-    if (issue.assignedTo) {
-      notificationEvents.push({
-        type: "issue.assigned",
-        actorId: actor.id,
-        actorName: actor.name ?? "",
-        teamId,
-        projectId,
-        issueId: issue.id,
-        issueNo: issue.no,
-        issueTitle: issue.title,
-        assigneeId: issue.assignedTo,
-      });
-    }
-
-    after(() => dispatchNotificationEvents(notificationEvents));
-
-    return NextResponse.json<IssueMutationResponse>(
-      {
-        issue,
-        message: `${issue.title} has been created.`,
-      },
-      {
-        status: 201,
+      if (issue.status === "review") {
+        notificationEvents.push({
+          type: "issue.marked_for_review",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          reviewerId: issue.reviewedBy,
+        });
       }
-    );
+
+      if (issue.assignedTo) {
+        notificationEvents.push({
+          type: "issue.assigned",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          assigneeId: issue.assignedTo,
+        });
+      }
+
+      if (actor.organizationId) {
+        after(() => withOrganizationScope(actor.organizationId!, () => dispatchNotificationEvents(notificationEvents)));
+      }
+
+      return NextResponse.json<IssueMutationResponse>(
+        {
+          issue,
+          message: `${issue.title} has been created.`,
+        },
+        {
+          status: 201,
+        }
+      );
+    });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the issue request.");
   }

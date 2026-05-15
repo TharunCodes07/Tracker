@@ -23,6 +23,19 @@ export const defaultNavigationConfig: NavigationConfig = {
         },
     },
     "/projects": { label: "Projects" },
+    "/admin": { label: "Admin" },
+    "/admin/organizations": {
+        label: "Organizations",
+        dynamicSegments: {
+            uuid: "Organization Details",
+        },
+    },
+    "/admin/users": {
+        label: "Users",
+        dynamicSegments: {
+            uuid: "User Details",
+        },
+    },
     "/course": {
         label: "Courses",
         dynamicSegments: {

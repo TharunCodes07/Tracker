@@ -13,7 +13,25 @@ import {
   varchar,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
+const currentOrganizationIdDefault = sql`nullif(current_setting('app.current_organization_id', true), '')::uuid`;
+
+export const organizations = pgTable(
+  'organizations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 255 }).notNull(),
+    slug: varchar('slug', { length: 80 }).notNull(),
+    createdBy: uuid('created_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('organizations_slug_unique').on(table.slug),
+    index('organizations_created_by_idx').on(table.createdBy),
+  ]
+);
 
 export const user = pgTable(
   'user',
@@ -23,10 +41,36 @@ export const user = pgTable(
     email: varchar('email', { length: 255 }).notNull(),
     emailVerified: boolean('email_verified').notNull().default(false),
     image: text('image'),
+    role: varchar('role', { length: 16 }).notNull().default('USER'),
+    status: varchar('status', { length: 16 }).notNull().default('ACTIVE'),
+    organizationId: uuid('organization_id').references(() => organizations.id, {
+      onDelete: 'set null',
+    }),
+    mustChangePassword: boolean('must_change_password').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex('user_email_unique').on(table.email)]
+);
+
+export const organizationMembers = pgTable(
+  'organization_members',
+  {
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    role: varchar('role', { length: 16 }).notNull().default('USER'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.organizationId, table.userId] }),
+    index('organization_members_organization_id_idx').on(table.organizationId),
+    index('organization_members_user_id_idx').on(table.userId),
+    index('organization_members_role_idx').on(table.role),
+  ]
 );
 
 export const session = pgTable(
@@ -97,6 +141,9 @@ export const verification = pgTable(
 
 export const teams = pgTable('teams', {
   id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .default(currentOrganizationIdDefault)
+    .references(() => organizations.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
   visibility: varchar('visibility', { length: 16 }).notNull().default('private'),
@@ -106,6 +153,7 @@ export const teams = pgTable('teams', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 },
   (table) => [
+    index('teams_organization_id_idx').on(table.organizationId),
     uniqueIndex('teams_join_code_unique').on(table.joinCode),
     index('teams_created_by_idx').on(table.createdBy),
   ]
@@ -113,15 +161,23 @@ export const teams = pgTable('teams', {
 
 export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .default(currentOrganizationIdDefault)
+    .references(() => organizations.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+},
+  (table) => [index('projects_organization_id_idx').on(table.organizationId)]
+);
 
 export const projectModules = pgTable(
   'project_modules',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
@@ -134,6 +190,7 @@ export const projectModules = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    index('project_modules_organization_id_idx').on(table.organizationId),
     index('project_modules_project_id_idx').on(table.projectId),
     index('project_modules_parent_module_id_idx').on(table.parentModuleId),
     uniqueIndex('project_modules_project_parent_name_unique').on(
@@ -148,6 +205,9 @@ export const issueClasses = pgTable(
   'issue_classes',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
@@ -158,6 +218,7 @@ export const issueClasses = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    index('issue_classes_organization_id_idx').on(table.organizationId),
     index('issue_classes_project_id_idx').on(table.projectId),
     uniqueIndex('issue_classes_project_name_unique').on(table.projectId, table.name),
   ]
@@ -166,6 +227,9 @@ export const issueClasses = pgTable(
 export const usersToTeams = pgTable(
   'users_to_teams',
   {
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     userId: uuid('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
@@ -177,6 +241,7 @@ export const usersToTeams = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.userId, t.teamId] }),
+    index('users_to_teams_organization_id_idx').on(t.organizationId),
     index('users_to_teams_user_id_idx').on(t.userId),
     index('users_to_teams_user_id_membership_status_idx').on(t.userId, t.membershipStatus),
     index('users_to_teams_team_id_idx').on(t.teamId),
@@ -187,6 +252,9 @@ export const usersToTeams = pgTable(
 export const teamMemberRoles = pgTable(
   'team_member_roles',
   {
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     userId: uuid('user_id').notNull(),
     teamId: uuid('team_id').notNull(),
     role: varchar('role', { length: 24 }).notNull(),
@@ -198,6 +266,7 @@ export const teamMemberRoles = pgTable(
       foreignColumns: [usersToTeams.userId, usersToTeams.teamId],
       name: 'team_member_roles_membership_fk',
     }).onDelete('cascade'),
+    index('team_member_roles_organization_id_idx').on(t.organizationId),
     index('team_member_roles_user_id_idx').on(t.userId),
     index('team_member_roles_team_id_idx').on(t.teamId),
     index('team_member_roles_role_idx').on(t.role),
@@ -207,6 +276,9 @@ export const teamMemberRoles = pgTable(
 export const teamsToProjects = pgTable(
   'teams_to_projects',
   {
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     teamId: uuid('team_id')
       .notNull()
       .references(() => teams.id, { onDelete: 'cascade' }),
@@ -216,6 +288,7 @@ export const teamsToProjects = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.teamId, t.projectId] }),
+    index('teams_to_projects_organization_id_idx').on(t.organizationId),
     index('teams_to_projects_team_id_idx').on(t.teamId),
     index('teams_to_projects_project_id_idx').on(t.projectId),
   ]
@@ -225,6 +298,9 @@ export const issues = pgTable(
   'issues',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
@@ -253,6 +329,7 @@ export const issues = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    index('issues_organization_id_idx').on(table.organizationId),
     index('issues_project_id_idx').on(table.projectId),
     index('issues_module_id_idx').on(table.moduleId),
     index('issues_issue_class_id_idx').on(table.issueClassId),
@@ -271,6 +348,9 @@ export const issueMedia = pgTable(
   'issue_media',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
@@ -288,6 +368,7 @@ export const issueMedia = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    index('issue_media_organization_id_idx').on(table.organizationId),
     index('issue_media_project_id_idx').on(table.projectId),
     index('issue_media_issue_id_idx').on(table.issueId),
     index('issue_media_media_type_idx').on(table.mediaType),
@@ -299,6 +380,9 @@ export const notifications = pgTable(
   'notifications',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
     userId: uuid('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
@@ -313,6 +397,7 @@ export const notifications = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    index('notifications_organization_id_idx').on(table.organizationId),
     index('notifications_user_id_idx').on(table.userId),
     index('notifications_user_id_read_at_idx').on(table.userId, table.readAt),
     index('notifications_user_id_created_at_idx').on(table.userId, table.createdAt),

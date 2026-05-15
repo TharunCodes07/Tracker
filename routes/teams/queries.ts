@@ -600,6 +600,12 @@ export async function searchTeamInviteCandidatesForUser(
     };
   }
 
+  const [actor] = await db
+    .select({ organizationId: user.organizationId })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+
   const candidateMembership = alias(usersToTeams, "candidate_membership");
   const pattern = `%${normalizedQuery}%`;
   const membershipOrder = sql<number>`case
@@ -622,7 +628,13 @@ export async function searchTeamInviteCandidatesForUser(
       candidateMembership,
       and(eq(candidateMembership.userId, user.id), eq(candidateMembership.teamId, teamId))
     )
-    .where(and(ne(user.id, userId), or(ilike(user.email, pattern), ilike(user.name, pattern))))
+    .where(
+      and(
+        ne(user.id, userId),
+        actor?.organizationId ? eq(user.organizationId, actor.organizationId) : sql`false`,
+        or(ilike(user.email, pattern), ilike(user.name, pattern))
+      )
+    )
     .orderBy(asc(membershipOrder), asc(user.email))
     .limit(8);
 

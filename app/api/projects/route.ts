@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { handleRouteError, requireRouteUser } from "@/routes/http";
+import { handleRouteError, withRouteOrganization } from "@/routes/http";
 import { listProjectsForUser } from "@/routes/projects/queries";
 import { USER_PROJECT_LIST_SORT_FIELDS } from "@/routes/projects/types";
 import type {
@@ -56,11 +56,12 @@ function readListProjectsInput(request: NextRequest): ListUserProjectsInput {
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await requireRouteUser(request);
-    const listInput = readListProjectsInput(request);
-    const projects = await listProjectsForUser(actor.id, listInput);
+    return await withRouteOrganization(request, async (actor) => {
+      const listInput = readListProjectsInput(request);
+      const projects = await listProjectsForUser(actor.id, listInput);
 
-    return NextResponse.json<UserProjectsResponse>(projects);
+      return NextResponse.json<UserProjectsResponse>(projects);
+    });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the project request.");
   }

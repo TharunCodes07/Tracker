@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { handleRouteError, requireRouteUser } from "@/routes/http";
+import { handleRouteError, withRouteOrganization } from "@/routes/http";
 import { listNotificationsForUser } from "@/routes/notifications/queries";
 import type { NotificationsResponse } from "@/routes/notifications/types";
 
@@ -37,14 +37,15 @@ function parseUnreadOnly(value: string | null) {
 
 export async function GET(request: NextRequest) {
   try {
-    const actor = await requireRouteUser(request);
-    const notificationCenter = await listNotificationsForUser(actor.id, {
-      page: parsePositiveInteger(request.nextUrl.searchParams.get("page"), DEFAULT_PAGE),
-      pageSize: parsePageSize(request.nextUrl.searchParams),
-      unreadOnly: parseUnreadOnly(request.nextUrl.searchParams.get("unreadOnly")),
-    });
+    return await withRouteOrganization(request, async (actor) => {
+      const notificationCenter = await listNotificationsForUser(actor.id, {
+        page: parsePositiveInteger(request.nextUrl.searchParams.get("page"), DEFAULT_PAGE),
+        pageSize: parsePageSize(request.nextUrl.searchParams),
+        unreadOnly: parseUnreadOnly(request.nextUrl.searchParams.get("unreadOnly")),
+      });
 
-    return NextResponse.json<NotificationsResponse>(notificationCenter);
+      return NextResponse.json<NotificationsResponse>(notificationCenter);
+    });
   } catch (error) {
     return handleRouteError(
       error,

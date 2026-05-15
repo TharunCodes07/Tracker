@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { handleRouteError, requireRouteUser } from "@/routes/http";
+import { handleRouteError, withRouteOrganization } from "@/routes/http";
 import {
   approveTeamJoinRequestForUser,
   rejectTeamJoinRequestForUser,
@@ -12,13 +12,14 @@ export async function PATCH(
   context: { params: Promise<{ teamId: string; memberUserId: string }> }
 ) {
   try {
-    const actor = await requireRouteUser(request);
-    const { teamId, memberUserId } = await context.params;
-    const approvedMemberUserId = await approveTeamJoinRequestForUser(actor, teamId, memberUserId);
+    return await withRouteOrganization(request, async (actor) => {
+      const { teamId, memberUserId } = await context.params;
+      const approvedMemberUserId = await approveTeamJoinRequestForUser(actor, teamId, memberUserId);
 
-    return NextResponse.json<TeamJoinRequestMutationResponse>({
-      memberUserId: approvedMemberUserId,
-      message: "Join request approved.",
+      return NextResponse.json<TeamJoinRequestMutationResponse>({
+        memberUserId: approvedMemberUserId,
+        message: "Join request approved.",
+      });
     });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while approving the join request.");
@@ -30,13 +31,14 @@ export async function DELETE(
   context: { params: Promise<{ teamId: string; memberUserId: string }> }
 ) {
   try {
-    const actor = await requireRouteUser(request);
-    const { teamId, memberUserId } = await context.params;
-    const rejectedMemberUserId = await rejectTeamJoinRequestForUser(actor, teamId, memberUserId);
+    return await withRouteOrganization(request, async (actor) => {
+      const { teamId, memberUserId } = await context.params;
+      const rejectedMemberUserId = await rejectTeamJoinRequestForUser(actor, teamId, memberUserId);
 
-    return NextResponse.json<TeamJoinRequestMutationResponse>({
-      memberUserId: rejectedMemberUserId,
-      message: "Join request declined.",
+      return NextResponse.json<TeamJoinRequestMutationResponse>({
+        memberUserId: rejectedMemberUserId,
+        message: "Join request declined.",
+      });
     });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while declining the join request.");

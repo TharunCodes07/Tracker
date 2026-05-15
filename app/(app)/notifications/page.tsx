@@ -13,7 +13,7 @@ import {
 import { TeamInviteNotificationAction } from "@/components/notifications/team-invite-notification-action";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { requireServerSession } from "@/lib/auth-session";
+import { requireServerSession, withServerOrganization } from "@/lib/auth-session";
 import { cn } from "@/lib/utils";
 import { listNotificationsForUser } from "@/routes/notifications/queries";
 import type { NotificationListItem } from "@/routes/notifications/types";
@@ -108,16 +108,23 @@ export default async function NotificationsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const session = await requireServerSession();
+  const session = await requireServerSession({
+    roles: ["ADMIN", "USER"],
+    organizationRequired: true,
+  });
   const resolvedSearchParams = await searchParams;
   const unreadOnly = parseUnreadOnly(resolvedSearchParams.unreadOnly);
   const page = parsePositiveInteger(resolvedSearchParams.page, DEFAULT_PAGE);
   const pageSize = parsePositiveInteger(resolvedSearchParams.pageSize, DEFAULT_PAGE_SIZE);
-  const notificationCenter = await listNotificationsForUser(session.user.id, {
-    page,
-    pageSize,
-    unreadOnly,
-  });
+  const notificationCenter = await withServerOrganization(
+    () =>
+      listNotificationsForUser(session.user.id, {
+        page,
+        pageSize,
+        unreadOnly,
+      }),
+    { roles: ["ADMIN", "USER"] }
+  );
 
   return (
     <div className="space-y-5">

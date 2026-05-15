@@ -1,6 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 
-import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
+import { withOrganizationScope } from "@/db";
+import { handleRouteError, readJsonBody, withRouteOrganization } from "@/routes/http";
 import { dispatchNotificationEvents } from "@/routes/notifications/service";
 import type { NotificationEvent } from "@/routes/notifications/types";
 import { createProjectForTeam } from "@/routes/projects/mutations";
@@ -64,16 +65,17 @@ export async function GET(
   context: { params: Promise<{ teamId: string }> }
 ) {
   try {
-    const actor = await requireRouteUser(request);
-    const { teamId } = await context.params;
-    const listInput = readListTeamProjectsInput(request);
-    const teamProjects = await getTeamProjectsForUser(actor.id, teamId, listInput);
+    return await withRouteOrganization(request, async (actor) => {
+      const { teamId } = await context.params;
+      const listInput = readListTeamProjectsInput(request);
+      const teamProjects = await getTeamProjectsForUser(actor.id, teamId, listInput);
 
-    if (!teamProjects) {
-      return NextResponse.json({ message: "Team not found." }, { status: 404 });
-    }
+      if (!teamProjects) {
+        return NextResponse.json({ message: "Team not found." }, { status: 404 });
+      }
 
-    return NextResponse.json<TeamProjectsResponse>(teamProjects);
+      return NextResponse.json<TeamProjectsResponse>(teamProjects);
+    });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the project request.");
   }
@@ -84,32 +86,35 @@ export async function POST(
   context: { params: Promise<{ teamId: string }> }
 ) {
   try {
-    const actor = await requireRouteUser(request);
-    const { teamId } = await context.params;
-    const body = await readJsonBody<CreateProjectInput>(request);
-    const project = await createProjectForTeam(actor, teamId, body);
-    const notificationEvents: NotificationEvent[] = [
-      {
-        type: "project.created",
-        actorId: actor.id,
-        actorName: actor.name ?? "",
-        teamId,
-        projectId: project.id,
-        projectName: project.name,
-      },
-    ];
+    return await withRouteOrganization(request, async (actor) => {
+      const { teamId } = await context.params;
+      const body = await readJsonBody<CreateProjectInput>(request);
+      const project = await createProjectForTeam(actor, teamId, body);
+      const notificationEvents: NotificationEvent[] = [
+        {
+          type: "project.created",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId: project.id,
+          projectName: project.name,
+        },
+      ];
 
-    after(() => dispatchNotificationEvents(notificationEvents));
-
-    return NextResponse.json<ProjectMutationResponse>(
-      {
-        project,
-        message: `${project.name} is ready.`,
-      },
-      {
-        status: 201,
+      if (actor.organizationId) {
+        after(() => withOrganizationScope(actor.organizationId!, () => dispatchNotificationEvents(notificationEvents)));
       }
-    );
+
+      return NextResponse.json<ProjectMutationResponse>(
+        {
+          project,
+          message: `${project.name} is ready.`,
+        },
+        {
+          status: 201,
+        }
+      );
+    });
   } catch (error) {
     return handleRouteError(error, "Something went wrong while handling the project request.");
   }

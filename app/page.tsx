@@ -39,14 +39,9 @@ export default function Home() {
                   </Link>
                 </Button>
 
-                <Button
-                  asChild
-                  variant="outline"
-                  size="lg"
-                  className="h-11 w-full rounded-xl border-[#1F2937] bg-[#111827] px-5 text-[0.94rem] text-[#E5E7EB] hover:border-cyan-400/55 hover:bg-[#1A2434] hover:text-[#E5E7EB] sm:w-auto"
-                >
-                  <Link href="/signup">Create Account</Link>
-                </Button>
+                <p className="text-sm text-[#9CA3AF]">
+                  Accounts are created by your organization administrator.
+                </p>
               </div>
             </div>
           </div>

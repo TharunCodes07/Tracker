@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { handleRouteError, readJsonBody, requireRouteUser } from "@/routes/http";
+import { handleRouteError, readJsonBody, withRouteOrganization } from "@/routes/http";
 import { createIssueClass } from "@/routes/issues/mutations";
 import type {
   CreateIssueClassInput,
@@ -12,20 +12,21 @@ export async function POST(
   context: { params: Promise<{ teamId: string; projectId: string }> }
 ) {
   try {
-    const actor = await requireRouteUser(request);
-    const { teamId, projectId } = await context.params;
-    const body = await readJsonBody<CreateIssueClassInput>(request);
-    const issueClass = await createIssueClass(actor, teamId, projectId, body);
+    return await withRouteOrganization(request, async (actor) => {
+      const { teamId, projectId } = await context.params;
+      const body = await readJsonBody<CreateIssueClassInput>(request);
+      const issueClass = await createIssueClass(actor, teamId, projectId, body);
 
-    return NextResponse.json<IssueClassMutationResponse>(
-      {
-        issueClass,
-        message: `${issueClass.name} can now be used on issues.`,
-      },
-      {
-        status: 201,
-      }
-    );
+      return NextResponse.json<IssueClassMutationResponse>(
+        {
+          issueClass,
+          message: `${issueClass.name} can now be used on issues.`,
+        },
+        {
+          status: 201,
+        }
+      );
+    });
   } catch (error) {
     return handleRouteError(
       error,

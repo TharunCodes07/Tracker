@@ -18,7 +18,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     LayoutDashboard,
-    Settings,
     Moon,
     Sun,
     LogOut,
@@ -28,6 +27,8 @@ import {
     UsersRound,
     FolderKanban,
     Zap,
+    Building2,
+    UserCog,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -47,41 +48,48 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const navGroups = [
+const roleNavItems = [
     {
-        label: "Main",
-        items: [
-            {
-                title: "Dashboard",
-                url: "/dashboard",
-                icon: LayoutDashboard,
-                color: "text-blue-500",
-            },
-            {
-                title: "Projects",
-                url: "/projects",
-                icon: FolderKanban,
-                color: "text-cyan-500",
-            },
-            {
-                title: "Teams",
-                url: "/teams",
-                icon: UsersRound,
-                color: "text-emerald-500",
-            },
-            
-        ],
-    },  
+        title: "Dashboard",
+        url: "/dashboard",
+        icon: LayoutDashboard,
+        color: "text-blue-500",
+        roles: ["SUPER_ADMIN", "ADMIN", "USER"],
+    },
     {
-        label: "System",
-        items: [
-            {
-                title: "Settings",
-                url: "/settings",
-                icon: Settings,
-                color: "text-slate-500",
-            },
-        ],
+        title: "Teams",
+        url: "/teams",
+        icon: UsersRound,
+        color: "text-emerald-500",
+        roles: ["ADMIN", "USER"],
+    },
+    {
+        title: "Projects",
+        url: "/projects",
+        icon: FolderKanban,
+        color: "text-cyan-500",
+        roles: ["ADMIN", "USER"],
+    },
+    {
+        title: "Users",
+        url: "/admin/users",
+        icon: UserCog,
+        color: "text-amber-500",
+        roles: ["SUPER_ADMIN", "ADMIN"],
+    },
+    {
+        title: "Organizations",
+        url: "/admin/organizations",
+        icon: Building2,
+        color: "text-violet-500",
+        roles: ["SUPER_ADMIN"],
+    },
+];
+
+const fallbackNavGroups = [
+    {
+        label: "Navigation",
+        items: roleNavItems.filter((item) => item.roles.includes("USER")),
     },
 ];
 
@@ -124,6 +132,15 @@ export function AppSidebar() {
     const { open } = useSidebar();
     const [mounted, setMounted] = useState(false);
     const recentProjects = useRecentProjects(5);
+    const role = (session?.user as { role?: string } | undefined)?.role ?? "USER";
+    const navGroups = isPending
+        ? fallbackNavGroups
+        : [
+              {
+                  label: "Navigation",
+                  items: roleNavItems.filter((item) => item.roles.includes(role)),
+              },
+          ].filter((group) => group.items.length > 0);
 
     // This is a valid use case for detecting client-side mounting to prevent hydration mismatches
     useEffect(() => {
@@ -249,7 +266,7 @@ export function AppSidebar() {
                     </div>
                 ))}
 
-                {recentProjects.length > 0 ? (
+                {role === "USER" && recentProjects.length > 0 ? (
                     <>
                         <SidebarSeparator className={sidebarSectionSeparatorClassName} />
 
