@@ -122,7 +122,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
           count(${issues.id}) filter (where ${issues.status} <> 'done') as integer
         )`,
         pendingTestIssues: sql<number>`cast(
-          count(${issues.id}) filter (where ${issues.status} = 'done' and ${issues.testedBy} is null) as integer
+          count(${issues.id}) filter (where ${issues.status} = 'testing') as integer
         )`,
         criticalIssues: sql<number>`cast(
           count(${issues.id}) filter (where ${issues.priority} = 'critical') as integer
@@ -163,7 +163,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
           count(${issues.id}) filter (where ${issues.status} <> 'done') as integer
         )`,
         pendingTestIssues: sql<number>`cast(
-          count(${issues.id}) filter (where ${issues.status} = 'done' and ${issues.testedBy} is null) as integer
+          count(${issues.id}) filter (where ${issues.status} = 'testing') as integer
         )`,
         criticalIssues: sql<number>`cast(
           count(${issues.id}) filter (where ${issues.priority} = 'critical') as integer
@@ -180,7 +180,7 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
           sql`count(${issues.id}) filter (where ${issues.status} <> 'done')`
         ),
         desc(
-          sql`count(${issues.id}) filter (where ${issues.status} = 'done' and ${issues.testedBy} is null)`
+          sql`count(${issues.id}) filter (where ${issues.status} = 'testing')`
         ),
         desc(count(issues.id)),
         projects.name

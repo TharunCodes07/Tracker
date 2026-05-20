@@ -8,15 +8,19 @@ import { sql } from "drizzle-orm";
 import { unscopedDb as db } from "../db";
 import {
   account,
-  issueClasses,
+  issueActivity,
+  issueComments,
+  issueLinks,
   issueMedia,
   issues,
   notifications,
   organizationMembers,
   organizations,
-  projectModules,
+  projectComponents,
+  projectReleases,
   projects,
   session,
+  sprints,
   teamMemberRoles,
   teams,
   teamsToProjects,
@@ -32,8 +36,12 @@ const SUPER_ADMIN_PASSWORD = process.env.SEED_SUPER_ADMIN_PASSWORD ?? "SuperAdmi
 const RLS_TABLES = [
   "teams",
   "projects",
-  "project_modules",
-  "issue_classes",
+  "project_components",
+  "project_releases",
+  "sprints",
+  "issue_comments",
+  "issue_activity",
+  "issue_links",
   "users_to_teams",
   "team_member_roles",
   "teams_to_projects",
@@ -58,9 +66,13 @@ async function cleanDatabase() {
   await db.transaction(async (tx) => {
     await tx.delete(issueMedia);
     await tx.delete(notifications);
+    await tx.delete(issueLinks);
+    await tx.delete(issueActivity);
+    await tx.delete(issueComments);
     await tx.delete(issues);
-    await tx.delete(issueClasses);
-    await tx.delete(projectModules);
+    await tx.delete(sprints);
+    await tx.delete(projectReleases);
+    await tx.delete(projectComponents);
     await tx.delete(teamsToProjects);
     await tx.delete(teamMemberRoles);
     await tx.delete(usersToTeams);

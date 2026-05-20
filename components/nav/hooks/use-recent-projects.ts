@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 const RECENT_PROJECTS_STORAGE_KEY = "tracker-recent-projects";
 const RECENT_PROJECTS_EVENT_NAME = "tracker:recent-projects-changed";
-const MAX_RECENT_PROJECTS = 6;
+const MAX_RECENT_PROJECTS = 5;
 
 export interface RecentProjectEntry {
   teamId: string;

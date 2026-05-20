@@ -17,9 +17,11 @@ export type UserProjectListSortDirection = "asc" | "desc";
 export interface ProjectListItem {
   id: string;
   name: string;
+  keyPrefix: string;
   description: string | null;
   issueCount: number;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserProjectListItem extends ProjectListItem {
@@ -88,10 +90,12 @@ export interface ProjectDeleteResponse {
 
 export interface CreateProjectInput {
   name: string;
+  keyPrefix?: string | null;
   description?: string | null;
 }
 
 export interface UpdateProjectInput {
   name: string;
+  keyPrefix?: string | null;
   description?: string | null;
 }

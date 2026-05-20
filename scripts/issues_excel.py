@@ -16,9 +16,8 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 HEADERS = [
     "No",
-    "Main Module",
-    "Sub Module",
-    "Navigation",
+    "Module",
+    "Component",
     "Issue",
     "Priority",
     "Assigned to",
@@ -28,12 +27,19 @@ HEADERS = [
     "Tested By",
     "Fixed Date",
     "Development",
-    "Deployement",
+    "Deployment",
+    "Epic",
+    "Sprint",
+    "Release",
 ]
 
 HEADER_ALIASES = {
     "no": "no",
-    "navigation": "navigation",
+    "module": "moduleName",
+    "mainmodule": "moduleName",
+    "component": "componentName",
+    "submodule": "componentName",
+    "navigation": "componentName",
     "issue": "title",
     "priority": "priority",
     "assignedto": "assignedToName",
@@ -42,9 +48,12 @@ HEADER_ALIASES = {
     "remark": "remark",
     "testedby": "testedByName",
     "fixeddate": "fixedDate",
-    "development": "development",
-    "deployement": "deployment",
-    "deployment": "deployment",
+    "development": "developmentStatus",
+    "deployement": "deploymentStatus",
+    "deployment": "deploymentStatus",
+    "epic": "epicTitle",
+    "sprint": "sprintName",
+    "release": "releaseName",
 }
 
 COLUMN_WIDTHS = {
@@ -62,6 +71,9 @@ COLUMN_WIDTHS = {
     "L": 14,
     "M": 14,
     "N": 14,
+    "O": 24,
+    "P": 20,
+    "Q": 20,
 }
 
 PRIORITY_STYLES = {
@@ -246,9 +258,8 @@ def build_workbook(raw_payload: Any) -> Workbook:
             worksheet.append(
                 [
                     row.get("no"),
-                    row.get("mainModuleName"),
-                    row.get("subModuleName"),
-                    row.get("navigation"),
+                    row.get("moduleName"),
+                    row.get("componentName"),
                     row.get("title"),
                     row.get("priority"),
                     row.get("assignedToName"),
@@ -257,8 +268,11 @@ def build_workbook(raw_payload: Any) -> Workbook:
                     row.get("remark"),
                     row.get("testedByName"),
                     date_value,
-                    "Yes" if row.get("development") else "No",
-                    "Yes" if row.get("deployment") else "No",
+                    row.get("developmentStatus"),
+                    row.get("deploymentStatus"),
+                    row.get("epicTitle"),
+                    row.get("sprintName"),
+                    row.get("releaseName"),
                 ]
             )
 
@@ -269,7 +283,7 @@ def build_workbook(raw_payload: Any) -> Workbook:
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
         for row in worksheet.iter_rows(min_row=2):
-            priority_cell = row[5]
+            priority_cell = row[4]
             priority_key = normalize_priority_key(priority_cell.value)
             priority_style = PRIORITY_STYLES.get(priority_key)
 
@@ -278,12 +292,12 @@ def build_workbook(raw_payload: Any) -> Workbook:
                 priority_cell.font = priority_style["font"]
 
             priority_cell.alignment = Alignment(horizontal="center", vertical="center")
+            row[10].alignment = Alignment(horizontal="center", vertical="center")
             row[11].alignment = Alignment(horizontal="center", vertical="center")
             row[12].alignment = Alignment(horizontal="center", vertical="center")
-            row[13].alignment = Alignment(horizontal="center", vertical="center")
 
-            if row[11].value:
-                row[11].number_format = "yyyy-mm-dd"
+            if row[10].value:
+                row[10].number_format = "yyyy-mm-dd"
 
         for column_name, width in COLUMN_WIDTHS.items():
             worksheet.column_dimensions[column_name].width = width
@@ -351,7 +365,8 @@ def import_rows(input_path: Path, output_path: Path) -> None:
             header
             for header_key, header in (
                 ("no", "No"),
-                ("navigation", "Navigation"),
+                ("moduleName", "Module"),
+                ("componentName", "Component"),
                 ("title", "Issue"),
                 ("priority", "Priority"),
                 ("assignedToName", "Assigned to"),
@@ -360,8 +375,11 @@ def import_rows(input_path: Path, output_path: Path) -> None:
                 ("remark", "Remark"),
                 ("testedByName", "Tested By"),
                 ("fixedDate", "Fixed Date"),
-                ("development", "Development"),
-                ("deployment", "Deployement"),
+                ("developmentStatus", "Development"),
+                ("deploymentStatus", "Deployment"),
+                ("epicTitle", "Epic"),
+                ("sprintName", "Sprint"),
+                ("releaseName", "Release"),
             )
             if header_key not in canonical_headers
         ]
@@ -377,7 +395,8 @@ def import_rows(input_path: Path, output_path: Path) -> None:
             row_payload: dict[str, Any] = {
                 "rowNumber": row_number,
                 "no": None,
-                "navigation": None,
+                "moduleName": None,
+                "componentName": None,
                 "title": None,
                 "priority": None,
                 "assignedToName": None,
@@ -386,8 +405,11 @@ def import_rows(input_path: Path, output_path: Path) -> None:
                 "remark": None,
                 "testedByName": None,
                 "fixedDate": None,
-                "development": None,
-                "deployment": None,
+                "developmentStatus": None,
+                "deploymentStatus": None,
+                "epicTitle": None,
+                "sprintName": None,
+                "releaseName": None,
             }
 
             is_empty = True
@@ -403,8 +425,8 @@ def import_rows(input_path: Path, output_path: Path) -> None:
                     row_payload["no"] = normalize_number(cell_value)
                 elif header_key == "fixedDate":
                     row_payload["fixedDate"] = normalize_date(cell_value)
-                elif header_key in {"development", "deployment"}:
-                    row_payload[header_key] = normalize_boolean(cell_value)
+                elif header_key in {"developmentStatus", "deploymentStatus"}:
+                    row_payload[header_key] = normalize_text(cell_value)
                 else:
                     row_payload[header_key] = normalize_text(cell_value)
 

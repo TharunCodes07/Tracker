@@ -39,15 +39,19 @@ function toIsoString(value: Date | string) {
 function toProjectListItem(row: {
   id: string;
   name: string;
+  keyPrefix: string;
   description: string | null;
   createdAt: Date | string;
+  updatedAt: Date | string;
   issueCount: number | string | null;
 }): ProjectListItem {
   return {
     id: row.id,
     name: row.name,
+    keyPrefix: row.keyPrefix,
     description: row.description,
     createdAt: toIsoString(row.createdAt),
+    updatedAt: toIsoString(row.updatedAt),
     issueCount: Number(row.issueCount ?? 0),
   };
 }
@@ -55,8 +59,10 @@ function toProjectListItem(row: {
 function toUserProjectListItem(row: {
   id: string;
   name: string;
+  keyPrefix: string;
   description: string | null;
   createdAt: Date | string;
+  updatedAt: Date | string;
   issueCount: number | string | null;
   teamId: string;
   teamName: string;
@@ -70,8 +76,10 @@ function toUserProjectListItem(row: {
   return {
     id: row.id,
     name: row.name,
+    keyPrefix: row.keyPrefix,
     description: row.description,
     createdAt: toIsoString(row.createdAt),
+    updatedAt: toIsoString(row.updatedAt),
     issueCount: Number(row.issueCount ?? 0),
     teamId: row.teamId,
     teamName: row.teamName,
@@ -228,8 +236,10 @@ async function getProjectRowsForTeam(teamId: string, input: ListTeamProjectsInpu
     .select({
       id: projects.id,
       name: projects.name,
+      keyPrefix: projects.keyPrefix,
       description: projects.description,
       createdAt: projects.createdAt,
+      updatedAt: projects.updatedAt,
       issueCount: issueCountValue.as("issue_count"),
     })
     .from(teamsToProjects)
@@ -267,8 +277,10 @@ async function getProjectRowsForUser(userId: string, input: ListUserProjectsInpu
     .select({
       id: projects.id,
       name: projects.name,
+      keyPrefix: projects.keyPrefix,
       description: projects.description,
       createdAt: projects.createdAt,
+      updatedAt: projects.updatedAt,
       issueCount: issueCountValue.as("issue_count"),
       teamId: accessibleUserProjects.teamId,
       teamName: accessibleUserProjects.teamName,
@@ -361,8 +373,10 @@ export async function getProjectForTeam(userId: string, teamId: string, projectI
     .select({
       id: projects.id,
       name: projects.name,
+      keyPrefix: projects.keyPrefix,
       description: projects.description,
       createdAt: projects.createdAt,
+      updatedAt: projects.updatedAt,
       issueCount: issueCountValue.as("issue_count"),
     })
     .from(teamsToProjects)

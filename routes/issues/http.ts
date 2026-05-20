@@ -5,19 +5,23 @@ import type {
   IssueListSortDirection,
   IssueListSortField,
   IssuePriority,
+  IssueReporterFilterValue,
   IssueResolutionFilter,
+  IssueStatus,
+  IssueTestedByFilterValue,
+  IssueType,
   ListProjectIssuesInput,
 } from "@/routes/issues/types";
 import {
-  GENERAL_MODULE_FILTER_VALUE,
   ISSUE_LIST_SORT_FIELDS,
   ISSUE_PRIORITY_OPTIONS,
-  UNCLASSIFIED_ISSUE_TYPE_FILTER_VALUE,
+  ISSUE_STATUS_OPTIONS,
+  ISSUE_TYPE_OPTIONS,
 } from "@/routes/issues/types";
 
 const DEFAULT_PAGE = 1;
-const DEFAULT_PAGE_SIZE = 10;
-const MAX_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 250;
 const MAX_SEARCH_LENGTH = 120;
 
 function parsePositiveInteger(value: string | null, fallback: number) {
@@ -50,56 +54,59 @@ function parseResolution(value: string | null): IssueResolutionFilter {
     case "review":
     case "resolved":
     case "reopened":
-      return value;
-    case "resolved_pending_test":
-      return "review";
     case "all":
+      return value;
     default:
       return "all";
   }
 }
 
-function parsePriorityFilters(values: string[]): IssuePriority[] {
-  const allowedPriorities = new Set(ISSUE_PRIORITY_OPTIONS.map((option) => option.value));
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
 
-  return Array.from(
-    new Set(
-      values.filter((value): value is IssuePriority =>
-        allowedPriorities.has(value as IssuePriority)
-      )
-    )
+function parseIssueTypes(values: string[]): IssueType[] {
+  const allowed = new Set(ISSUE_TYPE_OPTIONS.map((option) => option.value));
+
+  return uniqueStrings(values).filter((value): value is IssueType =>
+    allowed.has(value as IssueType)
+  );
+}
+
+function parseStatuses(values: string[]): IssueStatus[] {
+  const allowed = new Set<string>(ISSUE_STATUS_OPTIONS.map((option) => option.value));
+
+  return uniqueStrings(values).filter((value): value is IssueStatus =>
+    allowed.has(value)
+  );
+}
+
+function parsePriorities(values: string[]): IssuePriority[] {
+  const allowed = new Set(ISSUE_PRIORITY_OPTIONS.map((option) => option.value));
+
+  return uniqueStrings(values).filter((value): value is IssuePriority =>
+    allowed.has(value as IssuePriority)
   );
 }
 
 function parseAssigneeFilters(values: string[]): IssueAssigneeFilterValue[] {
-  return Array.from(
-    new Set(
-      values.filter(
-        (value): value is IssueAssigneeFilterValue =>
-          value === "current-user" || value === "unassigned"
-      )
-    )
+  return uniqueStrings(values).filter(
+    (value): value is IssueAssigneeFilterValue =>
+      value === "current-user" || value === "unassigned"
   );
 }
 
-function parseSpecialAwareFilters(values: string[], specialValue: string) {
-  const seenValues = new Set<string>();
-  const normalizedValues: string[] = [];
+function parseReporterFilters(values: string[]): IssueReporterFilterValue[] {
+  return uniqueStrings(values).filter(
+    (value): value is IssueReporterFilterValue => value === "current-user"
+  );
+}
 
-  for (const value of values) {
-    if (!value || seenValues.has(value)) {
-      continue;
-    }
-
-    seenValues.add(value);
-    normalizedValues.push(value);
-  }
-
-  if (seenValues.has(specialValue)) {
-    return normalizedValues;
-  }
-
-  return normalizedValues.filter((value) => value !== specialValue);
+function parseTestedByFilters(values: string[]): IssueTestedByFilterValue[] {
+  return uniqueStrings(values).filter(
+    (value): value is IssueTestedByFilterValue =>
+      value === "current-user" || value === "untested"
+  );
 }
 
 export function readListProjectIssuesInput(
@@ -112,23 +119,32 @@ export function readListProjectIssuesInput(
   const { searchParams } = request.nextUrl;
   const defaultPageSize = options?.defaultPageSize ?? DEFAULT_PAGE_SIZE;
   const maxPageSize = options?.maxPageSize ?? MAX_PAGE_SIZE;
+  const issueTypeFilters = parseIssueTypes([
+    ...searchParams.getAll("typeFilter"),
+    ...searchParams.getAll("issueTypeFilter"),
+  ]);
+  const moduleFilters = uniqueStrings(searchParams.getAll("moduleFilter"));
+  const componentFilters = uniqueStrings(searchParams.getAll("componentFilter"));
 
   return {
     page: parsePositiveInteger(searchParams.get("page"), DEFAULT_PAGE),
     pageSize: Math.min(parsePositiveInteger(searchParams.get("pageSize"), defaultPageSize), maxPageSize),
     search: searchParams.get("search")?.trim().slice(0, MAX_SEARCH_LENGTH) ?? "",
     resolution: parseResolution(searchParams.get("resolution")),
-    moduleFilters: parseSpecialAwareFilters(
-      searchParams.getAll("moduleFilter"),
-      GENERAL_MODULE_FILTER_VALUE
-    ),
-    issueTypeFilters: parseSpecialAwareFilters(
-      searchParams.getAll("issueTypeFilter"),
-      UNCLASSIFIED_ISSUE_TYPE_FILTER_VALUE
-    ),
-    priorityFilters: parsePriorityFilters(searchParams.getAll("priorityFilter")),
+    typeFilters: issueTypeFilters,
+    statusFilters: parseStatuses(searchParams.getAll("statusFilter")),
+    moduleFilters,
+    componentFilters,
+    epicFilters: uniqueStrings(searchParams.getAll("epicFilter")),
+    releaseFilters: uniqueStrings(searchParams.getAll("releaseFilter")),
+    sprintFilters: uniqueStrings(searchParams.getAll("sprintFilter")),
+    priorityFilters: parsePriorities(searchParams.getAll("priorityFilter")),
     assigneeFilters: parseAssigneeFilters(searchParams.getAll("assigneeFilter")),
+    reporterFilters: parseReporterFilters(searchParams.getAll("reporterFilter")),
+    testedByFilters: parseTestedByFilters(searchParams.getAll("testedByFilter")),
+    backlogOnly: searchParams.get("backlog") === "true",
     sortBy: parseSortBy(searchParams.get("sortBy")),
     sortDirection: parseSortDirection(searchParams.get("sortDirection")),
+    issueTypeFilters,
   };
 }

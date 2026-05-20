@@ -17,6 +17,7 @@ import {
     type HeaderContext,
     type OnChangeFn,
     type Header,
+    type Row,
 } from "@tanstack/react-table";
 
 import {
@@ -46,7 +47,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { GripVertical } from "lucide-react";
+import { GripVertical, Maximize2, Minimize2 } from "lucide-react";
 
 export type DataTableColumnTextMode = "default" | "truncate" | "wrap" | "full";
 export type DataTableVisualMode = "default" | "excel";
@@ -131,6 +132,9 @@ export type DataTableProps<TData, TValue> = {
     defaultSorting?: SortingState;
     initialFilter?: string;
     enableRowSelection?: boolean;
+    rowSelection?: RowSelectionState;
+    onRowSelectionChange?: OnChangeFn<RowSelectionState>;
+    getRowId?: (originalRow: TData, index: number, parent?: Row<TData>) => string;
     isLoading?: boolean;
     skeletonRowCount?: number;
 
@@ -154,6 +158,8 @@ export type DataTableProps<TData, TValue> = {
     toolbarExtras?: React.ReactNode;
     /** Additional elements to render at the far end of the toolbar */
     toolbarEndExtras?: React.ReactNode;
+    /** Rendered below the toolbar when one or more visible rows are selected. */
+    selectionToolbar?: (selectedRows: TData[]) => React.ReactNode;
 
     visualMode?: DataTableVisualMode;
     fullTextColumnIds?: string[];
@@ -161,6 +167,7 @@ export type DataTableProps<TData, TValue> = {
     showRowNumbers?: boolean;
     showToolbar?: boolean;
     showColumnViewControl?: boolean;
+    enableFullscreen?: boolean;
     showPagination?: boolean;
     maxTableHeight?: string;
     className?: string;
@@ -225,6 +232,9 @@ export function DataTable<TData, TValue>({
     defaultSorting = [],
     initialFilter = "",
     enableRowSelection = false,
+    rowSelection: cRowSelection,
+    onRowSelectionChange: cOnRowSelectionChange,
+    getRowId,
     isLoading = false,
     skeletonRowCount = 10,
 
@@ -246,12 +256,14 @@ export function DataTable<TData, TValue>({
 
     toolbarExtras,
     toolbarEndExtras,
+    selectionToolbar,
     visualMode = "default",
     fullTextColumnIds = [],
     columnTextModes,
     showRowNumbers = false,
     showToolbar = true,
     showColumnViewControl = true,
+    enableFullscreen = false,
     showPagination = true,
     maxTableHeight,
     className,
@@ -270,6 +282,7 @@ export function DataTable<TData, TValue>({
     const [iPageIndex, iSetPageIndex] = React.useState<number>(0);
     const [iPageSize, iSetPageSize] = React.useState<number>(initialPageSize);
     const [columnSizing, setColumnSizing] = React.useState({});
+    const [isFullscreen, setIsFullscreen] = React.useState(false);
 
     const sorting = cSorting ?? iSorting;
     const pageIndex = cPageIndex ?? iPageIndex;
@@ -278,7 +291,7 @@ export function DataTable<TData, TValue>({
 
     const columnFilters = iColumnFilters;
     const columnVisibility = cColumnVisibility ?? iColumnVisibility;
-    const rowSelection = iRowSelection;
+    const rowSelection = cRowSelection ?? iRowSelection;
     const isExcelMode = visualMode === "excel";
     const fullTextColumnIdSet = React.useMemo(
         () => new Set(fullTextColumnIds),
@@ -375,6 +388,7 @@ export function DataTable<TData, TValue>({
             columnSizing,
         },
 
+        getRowId,
         onColumnSizingChange: setColumnSizing,
         columnResizeMode: "onChange",
         enableColumnResizing: true,
@@ -399,7 +413,8 @@ export function DataTable<TData, TValue>({
 
         onRowSelectionChange: (updater) => {
             const next = typeof updater === "function" ? updater(rowSelection) : updater;
-            iSetRowSelection(next);
+            if (cOnRowSelectionChange) cOnRowSelectionChange(next);
+            else iSetRowSelection(next);
         },
 
         onPaginationChange: (updater) => {
@@ -428,7 +443,13 @@ export function DataTable<TData, TValue>({
     });
 
     const showToolbarRow =
-        showToolbar && (filterColumn || toolbarExtras || showColumnViewControl || toolbarEndExtras);
+        showToolbar &&
+        (filterColumn ||
+            toolbarExtras ||
+            showColumnViewControl ||
+            toolbarEndExtras ||
+            (enableFullscreen && isExcelMode));
+    const selectedRows = table.getSelectedRowModel().rows.map((row) => row.original);
 
     const resolveTextMode = (columnId: string, meta: DataTableColumnMeta) =>
         columnTextModes?.[columnId] ??
@@ -442,6 +463,8 @@ export function DataTable<TData, TValue>({
                     : isExcelMode
                       ? "space-y-3"
                       : "space-y-4",
+                isFullscreen &&
+                    "fixed inset-3 z-50 flex min-h-0 flex-col rounded-xl border border-border bg-background p-3 shadow-2xl sm:inset-6",
                 className
             )}
         >
@@ -493,9 +516,27 @@ export function DataTable<TData, TValue>({
                     </DropdownMenu>
                 ) : null}
 
+                {enableFullscreen && isExcelMode ? (
+                    <Button
+                        type="button"
+                        variant={isExcelMode ? "secondary" : "outline"}
+                        size="sm"
+                        onClick={() => setIsFullscreen((currentValue) => !currentValue)}
+                    >
+                        {isFullscreen ? (
+                            <Minimize2 className="h-3.5 w-3.5" />
+                        ) : (
+                            <Maximize2 className="h-3.5 w-3.5" />
+                        )}
+                        {isFullscreen ? "Exit full screen" : "Full screen"}
+                    </Button>
+                ) : null}
+
                 {toolbarEndExtras}
             </div>
             ) : null}
+
+            {selectionToolbar && selectedRows.length > 0 ? selectionToolbar(selectedRows) : null}
 
             {isLoading ? (
                 <DataTableSkeleton columns={computedColumns.length} rows={skeletonRowCount} />
@@ -505,10 +546,16 @@ export function DataTable<TData, TValue>({
                         isExcelMode
                             ? "tracker-thin-scrollbar relative isolate overflow-auto rounded-xl border border-border/70 bg-background shadow-inner [&_[data-slot=table-container]]:overflow-visible"
                             : "rounded-md border overflow-x-auto",
-                        fillHeight && "min-h-0 flex-1",
+                        (fillHeight || isFullscreen) && "min-h-0 flex-1",
                         tableContainerClassName
                     )}
-                    style={maxTableHeight ? { maxHeight: maxTableHeight } : undefined}
+                    style={
+                        isFullscreen
+                            ? { maxHeight: "calc(100svh - 12rem)" }
+                            : maxTableHeight
+                              ? { maxHeight: maxTableHeight }
+                              : undefined
+                    }
                 >
                     <Table
                         className={cn(

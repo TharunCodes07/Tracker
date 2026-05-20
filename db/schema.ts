@@ -5,7 +5,6 @@ import {
   integer,
   pgTable,
   primaryKey,
-  serial,
   text,
   timestamp,
   uniqueIndex,
@@ -165,10 +164,16 @@ export const projects = pgTable('projects', {
     .default(currentOrganizationIdDefault)
     .references(() => organizations.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 255 }).notNull(),
+  keyPrefix: varchar('key_prefix', { length: 12 }).notNull().default('PROJ'),
   description: text('description'),
+  nextIssueNumber: integer('next_issue_number').notNull().default(1),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 },
-  (table) => [index('projects_organization_id_idx').on(table.organizationId)]
+  (table) => [
+    index('projects_organization_id_idx').on(table.organizationId),
+    index('projects_key_prefix_idx').on(table.keyPrefix),
+  ]
 );
 
 export const projectModules = pgTable(
@@ -181,28 +186,21 @@ export const projectModules = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    parentModuleId: uuid('parent_module_id').references((): AnyPgColumn => projectModules.id, {
-      onDelete: 'cascade',
-    }),
     name: varchar('name', { length: 80 }).notNull(),
     description: text('description'),
+    sortOrder: integer('sort_order').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('project_modules_organization_id_idx').on(table.organizationId),
     index('project_modules_project_id_idx').on(table.projectId),
-    index('project_modules_parent_module_id_idx').on(table.parentModuleId),
-    uniqueIndex('project_modules_project_parent_name_unique').on(
-      table.projectId,
-      table.parentModuleId,
-      table.name
-    ),
+    uniqueIndex('project_modules_project_name_unique').on(table.projectId, table.name),
   ]
 );
 
-export const issueClasses = pgTable(
-  'issue_classes',
+export const projectComponents = pgTable(
+  'project_components',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     organizationId: uuid('organization_id')
@@ -211,16 +209,101 @@ export const issueClasses = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    name: varchar('name', { length: 50 }).notNull(),
+    moduleId: uuid('module_id')
+      .notNull()
+      .references(() => projectModules.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 80 }).notNull(),
     description: text('description'),
-    isSystem: boolean('is_system').notNull().default(false),
+    leadId: uuid('lead_id').references(() => user.id, { onDelete: 'set null' }),
+    sortOrder: integer('sort_order').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index('issue_classes_organization_id_idx').on(table.organizationId),
-    index('issue_classes_project_id_idx').on(table.projectId),
-    uniqueIndex('issue_classes_project_name_unique').on(table.projectId, table.name),
+    index('project_components_organization_id_idx').on(table.organizationId),
+    index('project_components_project_id_idx').on(table.projectId),
+    index('project_components_module_id_idx').on(table.moduleId),
+    index('project_components_lead_id_idx').on(table.leadId),
+    uniqueIndex('project_components_module_name_unique').on(table.moduleId, table.name),
+  ]
+);
+
+export const projectEpics = pgTable(
+  'project_epics',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    title: varchar('title', { length: 255 }).notNull(),
+    description: text('description'),
+    status: varchar('status', { length: 24 }).notNull().default('open'),
+    startDate: timestamp('start_date', { withTimezone: true }),
+    targetDate: timestamp('target_date', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('project_epics_organization_id_idx').on(table.organizationId),
+    index('project_epics_project_id_idx').on(table.projectId),
+    index('project_epics_project_status_idx').on(table.projectId, table.status),
+    uniqueIndex('project_epics_project_title_unique').on(table.projectId, table.title),
+  ]
+);
+
+export const projectReleases = pgTable(
+  'project_releases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 80 }).notNull(),
+    description: text('description'),
+    status: varchar('status', { length: 16 }).notNull().default('planned'),
+    startDate: timestamp('start_date', { withTimezone: true }),
+    targetDate: timestamp('target_date', { withTimezone: true }),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('project_releases_organization_id_idx').on(table.organizationId),
+    index('project_releases_project_id_idx').on(table.projectId),
+    index('project_releases_status_idx').on(table.status),
+    uniqueIndex('project_releases_project_name_unique').on(table.projectId, table.name),
+  ]
+);
+
+export const sprints = pgTable(
+  'sprints',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 80 }).notNull(),
+    goal: text('goal'),
+    status: varchar('status', { length: 16 }).notNull().default('planned'),
+    startDate: timestamp('start_date', { withTimezone: true }),
+    endDate: timestamp('end_date', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('sprints_organization_id_idx').on(table.organizationId),
+    index('sprints_project_id_idx').on(table.projectId),
+    index('sprints_status_idx').on(table.status),
+    uniqueIndex('sprints_project_name_unique').on(table.projectId, table.name),
   ]
 );
 
@@ -304,43 +387,140 @@ export const issues = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    moduleId: uuid('module_id').references(() => projectModules.id, { onDelete: 'set null' }),
-    issueClassId: uuid('issue_class_id').references(() => issueClasses.id, {
-      onDelete: 'set null',
-    }),
-    no: serial('no'),
-    navigation: varchar('navigation', { length: 255 }),
+    sequence: integer('sequence').notNull(),
+    key: varchar('key', { length: 32 }).notNull(),
+    issueType: varchar('issue_type', { length: 16 }).notNull().default('task'),
     title: varchar('title', { length: 255 }).notNull(),
     description: text('description'),
-    priority: varchar('priority', { length: 50 }).notNull(), // Low, Medium, High, Critical
-    status: varchar('status', { length: 50 }).notNull(), // Open, In Progress, Review, Done
-    assignedTo: uuid('assigned_to').references(() => user.id, { onDelete: 'set null' }),
-    reviewedBy: uuid('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
-    comments: text('comments'),
+    status: varchar('status', { length: 24 }).notNull().default('todo'),
+    priority: varchar('priority', { length: 16 }).notNull().default('medium'),
+    assigneeId: uuid('assignee_id').references(() => user.id, { onDelete: 'set null' }),
+    reporterId: uuid('reporter_id').references(() => user.id, { onDelete: 'set null' }),
+    testedById: uuid('tested_by_id').references(() => user.id, { onDelete: 'set null' }),
+    epicId: uuid('epic_id').references(() => projectEpics.id, { onDelete: 'set null' }),
+    parentIssueId: uuid('parent_issue_id').references((): AnyPgColumn => issues.id, {
+      onDelete: 'cascade',
+    }),
+    moduleId: uuid('module_id').references(() => projectModules.id, {
+      onDelete: 'set null',
+    }),
+    componentId: uuid('component_id').references(() => projectComponents.id, {
+      onDelete: 'set null',
+    }),
+    releaseId: uuid('release_id').references(() => projectReleases.id, {
+      onDelete: 'set null',
+    }),
+    sprintId: uuid('sprint_id').references(() => sprints.id, { onDelete: 'set null' }),
     remark: text('remark'),
-    testedBy: uuid('tested_by').references(() => user.id, { onDelete: 'set null' }),
-    reopenedBy: uuid('reopened_by').references(() => user.id, { onDelete: 'set null' }),
-    reopenedAt: timestamp('reopened_at', { withTimezone: true }),
-    createdBy: uuid('created_by').references(() => user.id, { onDelete: 'set null' }),
     fixedDate: timestamp('fixed_date', { withTimezone: true }),
-    development: boolean('development').notNull().default(false),
-    deployment: boolean('deployment').notNull().default(false),
+    developmentStatus: varchar('development_status', { length: 24 }).notNull().default('not_started'),
+    deploymentStatus: varchar('deployment_status', { length: 24 }).notNull().default('not_deployed'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('issues_organization_id_idx').on(table.organizationId),
     index('issues_project_id_idx').on(table.projectId),
-    index('issues_module_id_idx').on(table.moduleId),
-    index('issues_issue_class_id_idx').on(table.issueClassId),
-    index('issues_assigned_to_idx').on(table.assignedTo),
-    index('issues_reviewed_by_idx').on(table.reviewedBy),
-    index('issues_tested_by_idx').on(table.testedBy),
-    index('issues_reopened_by_idx').on(table.reopenedBy),
-    index('issues_reopened_at_idx').on(table.reopenedAt),
-    index('issues_created_by_idx').on(table.createdBy),
-    index('issues_status_idx').on(table.status),
-    index('issues_priority_idx').on(table.priority),
+    uniqueIndex('issues_project_key_unique').on(table.projectId, table.key),
+    uniqueIndex('issues_project_sequence_unique').on(table.projectId, table.sequence),
+    index('issues_project_status_idx').on(table.projectId, table.status),
+    index('issues_project_type_idx').on(table.projectId, table.issueType),
+    index('issues_project_priority_idx').on(table.projectId, table.priority),
+    index('issues_project_module_idx').on(table.projectId, table.moduleId),
+    index('issues_project_component_idx').on(table.projectId, table.componentId),
+    index('issues_project_epic_idx').on(table.projectId, table.epicId),
+    index('issues_project_release_idx').on(table.projectId, table.releaseId),
+    index('issues_project_sprint_idx').on(table.projectId, table.sprintId),
+    index('issues_assignee_id_idx').on(table.assigneeId),
+    index('issues_reporter_id_idx').on(table.reporterId),
+    index('issues_tested_by_id_idx').on(table.testedById),
+    index('issues_parent_issue_id_idx').on(table.parentIssueId),
+    index('issues_updated_at_idx').on(table.updatedAt),
+  ]
+);
+
+export const issueComments = pgTable(
+  'issue_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    issueId: uuid('issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    authorId: uuid('author_id').references(() => user.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('issue_comments_organization_id_idx').on(table.organizationId),
+    index('issue_comments_project_id_idx').on(table.projectId),
+    index('issue_comments_issue_id_idx').on(table.issueId),
+    index('issue_comments_author_id_idx').on(table.authorId),
+  ]
+);
+
+export const issueActivity = pgTable(
+  'issue_activity',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    issueId: uuid('issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id').references(() => user.id, { onDelete: 'set null' }),
+    action: varchar('action', { length: 64 }).notNull(),
+    fromValue: text('from_value'),
+    toValue: text('to_value'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('issue_activity_organization_id_idx').on(table.organizationId),
+    index('issue_activity_project_id_idx').on(table.projectId),
+    index('issue_activity_issue_id_idx').on(table.issueId),
+    index('issue_activity_actor_id_idx').on(table.actorId),
+  ]
+);
+
+export const issueLinks = pgTable(
+  'issue_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .default(currentOrganizationIdDefault)
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    sourceIssueId: uuid('source_issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    targetIssueId: uuid('target_issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    linkType: varchar('link_type', { length: 32 }).notNull().default('relates_to'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('issue_links_organization_id_idx').on(table.organizationId),
+    index('issue_links_project_id_idx').on(table.projectId),
+    index('issue_links_source_issue_id_idx').on(table.sourceIssueId),
+    index('issue_links_target_issue_id_idx').on(table.targetIssueId),
+    uniqueIndex('issue_links_source_target_type_unique').on(
+      table.sourceIssueId,
+      table.targetIssueId,
+      table.linkType
+    ),
   ]
 );
 

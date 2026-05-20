@@ -9,8 +9,12 @@ import {
     SidebarGroupLabel,
     SidebarHeader,
     SidebarMenu,
+    SidebarMenuAction,
     SidebarMenuButton,
     SidebarMenuItem,
+    SidebarMenuSub,
+    SidebarMenuSubButton,
+    SidebarMenuSubItem,
     SidebarSeparator,
     SidebarTrigger,
     useSidebar,
@@ -29,6 +33,7 @@ import {
     Zap,
     Building2,
     UserCog,
+    ChevronDown,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -36,6 +41,7 @@ import { authClient } from "@/lib/auth-client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRecentProjects } from "@/components/nav/hooks/use-recent-projects";
+import { VIEW_NAVIGATION } from "@/components/issues/workflow/constants";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -100,6 +106,35 @@ function capitalizeWord(word: string) {
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
 }
 
+function getProjectViewIconClassName(value: string, isActive: boolean) {
+    if (isActive) {
+        return "!text-sidebar-accent-foreground";
+    }
+
+    switch (value) {
+        case "summary":
+            return "!text-emerald-500";
+        case "board":
+            return "!text-cyan-500";
+        case "issues":
+            return "!text-sky-500";
+        case "backlog":
+            return "!text-amber-500";
+        case "modules":
+            return "!text-violet-500";
+        case "releases":
+            return "!text-rose-500";
+        case "epics":
+            return "!text-indigo-500";
+        case "sprints":
+            return "!text-orange-500";
+        case "settings":
+            return "!text-zinc-500";
+        default:
+            return "!text-sidebar-foreground/60";
+    }
+}
+
 function ThemeToggle({ mounted }: { mounted: boolean }) {
     const { setTheme, resolvedTheme } = useTheme();
     const isDark = mounted ? resolvedTheme === "dark" : false;
@@ -131,6 +166,7 @@ export function AppSidebar() {
     const { data: session, isPending } = authClient.useSession();
     const { open } = useSidebar();
     const [mounted, setMounted] = useState(false);
+    const [expandedProjectKeys, setExpandedProjectKeys] = useState<Record<string, boolean>>({});
     const recentProjects = useRecentProjects(5);
     const role = (session?.user as { role?: string } | undefined)?.role ?? "USER";
     const navGroups = isPending
@@ -266,7 +302,7 @@ export function AppSidebar() {
                     </div>
                 ))}
 
-                {role === "USER" && recentProjects.length > 0 ? (
+                {recentProjects.length > 0 ? (
                     <>
                         <SidebarSeparator className={sidebarSectionSeparatorClassName} />
 
@@ -276,18 +312,35 @@ export function AppSidebar() {
                             </SidebarGroupLabel>
                             <SidebarGroupContent>
                                 <SidebarMenu>
-                                    {recentProjects.map((project) => (
-                                        <SidebarMenuItem key={`${project.teamId}:${project.projectId}`}>
+                                    {recentProjects.map((project) => {
+                                        const projectKey = `${project.teamId}:${project.projectId}`;
+                                        const isProjectActive = isItemActive(project.href);
+                                        const hasExpansionPreference = projectKey in expandedProjectKeys;
+                                        const isExpanded = hasExpansionPreference
+                                            ? expandedProjectKeys[projectKey]
+                                            : isProjectActive;
+
+                                        return (
+                                        <SidebarMenuItem key={projectKey}>
                                             <SidebarMenuButton
                                                 asChild
-                                                isActive={isItemActive(project.href)}
-                                                tooltip={`${project.projectName} • ${project.teamName}`}
+                                                isActive={isProjectActive}
+                                                tooltip={`${project.projectName} - ${project.teamName}`}
                                                 className="group/item mx-1 h-auto min-h-12 py-1 transition-all duration-200 hover:bg-sidebar-accent/80"
                                             >
-                                                <Link href={project.href} className="flex min-w-0 items-center gap-2">
+                                                <Link
+                                                    href={project.href}
+                                                    className="flex min-w-0 items-center gap-2"
+                                                    onClick={() =>
+                                                        setExpandedProjectKeys((currentKeys) => ({
+                                                            ...currentKeys,
+                                                            [projectKey]: true,
+                                                        }))
+                                                    }
+                                                >
                                                     <FolderKanban
                                                         className={`h-4 w-4 transition-colors ${
-                                                            isItemActive(project.href)
+                                                            isProjectActive
                                                                 ? "text-sidebar-accent-foreground"
                                                                 : "text-cyan-500 group-hover/item:text-sidebar-accent-foreground"
                                                         }`}
@@ -302,8 +355,68 @@ export function AppSidebar() {
                                                     </div>
                                                 </Link>
                                             </SidebarMenuButton>
+                                            <SidebarMenuAction
+                                                showOnHover
+                                                className="!top-2 !translate-y-0"
+                                                aria-label={`${isExpanded ? "Collapse" : "Expand"} ${project.projectName}`}
+                                                onClick={(event) => {
+                                                    event.preventDefault();
+                                                    event.stopPropagation();
+                                                    setExpandedProjectKeys((currentKeys) => ({
+                                                        ...currentKeys,
+                                                        [projectKey]: !isExpanded,
+                                                    }));
+                                                }}
+                                            >
+                                                <ChevronDown
+                                                    className={`h-4 w-4 transition-transform ${
+                                                        isExpanded ? "rotate-180" : ""
+                                                    }`}
+                                                />
+                                            </SidebarMenuAction>
+                                            {isExpanded ? (
+                                                <SidebarMenuSub>
+                                                    {VIEW_NAVIGATION.map((item) => {
+                                                        const Icon = item.icon;
+                                                        const href = `${project.href}${item.path}`;
+                                                        const isActive =
+                                                            item.path === ""
+                                                                ? pathname === project.href
+                                                                : pathname === href || pathname.startsWith(`${href}/`);
+
+                                                        return (
+                                                            <SidebarMenuSubItem key={item.value}>
+                                                                <SidebarMenuSubButton
+                                                                    asChild
+                                                                    size="sm"
+                                                                    isActive={isActive}
+                                                                >
+                                                                    <Link
+                                                                        href={href}
+                                                                        onClick={() =>
+                                                                            setExpandedProjectKeys((currentKeys) => ({
+                                                                                ...currentKeys,
+                                                                                [projectKey]: true,
+                                                                            }))
+                                                                        }
+                                                                    >
+                                                                        <Icon
+                                                                            className={`h-3.5 w-3.5 transition-colors ${getProjectViewIconClassName(
+                                                                                item.value,
+                                                                                isActive
+                                                                            )}`}
+                                                                        />
+                                                                        <span>{item.label}</span>
+                                                                    </Link>
+                                                                </SidebarMenuSubButton>
+                                                            </SidebarMenuSubItem>
+                                                        );
+                                                    })}
+                                                </SidebarMenuSub>
+                                            ) : null}
                                         </SidebarMenuItem>
-                                    ))}
+                                        );
+                                    })}
                                 </SidebarMenu>
                             </SidebarGroupContent>
                         </SidebarGroup>

@@ -20,7 +20,10 @@ export async function GET(
   try {
     return await withRouteOrganization(request, async (actor) => {
       const { teamId, projectId } = await context.params;
-      const listInput = readListProjectIssuesInput(request);
+      const listInput = readListProjectIssuesInput(request, {
+        maxPageSize:
+          request.nextUrl.searchParams.get("assignment") === "true" ? 2147483647 : 1000,
+      });
       const projectIssues = await listProjectIssuesForUser(actor.id, teamId, projectId, listInput);
 
       if (!projectIssues) {
@@ -53,7 +56,7 @@ export async function POST(
           issueId: issue.id,
           issueNo: issue.no,
           issueTitle: issue.title,
-          assignedTo: issue.assignedTo,
+          assignedTo: issue.assigneeId,
         },
       ];
 
@@ -67,11 +70,11 @@ export async function POST(
           issueId: issue.id,
           issueNo: issue.no,
           issueTitle: issue.title,
-          reviewerId: issue.reviewedBy,
+          reviewerId: issue.testedById,
         });
       }
 
-      if (issue.assignedTo) {
+      if (issue.assigneeId) {
         notificationEvents.push({
           type: "issue.assigned",
           actorId: actor.id,
@@ -81,7 +84,7 @@ export async function POST(
           issueId: issue.id,
           issueNo: issue.no,
           issueTitle: issue.title,
-          assigneeId: issue.assignedTo,
+          assigneeId: issue.assigneeId,
         });
       }
 

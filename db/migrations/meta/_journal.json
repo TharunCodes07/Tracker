@@ -15,6 +15,34 @@
       "when": 1778784431362,
       "tag": "0001_organization_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778784431363,
+      "tag": "0002_clean_issue_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779036579865,
+      "tag": "0003_natural_ken_ellis",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779040000000,
+      "tag": "0004_fresh_module_component_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779087337201,
+      "tag": "0005_chilly_nightcrawler",
+      "breakpoints": true
     }
   ]
 }

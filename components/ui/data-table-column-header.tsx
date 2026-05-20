@@ -30,19 +30,21 @@ export function DataTableColumnHeader<TData, TValue>({
         );
     }
 
+    const isSorted = column.getIsSorted();
+
     return (
         <div className={cn("flex min-w-0 max-w-full items-center justify-center", className)}>
             <Button
                 variant="ghost"
                 size="sm"
                 className="h-auto max-w-full px-2 py-1.5 whitespace-normal data-[state=open]:bg-accent"
-                onClick={() => column.toggleSorting()}
+                onClick={() => column.toggleSorting(isSorted === "asc")}
                 title={title}
             >
                 <span className="line-clamp-2 break-words text-center leading-5">{title}</span>
-                {column.getIsSorted() === "desc" ? (
+                {isSorted === "desc" ? (
                     <ArrowDown className="h-4 w-4 shrink-0" />
-                ) : column.getIsSorted() === "asc" ? (
+                ) : isSorted === "asc" ? (
                     <ArrowUp className="h-4 w-4 shrink-0" />
                 ) : (
                     <ChevronsUpDown className="h-4 w-4 shrink-0" />

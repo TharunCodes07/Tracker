@@ -3,15 +3,15 @@ import "server-only";
 import { and, count, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { issueClasses, projects, teamsToProjects } from "@/db/schema";
+import { projects, teamsToProjects } from "@/db/schema";
 import { RouteError } from "@/routes/errors";
-import { DEFAULT_ISSUE_CLASS_DEFINITIONS } from "@/routes/issues/types";
 import { getTeamForUser } from "@/routes/teams/queries";
 
 import type { CreateProjectInput, UpdateProjectInput } from "./types";
 import { getProjectForTeam } from "./queries";
 
 const PROJECT_NAME_MAX_LENGTH = 80;
+const PROJECT_KEY_PREFIX_MAX_LENGTH = 12;
 const PROJECT_DESCRIPTION_MAX_LENGTH = 280;
 
 export interface ProjectActor {
@@ -32,6 +32,39 @@ function normalizeProjectName(name: string) {
   }
 
   return value;
+}
+
+function deriveProjectKeyPrefix(name: string) {
+  const initials = name
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
+
+  if (initials.length >= 2) {
+    return initials;
+  }
+
+  return name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 4).toUpperCase() || "PROJ";
+}
+
+function normalizeProjectKeyPrefix(value: string | null | undefined, name: string) {
+  const rawValue = value?.trim() || deriveProjectKeyPrefix(name);
+  const normalizedValue = rawValue.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
+  if (normalizedValue.length < 2) {
+    throw new RouteError("Project key prefix must be at least 2 letters or numbers.");
+  }
+
+  if (normalizedValue.length > PROJECT_KEY_PREFIX_MAX_LENGTH) {
+    throw new RouteError(
+      `Project key prefix must be ${PROJECT_KEY_PREFIX_MAX_LENGTH} characters or fewer.`
+    );
+  }
+
+  return normalizedValue;
 }
 
 function normalizeDescription(description?: string | null) {
@@ -88,6 +121,7 @@ export async function createProjectForTeam(
   await requireEditableTeamForUser(actor, teamId);
 
   const name = normalizeProjectName(input.name);
+  const keyPrefix = normalizeProjectKeyPrefix(input.keyPrefix, name);
   const description = normalizeDescription(input.description);
 
   const createdProject = await db.transaction(async (tx) => {
@@ -95,6 +129,7 @@ export async function createProjectForTeam(
       .insert(projects)
       .values({
         name,
+        keyPrefix,
         description,
       })
       .returning({ id: projects.id });
@@ -103,20 +138,6 @@ export async function createProjectForTeam(
       teamId,
       projectId: project.id,
     });
-
-    await tx
-      .insert(issueClasses)
-      .values(
-        DEFAULT_ISSUE_CLASS_DEFINITIONS.map((issueClassDefinition) => ({
-          projectId: project.id,
-          name: issueClassDefinition.name,
-          description: issueClassDefinition.description,
-          isSystem: true,
-        }))
-      )
-      .onConflictDoNothing({
-        target: [issueClasses.projectId, issueClasses.name],
-      });
 
     return project;
   });
@@ -136,16 +157,19 @@ export async function updateProjectForTeam(
   projectId: string,
   input: UpdateProjectInput
 ) {
-  await requireProjectInEditableTeam(actor, teamId, projectId);
+  const existingProject = await requireProjectInEditableTeam(actor, teamId, projectId);
 
   const name = normalizeProjectName(input.name);
+  const keyPrefix = normalizeProjectKeyPrefix(input.keyPrefix ?? existingProject.keyPrefix, name);
   const description = normalizeDescription(input.description);
 
   await db
     .update(projects)
     .set({
       name,
+      keyPrefix,
       description,
+      updatedAt: new Date(),
     })
     .where(eq(projects.id, projectId));
 
