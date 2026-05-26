@@ -173,7 +173,7 @@ export type DataTableProps<TData, TValue> = {
     className?: string;
     toolbarClassName?: string;
     tableContainerClassName?: string;
-    emptyMessage?: string;
+    emptyMessage?: React.ReactNode;
     paginationPageSizes?: number[];
     fillHeight?: boolean;
 };

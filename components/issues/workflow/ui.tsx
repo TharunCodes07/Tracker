@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ViewMode } from "@/hooks/use-persisted-view-mode";
+import { cn } from "@/lib/utils";
 
 import { ALL_VALUE } from "./constants";
 
@@ -169,6 +170,8 @@ export function MultiFilterSelect<T extends string>({
   disabled,
   emptyLabel = "All",
   showAllOption = true,
+  triggerClassName,
+  contentClassName,
 }: {
   values: T[];
   onValuesChange: (values: T[]) => void;
@@ -177,6 +180,8 @@ export function MultiFilterSelect<T extends string>({
   disabled?: boolean;
   emptyLabel?: string;
   showAllOption?: boolean;
+  triggerClassName?: string;
+  contentClassName?: string;
 }) {
   const selectedValueSet = new Set(values);
   const selectedLabels = options
@@ -187,7 +192,7 @@ export function MultiFilterSelect<T extends string>({
       ? `${label}: ${emptyLabel}`
       : selectedLabels.length === 1
         ? `${label}: ${selectedLabels[0]}`
-        : `${label}: ${selectedLabels.length} selected`;
+        : `${label}: ${selectedLabels.join(", ")}`;
 
   function toggleValue(value: T) {
     const nextValues = selectedValueSet.has(value)
@@ -203,14 +208,17 @@ export function MultiFilterSelect<T extends string>({
         <Button
           type="button"
           variant="outline"
-          className="w-full justify-between rounded-full border-border/60 bg-background/80 px-3 font-normal shadow-sm"
+          className={cn(
+            "w-full justify-between rounded-full border-border/60 bg-background/80 px-3 font-normal shadow-sm",
+            triggerClassName
+          )}
           disabled={disabled}
         >
           <span className="truncate">{triggerLabel}</span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="max-h-72 min-w-56" align="start">
+      <DropdownMenuContent className={cn("max-h-72 min-w-56", contentClassName)} align="start">
         {showAllOption ? (
           <DropdownMenuCheckboxItem
             checked={values.length === 0}
@@ -241,12 +249,16 @@ export function EntityMultiFilterSelect({
   label,
   items,
   disabled,
+  triggerClassName,
+  contentClassName,
 }: {
   values: string[];
   onValuesChange: (values: string[]) => void;
   label: string;
   items: { id: string; name: string }[];
   disabled?: boolean;
+  triggerClassName?: string;
+  contentClassName?: string;
 }) {
   return (
     <MultiFilterSelect
@@ -255,6 +267,8 @@ export function EntityMultiFilterSelect({
       label={label}
       options={items.map((item) => ({ value: item.id, label: item.name }))}
       disabled={disabled}
+      triggerClassName={triggerClassName}
+      contentClassName={contentClassName}
     />
   );
 }

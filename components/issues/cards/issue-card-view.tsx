@@ -108,19 +108,12 @@ export function IssueCardView({
   }
 
   if (issues.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-border/70 bg-background/60 px-5 py-12 text-center">
-        <h3 className="text-base font-semibold text-foreground">No issues found</h3>
-        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-          Adjust the filters or switch the issue status view.
-        </p>
-      </div>
-    );
+    return <IssueEmptyState />;
   }
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {issues.map((issue) => {
           const isInteractive = Boolean(onIssueClick);
           const assignedTo = issue.assignedToName ?? "Unassigned";
@@ -301,5 +294,130 @@ export function IssueCardView({
         </div>
       </div>
     </div>
+  );
+}
+
+export function IssueEmptyState({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border border-dashed border-border/70 bg-background/70 px-5 py-12 text-center",
+        className
+      )}
+    >
+      <div className="mx-auto flex max-w-xl flex-col items-center">
+        <IssueListEmptyVisual />
+        <div className="mt-6 inline-flex items-center rounded-full border border-border/70 px-2 py-1 text-xs text-muted-foreground">
+          Queue cleared
+        </div>
+        <h3 className="mt-3 text-xl font-semibold tracking-tight">No matching issues</h3>
+        <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+          The current filters did not return any issue cards.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function IssueListEmptyVisual() {
+  return (
+    <div className="relative h-52 w-full max-w-md">
+      <QueueStackFrame />
+      <DrawnIssueTick className="absolute inset-0" />
+    </div>
+  );
+}
+
+function QueueStackFrame() {
+  return (
+    <>
+      <QueueCard className="left-1/2 top-0 w-[78%] -translate-x-1/2" delay={0} rows={2} />
+      <QueueCard className="left-1/2 top-11 w-[84%] -translate-x-1/2" delay={160} rows={2} />
+      <QueueCard className="left-1/2 top-[5.5rem] w-[76%] -translate-x-1/2" delay={320} rows={2} />
+    </>
+  );
+}
+
+function QueueCard({
+  className,
+  delay,
+  rows,
+  compact,
+}: {
+  className?: string;
+  delay: number;
+  rows: number;
+  compact?: boolean;
+}) {
+  return (
+    <div className={cn("absolute", className)}>
+      <div className="tracker-empty-jiggle rounded-2xl border border-border/70 bg-background p-3 shadow-sm" style={{ animationDelay: `${delay}ms` }}>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="h-2 w-20 rounded-full bg-muted" />
+          <div className="flex gap-1">
+            <span className="h-2 w-2 rounded-full bg-emerald-500/50" />
+            <span className="h-2 w-2 rounded-full bg-muted" />
+          </div>
+        </div>
+        <IssueListRows rows={rows} compact={compact} />
+      </div>
+    </div>
+  );
+}
+
+function IssueListRows({
+  rows = 4,
+  compact,
+}: {
+  rows?: number;
+  compact?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: rows }).map((_, index) => (
+        <IssueListRow key={index} compact={compact} />
+      ))}
+    </div>
+  );
+}
+
+function IssueListRow({ compact }: { compact?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-3",
+        compact ? "h-8" : "h-9"
+      )}
+    >
+      <span className="h-3 w-3 rounded border border-border bg-background" />
+      <span className="h-2 min-w-0 flex-1 rounded-full bg-muted" />
+      <span className="h-2 w-10 rounded-full bg-muted/70" />
+    </div>
+  );
+}
+
+function DrawnIssueTick({ className }: { className?: string }) {
+  return (
+    <svg className={cn("pointer-events-none h-full w-full", className)} viewBox="0 0 420 220" aria-hidden="true">
+      <path
+        d="M130 112 182 157 292 63"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="22"
+        className="text-emerald-500/10"
+      />
+      <path
+        d="M130 112 182 157 292 63"
+        fill="none"
+        pathLength={118}
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="14"
+        className="tracker-empty-draw text-emerald-600/90 dark:text-emerald-300"
+      />
+    </svg>
   );
 }

@@ -372,7 +372,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     [issues]
   );
   const canEdit = workspace?.team.canEdit ?? false;
-  const isLoading = isLoadingIssues && issues.length === 0;
+  const isLoading = isLoadingIssues;
   const selectedIssues = useMemo(() => {
     const selectedIssueIdSet = new Set(selectedIssueIds);
     return issues.filter((issue) => selectedIssueIdSet.has(issue.id));
@@ -929,7 +929,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
   };
 
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 space-y-2">
       {showIssueFilters ? (
         <WorkflowFilters
           search={search}

@@ -161,9 +161,133 @@
   }
 }
 
+@keyframes tracker-empty-scan {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+
+  12%,
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+@keyframes tracker-empty-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes tracker-empty-draw {
+  0% {
+    stroke-dashoffset: 118;
+  }
+
+  55%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes tracker-empty-step {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+
+  45% {
+    opacity: 1;
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes tracker-empty-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes tracker-empty-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  22%,
+  78% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.35;
+    transform: translateY(-4px) scale(1);
+  }
+}
+
+@keyframes tracker-empty-jiggle {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  35% {
+    transform: translate3d(0, -2px, 0);
+  }
+
+  70% {
+    transform: translate3d(0, 1px, 0);
+  }
+}
+
 @layer utilities {
   .tracker-notification-heartbeat {
     animation: notification-heartbeat 1.8s ease-out infinite;
+  }
+
+  .tracker-empty-scan {
+    animation: tracker-empty-scan 2.6s ease-in-out infinite;
+  }
+
+  .tracker-empty-float {
+    animation: tracker-empty-float 3.2s ease-in-out infinite;
+  }
+
+  .tracker-empty-draw {
+    stroke-dasharray: 118;
+    animation: tracker-empty-draw 2.4s ease-out infinite;
+  }
+
+  .tracker-empty-step {
+    animation: tracker-empty-step 1.8s ease-in-out infinite;
+  }
+
+  .tracker-empty-sweep {
+    animation: tracker-empty-sweep 5.5s linear infinite;
+  }
+
+  .tracker-empty-rise {
+    animation: tracker-empty-rise 2.8s ease-in-out infinite;
+  }
+
+  .tracker-empty-jiggle {
+    animation: tracker-empty-jiggle 2.4s ease-in-out infinite;
+    transform-origin: center;
   }
 
   .tracker-thin-scrollbar {
