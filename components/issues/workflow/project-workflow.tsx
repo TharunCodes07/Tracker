@@ -368,7 +368,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     return groups;
   }, [issues]);
   const criticalIssues = useMemo(
-    () => issues.filter((issue) => issue.priority === "critical" && issue.status !== "done"),
+    () => issues.filter((issue) => issue.priority === "critical" && issue.status !== "fixed"),
     [issues]
   );
   const canEdit = workspace?.team.canEdit ?? false;
@@ -1043,7 +1043,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           description={
             activeView === "issues"
               ? "All issues in this project, with spreadsheet-friendly columns for tracking and bulk review."
-              : "Issues without an active sprint and not marked done."
+              : "Issues without an active sprint and not marked fixed."
           }
           issues={issues}
           {...sharedIssueViewProps}

@@ -34,6 +34,7 @@ import {
   DEPLOYMENT_STATUS_OPTIONS,
   DEVELOPMENT_STATUS_OPTIONS,
   EPIC_STATUS_OPTIONS,
+  ISSUE_ASSIGNMENT_GROUP_OPTIONS,
   ISSUE_PRIORITY_OPTIONS,
   ISSUE_STATUS_OPTIONS,
   ISSUE_TYPE_OPTIONS,
@@ -50,6 +51,7 @@ import {
   type DevelopmentStatus,
   type EpicStatus,
   type IssueExcelImportResponse,
+  type IssueAssignmentGroup,
   type IssueExcelSheet,
   type IssueListItem,
   type IssuePriority,
@@ -70,7 +72,9 @@ export interface IssueActor {
 export interface UpdateIssueResult {
   issue: IssueListItem;
   previousAssignedTo: string | null;
+  previousTesterAssignedTo: string | null;
   previousStatus: IssueStatus;
+  reopened: boolean;
 }
 
 interface ValidatedIssueFields {
@@ -79,17 +83,19 @@ interface ValidatedIssueFields {
   issueType: IssueType;
   status: IssueStatus;
   priority: IssuePriority;
+  assigneeGroup: IssueAssignmentGroup | null;
+  testerAssigneeGroup: IssueAssignmentGroup | null;
   moduleId: string | null;
   componentId: string | null;
   epicId: string | null;
   sprintId: string | null;
   releaseId: string | null;
   assigneeId: string | null;
+  testerAssigneeId: string | null;
   reporterId: string | null;
   testedById: string | null;
   parentIssueId: string | null;
   remark: string | null;
-  fixedDate: Date | null;
   developmentStatus: DevelopmentStatus;
   deploymentStatus: DeploymentStatus;
 }
@@ -120,6 +126,50 @@ function normalizeOptionalText(value: string | null | undefined, label = "Descri
   }
 
   return normalizedValue;
+}
+
+function stripBulletPrefix(value: string) {
+  return value.replace(/^([-*]|\d+[.)])\s+/, "").trim();
+}
+
+function normalizeTextItems(value: string | null | undefined, label: string) {
+  const normalizedText = normalizeOptionalText(value, label);
+
+  if (!normalizedText) {
+    return [];
+  }
+
+  return normalizedText
+    .split(/\r?\n+/)
+    .map(stripBulletPrefix)
+    .filter(Boolean);
+}
+
+function getNewCommentItems(inputComments: string | null | undefined, existingComments: string | null) {
+  const normalizedComments = normalizeOptionalText(inputComments, "Comments");
+  const normalizedExistingComments = normalizeOptionalText(existingComments, "Comments");
+
+  if (!normalizedComments) {
+    return [];
+  }
+
+  if (!normalizedExistingComments) {
+    return normalizeTextItems(normalizedComments, "Comments");
+  }
+
+  if (normalizedComments === normalizedExistingComments) {
+    return [];
+  }
+
+  if (normalizedComments.startsWith(normalizedExistingComments)) {
+    return normalizeTextItems(
+      normalizedComments.slice(normalizedExistingComments.length),
+      "Comments"
+    );
+  }
+
+  const existingItems = new Set(normalizeTextItems(normalizedExistingComments, "Comments"));
+  return normalizeTextItems(normalizedComments, "Comments").filter((item) => !existingItems.has(item));
 }
 
 function normalizeOptionalId(value?: string | null) {
@@ -156,7 +206,7 @@ function assertOption<T extends string>(
 }
 
 function normalizeIssueType(input: CreateIssueInput | UpdateIssueInput) {
-  const value = input.issueType ?? input.type ?? (input.issueClassId as IssueType | undefined) ?? "task";
+  const value = input.issueType ?? input.type ?? (input.issueClassId as IssueType | undefined) ?? "bug";
   return assertOption(value, ISSUE_TYPE_OPTIONS, "Choose a valid issue type.");
 }
 
@@ -169,11 +219,15 @@ function normalizeIssueStatus(value: string) {
 }
 
 function normalizeDevelopmentStatus(value?: string | null, status?: IssueStatus): DevelopmentStatus {
+  if (value === "done") {
+    return "fixed";
+  }
+
   if (value) {
     return assertOption(value, DEVELOPMENT_STATUS_OPTIONS, "Choose a valid development status.");
   }
 
-  return status === "fixed" || status === "done" ? "fixed" : "not_started";
+  return status === "fixed" ? "fixed" : "not_started";
 }
 
 function normalizeDeploymentStatus(value?: string | null, deployed?: boolean): DeploymentStatus {
@@ -182,6 +236,35 @@ function normalizeDeploymentStatus(value?: string | null, deployed?: boolean): D
   }
 
   return deployed ? "deployed" : "not_deployed";
+}
+
+function normalizeIssueAssignmentGroup(value?: string | null): IssueAssignmentGroup | null {
+  const normalizedValue = normalizeOptionalId(value);
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return assertOption(
+    normalizedValue,
+    ISSUE_ASSIGNMENT_GROUP_OPTIONS,
+    "Choose a valid assignment team."
+  );
+}
+
+function isFixedWorkflowState(status: IssueStatus, developmentStatus: DevelopmentStatus) {
+  return status === "fixed" || developmentStatus === "fixed";
+}
+
+function getAutomaticFixedDate(
+  fields: Pick<ValidatedIssueFields, "status" | "developmentStatus">,
+  previousFixedDate?: string | Date | null
+) {
+  if (!isFixedWorkflowState(fields.status, fields.developmentStatus)) {
+    return null;
+  }
+
+  return previousFixedDate ? new Date(previousFixedDate) : new Date();
 }
 
 function normalizeEpicStatus(value?: string | null) {
@@ -354,7 +437,12 @@ async function validateIssueFields(
   const description = normalizeOptionalText(input.description);
   const status = normalizeIssueStatus(input.status);
   const priority = normalizeIssuePriority(input.priority);
+  const assigneeGroup = normalizeIssueAssignmentGroup(input.assigneeGroup ?? input.assignmentGroup);
   const assigneeId = normalizeOptionalId(input.assigneeId ?? input.assignedTo);
+  const testerAssigneeGroup = normalizeIssueAssignmentGroup(
+    input.testerAssigneeGroup ?? input.testerAssignmentGroup
+  );
+  const testerAssigneeId = normalizeOptionalId(input.testerAssigneeId ?? input.testerAssignedTo);
   const reporterId = normalizeOptionalId(input.reporterId) ?? actor.id;
   const testedById = normalizeOptionalId(input.testedById ?? input.testedBy);
   const componentId = normalizeOptionalId(input.componentId);
@@ -366,7 +454,6 @@ async function validateIssueFields(
   const releaseId = normalizeOptionalId(input.releaseId);
   const parentIssueId = normalizeOptionalId(input.parentIssueId);
   const remark = normalizeOptionalText(input.remark);
-  const fixedDate = normalizeOptionalDate(input.fixedDate);
   const developmentStatus = normalizeDevelopmentStatus(
     input.developmentStatus,
     input.development ? "fixed" : status
@@ -382,7 +469,12 @@ async function validateIssueFields(
   }
 
   await Promise.all([
-    assertUsersBelongToTeam(teamId, [assigneeId ?? "", reporterId, testedById ?? ""]),
+    assertUsersBelongToTeam(teamId, [
+      assigneeId ?? "",
+      testerAssigneeId ?? "",
+      reporterId,
+      testedById ?? "",
+    ]),
     assertModuleBelongsToProject(projectId, moduleId),
     assertEpicBelongsToProject(projectId, epicId),
     assertReleaseBelongsToProject(projectId, releaseId),
@@ -396,17 +488,19 @@ async function validateIssueFields(
     issueType,
     status,
     priority,
+    assigneeGroup,
+    testerAssigneeGroup,
     moduleId,
     componentId,
     epicId,
     sprintId,
     releaseId,
     assigneeId,
+    testerAssigneeId,
     reporterId,
     testedById,
     parentIssueId,
     remark,
-    fixedDate,
     developmentStatus,
     deploymentStatus,
   };
@@ -789,7 +883,8 @@ export async function createIssue(
   await requireEditableProjectForUser(actor, teamId, projectId);
   const validatedIssue = await validateIssueFields(actor, teamId, projectId, input);
   const hasMediaUploads = Boolean(input.media?.length);
-  const initialComment = normalizeOptionalText(input.comments, "Comments");
+  const initialComments = normalizeTextItems(input.comments, "Comments");
+  const fixedDate = getAutomaticFixedDate(validatedIssue);
 
   if (hasMediaUploads) {
     validateIssueMediaMutationInput(teamId, projectId, input.media);
@@ -803,6 +898,7 @@ export async function createIssue(
         projectId,
         ...keyFields,
         ...validatedIssue,
+        fixedDate,
       })
       .returning({ id: issues.id });
 
@@ -814,13 +910,15 @@ export async function createIssue(
       toValue: keyFields.key,
     });
 
-    if (initialComment) {
-      await db.insert(issueComments).values({
-        projectId,
-        issueId: createdIssue.id,
-        authorId: actor.id,
-        body: initialComment,
-      });
+    if (initialComments.length > 0) {
+      await db.insert(issueComments).values(
+        initialComments.map((body) => ({
+          projectId,
+          issueId: createdIssue.id,
+          authorId: actor.id,
+          body,
+        }))
+      );
     }
 
     return createdIssue.id;
@@ -849,17 +947,23 @@ export async function updateIssue(
   await requireEditableProjectForUser(actor, teamId, projectId);
   const existingIssue = await loadIssueForActor(actor, teamId, projectId, issueId);
   const validatedIssue = await validateIssueFields(actor, teamId, projectId, input);
+  const isReopenRequest = Boolean(input.reopen);
   const mediaChanged = Boolean(input.mediaChanged || input.media?.length || input.removeMediaIds?.length);
-  const normalizedComments = normalizeOptionalText(input.comments, "Comments");
-  const commentToAppend =
-    !normalizedComments || normalizedComments === existingIssue.comments
-      ? null
-      : existingIssue.comments && normalizedComments.startsWith(existingIssue.comments)
-        ? normalizeOptionalText(
-            normalizedComments.slice(existingIssue.comments.length),
-            "Comments"
-          )
-        : normalizedComments;
+  const commentsToAppend = getNewCommentItems(input.comments, existingIssue.comments);
+
+  if (isReopenRequest && existingIssue.status !== "review" && existingIssue.status !== "fixed") {
+    throw new RouteError("Only issues in review or fixed status can be reopened.");
+  }
+
+  const issueFields: ValidatedIssueFields = isReopenRequest
+    ? {
+        ...validatedIssue,
+        status: "in_progress",
+        developmentStatus: "in_progress",
+        deploymentStatus: "not_deployed",
+      }
+    : validatedIssue;
+  const fixedDate = isReopenRequest ? null : getAutomaticFixedDate(issueFields, existingIssue.fixedDate);
 
   if (mediaChanged) {
     validateIssueMediaMutationInput(teamId, projectId, input.media, input.removeMediaIds);
@@ -868,29 +972,49 @@ export async function updateIssue(
   await db
     .update(issues)
     .set({
-      ...validatedIssue,
+      ...issueFields,
+      fixedDate,
+      ...(isReopenRequest
+        ? {
+            reopenedById: actor.id,
+            reopenedAt: new Date(),
+          }
+        : {}),
       updatedAt: new Date(),
     })
     .where(and(eq(issues.projectId, projectId), eq(issues.id, existingIssue.id)));
 
-  if (existingIssue.status !== validatedIssue.status) {
+  if (existingIssue.status !== issueFields.status) {
     await db.insert(issueActivity).values({
       projectId,
       issueId: existingIssue.id,
       actorId: actor.id,
       action: "status_changed",
       fromValue: existingIssue.status,
-      toValue: validatedIssue.status,
+      toValue: issueFields.status,
     });
   }
 
-  if (commentToAppend) {
-    await db.insert(issueComments).values({
+  if (isReopenRequest) {
+    await db.insert(issueActivity).values({
       projectId,
       issueId: existingIssue.id,
-      authorId: actor.id,
-      body: commentToAppend,
+      actorId: actor.id,
+      action: "reopened",
+      fromValue: existingIssue.status,
+      toValue: issueFields.status,
     });
+  }
+
+  if (commentsToAppend.length > 0) {
+    await db.insert(issueComments).values(
+      commentsToAppend.map((body) => ({
+        projectId,
+        issueId: existingIssue.id,
+        authorId: actor.id,
+        body,
+      }))
+    );
   }
 
   if (mediaChanged) {
@@ -909,7 +1033,9 @@ export async function updateIssue(
   return {
     issue,
     previousAssignedTo: existingIssue.assigneeId,
+    previousTesterAssignedTo: existingIssue.testerAssigneeId,
     previousStatus: existingIssue.status,
+    reopened: isReopenRequest,
   };
 }
 
@@ -921,6 +1047,7 @@ export async function updateIssueStatus(
   status: IssueStatus
 ) {
   const existingIssue = await loadIssueForActor(actor, teamId, projectId, issueId);
+  const developmentStatus = status === "fixed" ? "fixed" : existingIssue.developmentStatus;
 
   return updateIssue(actor, teamId, projectId, existingIssue.id, {
     title: existingIssue.title,
@@ -933,13 +1060,15 @@ export async function updateIssueStatus(
     epicId: existingIssue.epicId,
     sprintId: existingIssue.sprintId,
     releaseId: existingIssue.releaseId,
+    assigneeGroup: existingIssue.assigneeGroup,
     assigneeId: existingIssue.assigneeId,
+    testerAssigneeGroup: existingIssue.testerAssigneeGroup,
+    testerAssigneeId: existingIssue.testerAssigneeId,
     reporterId: existingIssue.reporterId,
     testedById: existingIssue.testedById,
     parentIssueId: existingIssue.parentIssueId,
     remark: existingIssue.remark,
-    fixedDate: existingIssue.fixedDate,
-    developmentStatus: existingIssue.developmentStatus,
+    developmentStatus,
     deploymentStatus: existingIssue.deploymentStatus,
   });
 }

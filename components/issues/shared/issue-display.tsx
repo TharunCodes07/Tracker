@@ -33,24 +33,20 @@ export function getIssuePriorityOrder(priority: IssuePriority) {
 
 export function getIssueStatusOrder(status: IssueStatus) {
   switch (status) {
-    case "done":
-      return 6;
     case "fixed":
-      return 5;
-    case "review":
       return 4;
-    case "in_progress":
+    case "review":
       return 3;
-    case "todo":
+    case "in_progress":
       return 2;
-    case "open":
+    case "todo":
     default:
       return 1;
   }
 }
 
 export function isIssueResolved(status: IssueStatus) {
-  return status === "done";
+  return status === "fixed";
 }
 
 export function getIssuePriorityBadgeClassName(priority: IssuePriority) {
@@ -111,17 +107,14 @@ export function getIssuePriorityCardAccentClassName(priority: IssuePriority) {
 
 export function getIssueStatusBadgeClassName(status: IssueStatus) {
   switch (status) {
-    case "done":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
     case "fixed":
-      return "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
     case "review":
       return "border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300";
     case "in_progress":
       return "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300";
     case "todo":
       return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
-    case "open":
     default:
       return "border-border/80 bg-muted/70 text-muted-foreground";
   }

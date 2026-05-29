@@ -37,6 +37,7 @@ import {
   DEVELOPMENT_STATUS_OPTIONS,
   EPIC_STATUS_OPTIONS,
   GENERAL_MODULE_FILTER_VALUE,
+  ISSUE_ASSIGNMENT_GROUP_OPTIONS,
   ISSUE_PRIORITY_OPTIONS,
   ISSUE_STATUS_OPTIONS,
   ISSUE_TYPE_OPTIONS,
@@ -45,6 +46,7 @@ import {
   type DeploymentStatus,
   type DevelopmentStatus,
   type EpicStatus,
+  type IssueAssignmentGroup,
   type IssueExcelRow,
   type IssueExcelWorkbook,
   type IssueGroupCount,
@@ -89,7 +91,7 @@ function normalizeOption<T extends string>(
 }
 
 function normalizeIssueType(value: string | null | undefined): IssueType {
-  return normalizeOption(value, ISSUE_TYPE_OPTIONS, "task");
+  return normalizeOption(value, ISSUE_TYPE_OPTIONS, "bug");
 }
 
 function normalizeIssuePriority(value: string | null | undefined): IssuePriority {
@@ -97,15 +99,43 @@ function normalizeIssuePriority(value: string | null | undefined): IssuePriority
 }
 
 function normalizeIssueStatus(value: string | null | undefined): IssueStatus {
+  if (value === "open") {
+    return "todo";
+  }
+
+  if (value === "done") {
+    return "fixed";
+  }
+
+  if (value === "reopened") {
+    return "in_progress";
+  }
+
   return normalizeOption(value, ISSUE_STATUS_OPTIONS, "todo");
 }
 
 function normalizeDevelopmentStatus(value: string | null | undefined): DevelopmentStatus {
+  if (value === "done") {
+    return "fixed";
+  }
+
   return normalizeOption(value, DEVELOPMENT_STATUS_OPTIONS, "not_started");
 }
 
 function normalizeDeploymentStatus(value: string | null | undefined): DeploymentStatus {
   return normalizeOption(value, DEPLOYMENT_STATUS_OPTIONS, "not_deployed");
+}
+
+function normalizeIssueAssignmentGroup(value: string | null | undefined): IssueAssignmentGroup | null {
+  return ISSUE_ASSIGNMENT_GROUP_OPTIONS.some((option) => option.value === value)
+    ? (value as IssueAssignmentGroup)
+    : null;
+}
+
+function getIssueAssignmentGroupLabel(value: IssueAssignmentGroup | null) {
+  return value
+    ? ISSUE_ASSIGNMENT_GROUP_OPTIONS.find((option) => option.value === value)?.label ?? value
+    : null;
 }
 
 function normalizeEpicStatus(value: string | null | undefined): EpicStatus {
@@ -253,6 +283,8 @@ function toIssueListItem(
     description: string | null;
     status: string | null;
     priority: string | null;
+    assigneeGroup: string | null;
+    testerAssigneeGroup: string | null;
     moduleId: string | null;
     moduleName: string | null;
     componentId: string | null;
@@ -265,6 +297,8 @@ function toIssueListItem(
     releaseName: string | null;
     assigneeId: string | null;
     assigneeName: string | null;
+    testerAssigneeId: string | null;
+    testerAssigneeName: string | null;
     reporterId: string | null;
     reporterName: string | null;
     testedById: string | null;
@@ -274,6 +308,9 @@ function toIssueListItem(
     parentIssueTitle: string | null;
     remark: string | null;
     fixedDate: Date | string | null;
+    reopenedBy: string | null;
+    reopenedByName: string | null;
+    reopenedAt: Date | string | null;
     developmentStatus: string | null;
     deploymentStatus: string | null;
     createdAt: Date | string;
@@ -292,6 +329,10 @@ function toIssueListItem(
   const priority = normalizeIssuePriority(row.priority);
   const developmentStatus = normalizeDevelopmentStatus(row.developmentStatus);
   const deploymentStatus = normalizeDeploymentStatus(row.deploymentStatus);
+  const assigneeGroup = normalizeIssueAssignmentGroup(row.assigneeGroup);
+  const assignmentGroupName = getIssueAssignmentGroupLabel(assigneeGroup);
+  const testerAssigneeGroup = normalizeIssueAssignmentGroup(row.testerAssigneeGroup);
+  const testerAssignmentGroupName = getIssueAssignmentGroupLabel(testerAssigneeGroup);
   const issueTypeLabel = getIssueTypeLabel(issueType);
 
   return {
@@ -307,6 +348,8 @@ function toIssueListItem(
     description: row.description,
     status,
     priority,
+    assigneeGroup,
+    testerAssigneeGroup,
     moduleId: row.moduleId,
     moduleName: row.moduleName,
     componentId: row.componentId,
@@ -319,6 +362,8 @@ function toIssueListItem(
     releaseName: row.releaseName,
     assigneeId: row.assigneeId,
     assigneeName: row.assigneeName,
+    testerAssigneeId: row.testerAssigneeId,
+    testerAssigneeName: row.testerAssigneeName,
     reporterId: row.reporterId,
     reporterName: row.reporterName,
     testedById: row.testedById,
@@ -344,15 +389,21 @@ function toIssueListItem(
     issueClassId: issueType,
     issueClassName: issueTypeLabel,
     assignedTo: row.assigneeId,
-    assignedToName: row.assigneeName,
+    assignedToName: row.assigneeName ?? assignmentGroupName,
+    assignmentGroup: assigneeGroup,
+    assignmentGroupName,
+    testerAssignedTo: row.testerAssigneeId,
+    testerAssignedToName: row.testerAssigneeName ?? testerAssignmentGroupName,
+    testerAssignmentGroup: testerAssigneeGroup,
+    testerAssignmentGroupName,
     reviewedBy: null,
     reviewedByName: null,
     comments: options.comments ?? null,
     testedBy: row.testedById,
-    reopenedBy: null,
-    reopenedByName: null,
-    reopenedAt: null,
-    development: developmentStatus === "fixed" || developmentStatus === "done",
+    reopenedBy: row.reopenedBy,
+    reopenedByName: row.reopenedByName,
+    reopenedAt: toOptionalIsoString(row.reopenedAt),
+    development: developmentStatus === "fixed",
     deployment: deploymentStatus === "deployed" || deploymentStatus === "verified",
     createdBy: row.reporterId,
     createdByName: row.reporterName,
@@ -410,6 +461,7 @@ function buildProjectIssuesWhereClause(
   input: ListProjectIssuesInput,
   aliases: {
     assigneeName: SQLWrapper;
+    testerAssigneeName: SQLWrapper;
     reporterName: SQLWrapper;
     testedByName: SQLWrapper;
     moduleName: SQLWrapper;
@@ -422,13 +474,13 @@ function buildProjectIssuesWhereClause(
   const conditions: SQL[] = [eq(issues.projectId, projectId)];
 
   if (input.resolution === "open") {
-    conditions.push(ne(issues.status, "done"));
+    conditions.push(ne(issues.status, "fixed"));
   } else if (input.resolution === "review") {
     conditions.push(eq(issues.status, "review"));
   } else if (input.resolution === "resolved") {
-    conditions.push(eq(issues.status, "done"));
+    conditions.push(eq(issues.status, "fixed"));
   } else if (input.resolution === "reopened") {
-    conditions.push(and(ne(issues.status, "done"), ne(issues.updatedAt, issues.createdAt)) as SQL);
+    conditions.push(sql`${issues.reopenedAt} is not null`);
   }
 
   if (input.typeFilters.length > 0) {
@@ -462,11 +514,14 @@ function buildProjectIssuesWhereClause(
     const assigneeConditions: SQL[] = [];
 
     if (input.assigneeFilters.includes("current-user")) {
-      assigneeConditions.push(eq(issues.assigneeId, currentUserId));
+      assigneeConditions.push(or(
+        eq(issues.assigneeId, currentUserId),
+        eq(issues.testerAssigneeId, currentUserId)
+      ) as SQL);
     }
 
     if (input.assigneeFilters.includes("unassigned")) {
-      assigneeConditions.push(isNull(issues.assigneeId));
+      assigneeConditions.push(and(isNull(issues.assigneeId), isNull(issues.testerAssigneeId)) as SQL);
     }
 
     if (assigneeConditions.length > 0) {
@@ -487,7 +542,7 @@ function buildProjectIssuesWhereClause(
   }
 
   if (input.backlogOnly) {
-    conditions.push(and(isNull(issues.sprintId), ne(issues.status, "done")) as SQL);
+    conditions.push(and(isNull(issues.sprintId), ne(issues.status, "fixed")) as SQL);
   }
 
   const normalizedSearch = input.search.trim();
@@ -503,10 +558,13 @@ function buildProjectIssuesWhereClause(
         ilike(issues.issueType, pattern),
         ilike(issues.status, pattern),
         ilike(issues.priority, pattern),
+        ilike(issues.assigneeGroup, pattern),
+        ilike(issues.testerAssigneeGroup, pattern),
         ilike(issues.remark, pattern),
         ilike(issues.developmentStatus, pattern),
         ilike(issues.deploymentStatus, pattern),
         sql<boolean>`coalesce(${aliases.assigneeName}, '') ilike ${pattern}`,
+        sql<boolean>`coalesce(${aliases.testerAssigneeName}, '') ilike ${pattern}`,
         sql<boolean>`coalesce(${aliases.reporterName}, '') ilike ${pattern}`,
         sql<boolean>`coalesce(${aliases.testedByName}, '') ilike ${pattern}`,
         sql<boolean>`coalesce(${aliases.moduleName}, '') ilike ${pattern}`,
@@ -525,6 +583,7 @@ function buildProjectIssuesOrderBy(
   input: Pick<ListProjectIssuesInput, "sortBy" | "sortDirection">,
   aliases: {
     assigneeName: SQLWrapper;
+    testerAssigneeName: SQLWrapper;
     testedByName: SQLWrapper;
     moduleName: SQLWrapper;
     componentName: SQLWrapper;
@@ -542,12 +601,13 @@ function buildProjectIssuesOrderBy(
     else 9
   end`;
   const statusOrder = sql<number>`case
+    when ${issues.status} = 'todo' then 1
     when ${issues.status} = 'open' then 1
-    when ${issues.status} = 'todo' then 2
-    when ${issues.status} = 'in_progress' then 3
-    when ${issues.status} = 'review' then 4
-    when ${issues.status} = 'fixed' then 5
-    when ${issues.status} = 'done' then 6
+    when ${issues.status} = 'in_progress' then 2
+    when ${issues.status} = 'reopened' then 2
+    when ${issues.status} = 'review' then 3
+    when ${issues.status} = 'fixed' then 4
+    when ${issues.status} = 'done' then 4
     else 9
   end`;
   const priorityOrder = sql<number>`case
@@ -597,7 +657,10 @@ function buildProjectIssuesOrderBy(
     case "assignee":
     case "assigneeName":
     case "assignedToName":
-      return [withDirection(sql<string>`coalesce(${aliases.assigneeName}, '')`), desc(issues.updatedAt), desc(issues.sequence), asc(issues.id)];
+      return [withDirection(sql<string>`coalesce(${aliases.assigneeName}, ${aliases.testerAssigneeName}, '')`), desc(issues.updatedAt), desc(issues.sequence), asc(issues.id)];
+    case "testerAssigneeName":
+    case "testerAssignedToName":
+      return [withDirection(sql<string>`coalesce(${aliases.testerAssigneeName}, '')`), desc(issues.updatedAt), desc(issues.sequence), asc(issues.id)];
     case "testedBy":
     case "testedByName":
       return [withDirection(sql<string>`coalesce(${aliases.testedByName}, '')`), desc(issues.updatedAt), desc(issues.sequence), asc(issues.id)];
@@ -618,8 +681,10 @@ function buildProjectIssuesOrderBy(
 function buildIssueAliases(prefix = "issue") {
   return {
     assignee: alias(user, `${prefix}_assignee`),
+    testerAssignee: alias(user, `${prefix}_tester_assignee`),
     reporter: alias(user, `${prefix}_reporter`),
     testedBy: alias(user, `${prefix}_tested_by`),
+    reopenedBy: alias(user, `${prefix}_reopened_by`),
     parentIssue: alias(issues, `${prefix}_parent_issue`),
   };
 }
@@ -641,6 +706,8 @@ async function getProjectIssueRows(
       description: issues.description,
       status: issues.status,
       priority: issues.priority,
+      assigneeGroup: issues.assigneeGroup,
+      testerAssigneeGroup: issues.testerAssigneeGroup,
       moduleId: issues.moduleId,
       moduleName: projectModules.name,
       componentId: issues.componentId,
@@ -653,6 +720,8 @@ async function getProjectIssueRows(
       releaseName: projectReleases.name,
       assigneeId: issues.assigneeId,
       assigneeName: aliases.assignee.name,
+      testerAssigneeId: issues.testerAssigneeId,
+      testerAssigneeName: aliases.testerAssignee.name,
       reporterId: issues.reporterId,
       reporterName: aliases.reporter.name,
       testedById: issues.testedById,
@@ -662,6 +731,9 @@ async function getProjectIssueRows(
       parentIssueTitle: aliases.parentIssue.title,
       remark: issues.remark,
       fixedDate: issues.fixedDate,
+      reopenedBy: issues.reopenedById,
+      reopenedByName: aliases.reopenedBy.name,
+      reopenedAt: issues.reopenedAt,
       developmentStatus: issues.developmentStatus,
       deploymentStatus: issues.deploymentStatus,
       createdAt: issues.createdAt,
@@ -669,8 +741,10 @@ async function getProjectIssueRows(
     })
     .from(issues)
     .leftJoin(aliases.assignee, eq(issues.assigneeId, aliases.assignee.id))
+    .leftJoin(aliases.testerAssignee, eq(issues.testerAssigneeId, aliases.testerAssignee.id))
     .leftJoin(aliases.reporter, eq(issues.reporterId, aliases.reporter.id))
     .leftJoin(aliases.testedBy, eq(issues.testedById, aliases.testedBy.id))
+    .leftJoin(aliases.reopenedBy, eq(issues.reopenedById, aliases.reopenedBy.id))
     .leftJoin(aliases.parentIssue, eq(issues.parentIssueId, aliases.parentIssue.id))
     .leftJoin(projectModules, eq(issues.moduleId, projectModules.id))
     .leftJoin(projectComponents, eq(issues.componentId, projectComponents.id))
@@ -680,6 +754,7 @@ async function getProjectIssueRows(
     .where(
       buildProjectIssuesWhereClause(projectId, currentUserId, input, {
         assigneeName: aliases.assignee.name,
+        testerAssigneeName: aliases.testerAssignee.name,
         reporterName: aliases.reporter.name,
         testedByName: aliases.testedBy.name,
         moduleName: projectModules.name,
@@ -692,6 +767,7 @@ async function getProjectIssueRows(
     .orderBy(
       ...buildProjectIssuesOrderBy(input, {
         assigneeName: aliases.assignee.name,
+        testerAssigneeName: aliases.testerAssignee.name,
         testedByName: aliases.testedBy.name,
         moduleName: projectModules.name,
         componentName: projectComponents.name,
@@ -715,6 +791,7 @@ async function getFilteredProjectIssuesCount(
     .select({ totalItems: count(issues.id) })
     .from(issues)
     .leftJoin(aliases.assignee, eq(issues.assigneeId, aliases.assignee.id))
+    .leftJoin(aliases.testerAssignee, eq(issues.testerAssigneeId, aliases.testerAssignee.id))
     .leftJoin(aliases.reporter, eq(issues.reporterId, aliases.reporter.id))
     .leftJoin(aliases.testedBy, eq(issues.testedById, aliases.testedBy.id))
     .leftJoin(projectModules, eq(issues.moduleId, projectModules.id))
@@ -725,6 +802,7 @@ async function getFilteredProjectIssuesCount(
     .where(
       buildProjectIssuesWhereClause(projectId, currentUserId, input, {
         assigneeName: aliases.assignee.name,
+        testerAssigneeName: aliases.testerAssignee.name,
         reporterName: aliases.reporter.name,
         testedByName: aliases.testedBy.name,
         moduleName: projectModules.name,
@@ -743,13 +821,14 @@ async function getProjectIssuesSummary(projectId: string): Promise<IssueListSumm
     db
       .select({
         totalIssues: count(issues.id),
-        openIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} <> 'done') as integer)`,
-        doneIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done') as integer)`,
+        openIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} <> 'fixed') as integer)`,
+        doneIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'fixed') as integer)`,
         reviewIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'review') as integer)`,
         fixedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'fixed') as integer)`,
-        backlogIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.sprintId} is null and ${issues.status} <> 'done') as integer)`,
-        criticalIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.priority} = 'critical' and ${issues.status} <> 'done') as integer)`,
-        unassignedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.assigneeId} is null and ${issues.status} <> 'done') as integer)`,
+        reopenedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.reopenedAt} is not null) as integer)`,
+        backlogIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.sprintId} is null and ${issues.status} <> 'fixed') as integer)`,
+        criticalIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.priority} = 'critical' and ${issues.status} <> 'fixed') as integer)`,
+        unassignedIssueCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.assigneeId} is null and ${issues.testerAssigneeId} is null and ${issues.status} <> 'fixed') as integer)`,
       })
       .from(issues)
       .where(eq(issues.projectId, projectId)),
@@ -775,7 +854,7 @@ async function getProjectIssuesSummary(projectId: string): Promise<IssueListSumm
     unassignedIssueCount: Number(row?.unassignedIssueCount ?? 0),
     hasUnclassifiedIssues: false,
     resolvedIssueCount: doneIssueCount,
-    reopenedIssueCount: 0,
+    reopenedIssueCount: Number(row?.reopenedIssueCount ?? 0),
   };
 }
 
@@ -787,9 +866,9 @@ async function getIssueGroupCounts(
     .select({
       id: field,
       issueCount: count(issues.id),
-      doneCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'done') as integer)`,
-      highPriorityCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.priority} in ('critical', 'high') and ${issues.status} <> 'done') as integer)`,
-      openCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} <> 'done') as integer)`,
+      doneCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} = 'fixed') as integer)`,
+      highPriorityCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.priority} in ('critical', 'high') and ${issues.status} <> 'fixed') as integer)`,
+      openCount: sql<number>`cast(count(${issues.id}) filter (where ${issues.status} <> 'fixed') as integer)`,
     })
     .from(issues)
     .where(eq(issues.projectId, projectId))

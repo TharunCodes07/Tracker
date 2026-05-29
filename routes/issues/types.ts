@@ -22,29 +22,32 @@ export const ISSUE_PRIORITY_OPTIONS = [
 export const ACTIVE_ISSUE_STATUS_OPTIONS = [
   { value: "todo", label: "To Do" },
   { value: "in_progress", label: "In Progress" },
-  { value: "review", label: "Review" },
+  { value: "review", label: "In Review" },
   { value: "fixed", label: "Fixed" },
 ] as const;
 
-export const ISSUE_STATUS_OPTIONS = [
-  { value: "open", label: "Open" },
-  ...ACTIVE_ISSUE_STATUS_OPTIONS,
-  { value: "done", label: "Done" },
-] as const;
+export const ISSUE_STATUS_OPTIONS = ACTIVE_ISSUE_STATUS_OPTIONS;
 
 export const DEVELOPMENT_STATUS_OPTIONS = [
   { value: "not_started", label: "Not Started" },
-  { value: "in_progress", label: "In Progress" },
+  { value: "in_progress", label: "In Development" },
+  { value: "developer_check", label: "Developer Check" },
+  { value: "tester_check", label: "Tester Check" },
   { value: "blocked", label: "Blocked" },
   { value: "fixed", label: "Fixed" },
-  { value: "done", label: "Done" },
 ] as const;
 
 export const DEPLOYMENT_STATUS_OPTIONS = [
   { value: "not_deployed", label: "Not Deployed" },
-  { value: "queued", label: "Queued" },
+  { value: "queued", label: "Queued for Deployment" },
   { value: "deployed", label: "Deployed" },
+  { value: "tester_check", label: "Tester Check" },
   { value: "verified", label: "Verified" },
+] as const;
+
+export const ISSUE_ASSIGNMENT_GROUP_OPTIONS = [
+  { value: "development", label: "Development team" },
+  { value: "testing", label: "Testing team" },
 ] as const;
 
 export const EPIC_STATUS_OPTIONS = [
@@ -97,6 +100,7 @@ export type IssuePriority = (typeof ISSUE_PRIORITY_OPTIONS)[number]["value"];
 export type IssueStatus = (typeof ISSUE_STATUS_OPTIONS)[number]["value"];
 export type DevelopmentStatus = (typeof DEVELOPMENT_STATUS_OPTIONS)[number]["value"];
 export type DeploymentStatus = (typeof DEPLOYMENT_STATUS_OPTIONS)[number]["value"];
+export type IssueAssignmentGroup = (typeof ISSUE_ASSIGNMENT_GROUP_OPTIONS)[number]["value"];
 export type EpicStatus = (typeof EPIC_STATUS_OPTIONS)[number]["value"];
 export type ProjectReleaseStatus = (typeof RELEASE_STATUS_OPTIONS)[number]["value"];
 export type SprintStatus = (typeof SPRINT_STATUS_OPTIONS)[number]["value"];
@@ -132,6 +136,8 @@ export const ISSUE_LIST_SORT_FIELDS = [
   "assignee",
   "assigneeName",
   "assignedToName",
+  "testerAssigneeName",
+  "testerAssignedToName",
   "testedBy",
   "testedByName",
   "reviewedByName",
@@ -248,6 +254,8 @@ export interface IssueListItem {
   description: string | null;
   status: IssueStatus;
   priority: IssuePriority;
+  assigneeGroup: IssueAssignmentGroup | null;
+  testerAssigneeGroup: IssueAssignmentGroup | null;
   moduleId: string | null;
   moduleName: string | null;
   componentId: string | null;
@@ -260,6 +268,8 @@ export interface IssueListItem {
   releaseName: string | null;
   assigneeId: string | null;
   assigneeName: string | null;
+  testerAssigneeId: string | null;
+  testerAssigneeName: string | null;
   reporterId: string | null;
   reporterName: string | null;
   testedById: string | null;
@@ -286,6 +296,12 @@ export interface IssueListItem {
   issueClassName: string;
   assignedTo: string | null;
   assignedToName: string | null;
+  assignmentGroup: IssueAssignmentGroup | null;
+  assignmentGroupName: string | null;
+  testerAssignedTo: string | null;
+  testerAssignedToName: string | null;
+  testerAssignmentGroup: IssueAssignmentGroup | null;
+  testerAssignmentGroupName: string | null;
   reviewedBy: string | null;
   reviewedByName: string | null;
   comments: string | null;
@@ -481,12 +497,16 @@ export interface CreateIssueInput {
   epicId?: string | null;
   sprintId?: string | null;
   releaseId?: string | null;
+  assigneeGroup?: IssueAssignmentGroup | null;
+  assignmentGroup?: IssueAssignmentGroup | null;
   assigneeId?: string | null;
+  testerAssigneeGroup?: IssueAssignmentGroup | null;
+  testerAssignmentGroup?: IssueAssignmentGroup | null;
+  testerAssigneeId?: string | null;
   reporterId?: string | null;
   testedById?: string | null;
   parentIssueId?: string | null;
   remark?: string | null;
-  fixedDate?: string | null;
   developmentStatus?: DevelopmentStatus;
   deploymentStatus?: DeploymentStatus;
   media?: UploadedIssueMediaInput[];
@@ -495,11 +515,13 @@ export interface CreateIssueInput {
   navigation?: string | null;
   issueClassId?: string | null;
   assignedTo?: string | null;
+  testerAssignedTo?: string | null;
   reviewedBy?: string | null;
   testedBy?: string | null;
   comments?: string | null;
   development?: boolean;
   deployment?: boolean;
+  reopen?: boolean;
 }
 
 export interface UpdateIssueInput extends CreateIssueInput {

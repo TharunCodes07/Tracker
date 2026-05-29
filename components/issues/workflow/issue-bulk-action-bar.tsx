@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -20,10 +23,10 @@ import type {
   ProjectSprintListItem,
 } from "@/routes/issues/types";
 import {
-  ACTIVE_ISSUE_STATUS_OPTIONS,
   DEPLOYMENT_STATUS_OPTIONS,
   DEVELOPMENT_STATUS_OPTIONS,
   ISSUE_PRIORITY_OPTIONS,
+  ISSUE_STATUS_OPTIONS,
 } from "@/routes/issues/types";
 import type { TeamMemberListItem } from "@/routes/teams/types";
 
@@ -40,7 +43,10 @@ export type IssueBulkPatch = Partial<
     | "epicId"
     | "sprintId"
     | "releaseId"
+    | "assigneeGroup"
     | "assigneeId"
+    | "testerAssigneeGroup"
+    | "testerAssigneeId"
     | "testedById"
     | "developmentStatus"
     | "deploymentStatus"
@@ -55,7 +61,8 @@ type BulkAction =
   | "epicId"
   | "sprintId"
   | "releaseId"
-  | "assigneeId"
+  | "developmentAssignment"
+  | "testingAssignment"
   | "testedById"
   | "developmentStatus"
   | "deploymentStatus";
@@ -73,7 +80,8 @@ const ACTION_OPTIONS: { value: BulkAction; label: string }[] = [
   { value: "epicId", label: "Move to epic" },
   { value: "sprintId", label: "Move to sprint" },
   { value: "releaseId", label: "Move to release" },
-  { value: "assigneeId", label: "Assign to" },
+  { value: "developmentAssignment", label: "Assign development" },
+  { value: "testingAssignment", label: "Assign testing" },
   { value: "testedById", label: "Set tested by" },
   { value: "developmentStatus", label: "Development" },
   { value: "deploymentStatus", label: "Deployment" },
@@ -94,7 +102,7 @@ function buildTargetOptions(options: {
 }): BulkOption[] {
   switch (options.action) {
     case "status":
-      return ACTIVE_ISSUE_STATUS_OPTIONS.map((status) => ({ value: status.value, label: status.label }));
+      return ISSUE_STATUS_OPTIONS.map((status) => ({ value: status.value, label: status.label }));
     case "priority":
       return ISSUE_PRIORITY_OPTIONS.map((priority) => ({
         value: priority.value,
@@ -128,11 +136,22 @@ function buildTargetOptions(options: {
         options.releases.map((release) => ({ value: release.id, label: release.name })),
         "No release"
       );
-    case "assigneeId":
-      return nullableOptions(
-        options.members.map((member) => ({ value: member.userId, label: member.name })),
-        "Unassigned"
-      );
+    case "developmentAssignment":
+      return [
+        { value: NONE_VALUE, label: "Unassigned" },
+        { value: "team:development", label: "Development team" },
+        ...options.members
+          .filter((member) => member.roles.includes("developer"))
+          .map((member) => ({ value: `user:development:${member.userId}`, label: member.name })),
+      ];
+    case "testingAssignment":
+      return [
+        { value: NONE_VALUE, label: "Unassigned" },
+        { value: "team:testing", label: "Testing team" },
+        ...options.members
+          .filter((member) => member.roles.includes("tester"))
+          .map((member) => ({ value: `user:testing:${member.userId}`, label: member.name })),
+      ];
     case "testedById":
       return nullableOptions(
         options.members.map((member) => ({ value: member.userId, label: member.name })),
@@ -149,6 +168,50 @@ function buildTargetOptions(options: {
         label: status.label,
       }));
   }
+}
+
+function parseAssignmentPatch(value: string, role: "development" | "testing"): IssueBulkPatch {
+  if (value === NONE_VALUE) {
+    return role === "development"
+      ? {
+          assigneeGroup: NONE_VALUE,
+          assigneeId: NONE_VALUE,
+        }
+      : {
+          testerAssigneeGroup: NONE_VALUE,
+          testerAssigneeId: NONE_VALUE,
+        };
+  }
+
+  if (value === `team:${role}`) {
+    return role === "development"
+      ? {
+          assigneeGroup: role,
+          assigneeId: NONE_VALUE,
+        }
+      : {
+          testerAssigneeGroup: role,
+          testerAssigneeId: NONE_VALUE,
+        };
+  }
+
+  if (value.startsWith(`user:${role}:`)) {
+    const [, group, userId] = value.split(":");
+
+    if (group === role) {
+      return role === "development"
+        ? {
+            assigneeGroup: group,
+            assigneeId: userId ?? NONE_VALUE,
+          }
+        : {
+            testerAssigneeGroup: group,
+            testerAssigneeId: userId ?? NONE_VALUE,
+          };
+    }
+  }
+
+  return {};
 }
 
 export function IssueBulkActionBar({
@@ -240,8 +303,11 @@ export function IssueBulkActionBar({
       case "releaseId":
         onApply({ releaseId: selectedTarget });
         return;
-      case "assigneeId":
-        onApply({ assigneeId: selectedTarget });
+      case "developmentAssignment":
+        onApply(parseAssignmentPatch(selectedTarget, "development"));
+        return;
+      case "testingAssignment":
+        onApply(parseAssignmentPatch(selectedTarget, "testing"));
         return;
       case "testedById":
         onApply({ testedById: selectedTarget });
@@ -286,12 +352,18 @@ export function IssueBulkActionBar({
           <SelectTrigger className="w-full sm:w-56">
             <SelectValue placeholder="Choose target" />
           </SelectTrigger>
-          <SelectContent>
-            {targetOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
+          <SelectContent className={action.includes("Assignment") ? "min-w-72" : undefined}>
+            {action === "developmentAssignment" ? (
+              <AssignmentTargetItems members={members} role="development" />
+            ) : action === "testingAssignment" ? (
+              <AssignmentTargetItems members={members} role="testing" />
+            ) : (
+              targetOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
 
@@ -313,5 +385,41 @@ export function IssueBulkActionBar({
         </div>
       </div>
     </div>
+  );
+}
+
+function AssignmentTargetItems({
+  members,
+  role,
+}: {
+  members: TeamMemberListItem[];
+  role: "development" | "testing";
+}) {
+  const developerMembers = members.filter((member) => member.roles.includes("developer"));
+  const testerMembers = members.filter((member) => member.roles.includes("tester"));
+  const visibleMembers = role === "development" ? developerMembers : testerMembers;
+  const roleLabel = role === "development" ? "Development" : "Testing";
+  const teamLabel = role === "development" ? "Development team" : "Testing team";
+  const emptyLabel = role === "development" ? "No developer members" : "No tester members";
+
+  return (
+    <>
+      <SelectItem value={NONE_VALUE}>Unassigned</SelectItem>
+      <SelectSeparator />
+      <SelectGroup>
+        <SelectLabel>{roleLabel}</SelectLabel>
+        <SelectItem value={`team:${role}`}>{teamLabel}</SelectItem>
+        {visibleMembers.map((member) => (
+          <SelectItem key={`${role}:${member.userId}`} value={`user:${role}:${member.userId}`}>
+            {member.name}
+          </SelectItem>
+        ))}
+      </SelectGroup>
+      {visibleMembers.length === 0 ? (
+        <SelectItem value={`__no_${role}_members__`} disabled>
+          {emptyLabel}
+        </SelectItem>
+      ) : null}
+    </>
   );
 }

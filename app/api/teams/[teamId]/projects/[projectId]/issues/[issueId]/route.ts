@@ -43,7 +43,7 @@ export async function PATCH(
     return await withRouteOrganization(request, async (actor) => {
       const { teamId, projectId, issueId } = await context.params;
       const body = await readJsonBody<UpdateIssueInput>(request);
-      const { issue, previousAssignedTo, previousStatus } =
+      const { issue, previousAssignedTo, previousTesterAssignedTo, previousStatus, reopened } =
         body.title && body.issueType && body.priority
           ? await updateIssue(actor, teamId, projectId, issueId, body)
           : await updateIssueStatus(actor, teamId, projectId, issueId, body.status);
@@ -63,6 +63,20 @@ export async function PATCH(
         });
       }
 
+      if (issue.testerAssigneeId && issue.testerAssigneeId !== previousTesterAssignedTo) {
+        notificationEvents.push({
+          type: "issue.assigned",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          assigneeId: issue.testerAssigneeId,
+        });
+      }
+
       if (previousStatus !== "review" && issue.status === "review") {
         notificationEvents.push({
           type: "issue.marked_for_review",
@@ -77,7 +91,7 @@ export async function PATCH(
         });
       }
 
-      if (previousStatus === "done" && issue.status !== "done") {
+      if (reopened) {
         notificationEvents.push({
           type: "issue.reopened",
           actorId: actor.id,
@@ -97,10 +111,7 @@ export async function PATCH(
 
       return NextResponse.json<IssueMutationResponse>({
         issue,
-        message:
-          previousStatus === "done" && issue.status !== "done"
-            ? `${issue.title} has been reopened.`
-            : `${issue.title} has been updated.`,
+        message: reopened ? `${issue.title} has been reopened.` : `${issue.title} has been updated.`,
       });
     });
   } catch (error) {

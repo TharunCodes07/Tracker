@@ -30,7 +30,7 @@ import { MultiFilterSelect } from "../ui";
 type AssignmentMode = "sprint" | "module";
 
 const DEFAULT_ASSIGNMENT_STATUS_FILTERS = ISSUE_STATUS_OPTIONS.filter(
-  (option) => option.value !== "done"
+  (option) => option.value !== "fixed"
 ).map((option) => option.value);
 
 export interface PlanningAssignmentTarget {

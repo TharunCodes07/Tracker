@@ -104,7 +104,7 @@ export function BoardView({
       {bulkActionBar}
 
       {isLoading ? (
-        <KanbanBoardSkeleton columns={boardTab === "versions" ? 4 : 4} />
+        <KanbanBoardSkeleton columns={boardTab === "issues" ? ACTIVE_ISSUE_STATUS_OPTIONS.length : 4} />
       ) : boardTab === "issues" ? (
         <KanbanBoard
           columns={ISSUE_BOARD_COLUMNS}

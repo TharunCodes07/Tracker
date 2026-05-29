@@ -38,18 +38,21 @@ export interface IssueFormState {
   epicId: string;
   sprintId: string;
   releaseId: string;
+  assigneeGroup: string;
   assigneeId: string;
+  testerAssigneeGroup: string;
+  testerAssigneeId: string;
   reporterId: string;
   testedById: string;
   parentIssueId: string;
   comments: string;
   remark: string;
-  fixedDate: string;
   developmentStatus: DevelopmentStatus;
   deploymentStatus: DeploymentStatus;
   media: IssueMediaListItem[];
   mediaFiles: File[];
   removeMediaIds: string[];
+  reopen: boolean;
 }
 
 export interface ModuleFormState {

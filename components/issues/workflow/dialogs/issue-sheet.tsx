@@ -21,6 +21,11 @@ import {
   IssuePriorityBadge,
   IssueStatusBadge,
 } from "@/components/issues/shared/issue-display";
+import {
+  getIssueAssignmentLabel,
+  getIssueTesterAssignmentLabel,
+  splitBulletItems,
+} from "@/components/issues/shared/issue-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -158,7 +163,7 @@ function IssueOperationsDetail({
       <div className="grid gap-2 md:grid-cols-4">
         <SummaryTile label="Status" value={issue.status.replaceAll("_", " ")} />
         <SummaryTile label="Priority" value={issue.priority} />
-        <SummaryTile label="Assignee" value={issue.assigneeName ?? "Unassigned"} />
+        <SummaryTile label="Dev owner" value={getIssueAssignmentLabel(issue)} />
         <SummaryTile label="Comments" value={`${issue.commentCount}`} />
       </div>
 
@@ -166,8 +171,8 @@ function IssueOperationsDetail({
         <main className="min-w-0 space-y-4">
           <TextSection title="Description" value={issue.description || "No description provided."} />
           <div className="grid gap-4 lg:grid-cols-2">
-            <TextSection title="Comments" value={issue.comments || "No comments."} subtle />
-            <TextSection title="Remark" value={issue.remark || "No remark."} subtle />
+            <BulletTextSection title="Comments" value={issue.comments} fallback="No comments." subtle />
+            <BulletTextSection title="Remark" value={issue.remark} fallback="No remark." subtle />
           </div>
           <MetaPanel title="Delivery" items={deliveryItems(issue)} columns="two" />
           <MediaSection
@@ -220,6 +225,38 @@ function TextSection({
       >
         {value}
       </p>
+    </section>
+  );
+}
+
+function BulletTextSection({
+  title,
+  value,
+  fallback,
+  subtle,
+}: {
+  title: string;
+  value: string | null;
+  fallback: string;
+  subtle?: boolean;
+}) {
+  const items = splitBulletItems(value);
+
+  return (
+    <section className="min-w-0 rounded-xl border border-border/70 bg-background p-4">
+      <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">{title}</div>
+      {items.length > 0 ? (
+        <ul className={cn("space-y-1.5 text-sm leading-6", subtle && "text-muted-foreground")}>
+          {items.map((item, index) => (
+            <li key={index} className="flex min-w-0 gap-2 [overflow-wrap:anywhere]">
+              <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-emerald-500" />
+              <span className="min-w-0 break-words">{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={cn("text-sm leading-6", subtle && "text-muted-foreground")}>{fallback}</p>
+      )}
     </section>
   );
 }
@@ -318,7 +355,8 @@ function planningItems(issue: IssueListItem) {
 
 function peopleItems(issue: IssueListItem) {
   return [
-    { label: "Assignee", value: issue.assigneeName ?? "Unassigned", icon: UserRound },
+    { label: "Development owner", value: getIssueAssignmentLabel(issue), icon: UserRound },
+    { label: "Testing owner", value: getIssueTesterAssignmentLabel(issue), icon: TestTube2 },
     { label: "Reporter", value: issue.reporterName ?? "Unknown", icon: UserRound },
     { label: "Tested by", value: issue.testedByName ?? "Not tested", icon: TestTube2 },
   ];

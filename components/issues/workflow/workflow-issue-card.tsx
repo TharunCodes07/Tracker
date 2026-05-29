@@ -7,6 +7,10 @@ import {
   IssuePriorityBadge,
   IssueStatusBadge,
 } from "@/components/issues/shared/issue-display";
+import {
+  getIssueAssignmentLabel,
+  getIssueTesterAssignmentLabel,
+} from "@/components/issues/shared/issue-text";
 import { ISSUE_TYPE_OPTIONS, type IssueListItem } from "@/routes/issues/types";
 
 import { labelFor } from "./forms";
@@ -82,8 +86,8 @@ export function WorkflowIssueCard({
         {issue.releaseName ? <Badge variant="outline">{issue.releaseName}</Badge> : null}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span>{issue.assigneeName ?? "Unassigned"}</span>
-        <span>{issue.testedByName ?? "Not tested"}</span>
+        <span>Dev {getIssueAssignmentLabel(issue)}</span>
+        <span>Test {getIssueTesterAssignmentLabel(issue)}</span>
         <span className="capitalize">Dev {issue.developmentStatus.replaceAll("_", " ")}</span>
         <span className="capitalize">Deploy {issue.deploymentStatus.replaceAll("_", " ")}</span>
       </div>

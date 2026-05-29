@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
-  ACTIVE_ISSUE_STATUS_OPTIONS,
   ISSUE_PRIORITY_OPTIONS,
+  ISSUE_STATUS_OPTIONS,
   ISSUE_TYPE_OPTIONS,
   type IssuePriority,
   type IssueStatus,
@@ -108,7 +108,7 @@ export function WorkflowFilters({
       filters,
       "status",
       "Status",
-      ACTIVE_ISSUE_STATUS_OPTIONS,
+      ISSUE_STATUS_OPTIONS,
       statusFilters,
       onStatusFiltersChange
     );
@@ -186,7 +186,7 @@ export function WorkflowFilters({
         values={statusFilters}
         onValuesChange={onStatusFiltersChange}
         label="Status"
-        options={ACTIVE_ISSUE_STATUS_OPTIONS}
+        options={ISSUE_STATUS_OPTIONS}
         triggerClassName={triggerClassName}
         contentClassName={contentClassName}
       />,

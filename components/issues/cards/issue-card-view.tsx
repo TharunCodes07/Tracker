@@ -18,6 +18,10 @@ import {
   IssueReopenedBadge,
   IssueStatusBadge,
 } from "@/components/issues/shared/issue-display";
+import {
+  getIssueAssignmentLabel,
+  getIssueTesterAssignmentLabel,
+} from "@/components/issues/shared/issue-text";
 import { IssueMediaSummary } from "@/components/issues/media/issue-media";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,7 +120,7 @@ export function IssueCardView({
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {issues.map((issue) => {
           const isInteractive = Boolean(onIssueClick);
-          const assignedTo = issue.assignedToName ?? "Unassigned";
+          const assignedTo = getIssueAssignmentLabel(issue);
           const isSelected = selectedIssueIds.includes(issue.id);
 
           return (
@@ -225,7 +229,11 @@ export function IssueCardView({
                   ) : null}
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <UserRound className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{assignedTo}</span>
+                    <span className="truncate">Dev {assignedTo}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <UserCheck className="h-3 w-3 shrink-0" />
+                    <span className="truncate">Test {getIssueTesterAssignmentLabel(issue)}</span>
                   </div>
                   {issue.testedByName && (
                     <div className="flex items-center gap-2 text-muted-foreground">

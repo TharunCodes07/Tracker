@@ -11,6 +11,11 @@ import {
   IssueReopenedBadge,
   IssueStatusBadge,
 } from "@/components/issues/shared/issue-display";
+import {
+  getIssueAssignmentLabel,
+  getIssueTesterAssignmentLabel,
+  splitBulletItems,
+} from "@/components/issues/shared/issue-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
@@ -69,6 +74,32 @@ function TextCell({ value, fallback }: { value: string | null; fallback: string 
     >
       {displayValue}
     </div>
+  );
+}
+
+function BulletTextCell({ value, fallback }: { value: string | null; fallback: string }) {
+  const items = splitBulletItems(value);
+
+  if (items.length === 0) {
+    return <TextCell value={null} fallback={fallback} />;
+  }
+
+  return (
+    <ul
+      className={cn(
+        "min-w-0 space-y-1 text-left leading-5 [overflow-wrap:anywhere]",
+        LONG_TEXT_WIDTH_CLASS,
+        LONG_TEXT_HEIGHT_CLASS
+      )}
+      title={items.join("\n")}
+    >
+      {items.map((item, index) => (
+        <li key={index} className="flex min-w-0 gap-2">
+          <span className="mt-2 size-1.5 shrink-0 rounded-full bg-emerald-500" />
+          <span className="min-w-0 break-words">{item}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -228,18 +259,29 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "assigneeName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Assigned to" />,
-      cell: ({ row }) => <PersonCell value={row.original.assigneeName} fallback="Unassigned" />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Dev owner" />,
+      cell: ({ row }) => <PersonCell value={getIssueAssignmentLabel(row.original)} fallback="Unassigned" />,
       size: 180,
       meta: {
-        label: "Assigned to",
+        label: "Dev owner",
+      },
+    },
+    {
+      accessorKey: "testerAssigneeName",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Testing owner" />,
+      cell: ({ row }) => (
+        <PersonCell value={getIssueTesterAssignmentLabel(row.original)} fallback="Unassigned" />
+      ),
+      size: 180,
+      meta: {
+        label: "Testing owner",
       },
     },
     {
       accessorKey: "comments",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Comments" />,
       cell: ({ row }) => (
-        <TextCell
+        <BulletTextCell
           value={row.original.comments}
           fallback={row.original.commentCount > 0 ? `${row.original.commentCount} comments` : "-"}
         />
@@ -257,7 +299,7 @@ export function getIssueTableColumns({
     {
       accessorKey: "remark",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Remark" />,
-      cell: ({ row }) => <TextCell value={row.original.remark} fallback="-" />,
+      cell: ({ row }) => <BulletTextCell value={row.original.remark} fallback="-" />,
       enableSorting: false,
       size: 220,
       minSize: 160,

@@ -17,6 +17,11 @@ import {
   IssuePriorityBadge,
   IssueStatusBadge,
 } from "@/components/issues/shared/issue-display";
+import {
+  getIssueAssignmentLabel,
+  getIssueTesterAssignmentLabel,
+  splitBulletItems,
+} from "@/components/issues/shared/issue-text";
 import { IssueMediaAttachmentList } from "@/components/issues/media/issue-media";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -103,7 +108,8 @@ export function IssueDetailContent({
           <DetailItem icon={GitBranch} label="Epic" value={issue.epicTitle ?? "None"} />
           <DetailItem icon={CalendarDays} label="Sprint" value={issue.sprintName ?? "Backlog"} />
           <DetailItem icon={PackageCheck} label="Release" value={issue.releaseName ?? "None"} />
-          <DetailItem icon={UserRound} label="Assignee" value={issue.assigneeName ?? "Unassigned"} />
+          <DetailItem icon={UserRound} label="Development owner" value={getIssueAssignmentLabel(issue)} />
+          <DetailItem icon={TestTube2} label="Testing owner" value={getIssueTesterAssignmentLabel(issue)} />
           <DetailItem icon={UserRound} label="Reporter" value={issue.reporterName ?? "Unknown"} />
           <DetailItem icon={TestTube2} label="Tested by" value={issue.testedByName ?? "Not tested"} />
           <DetailItem icon={CalendarDays} label="Fixed date" value={issue.fixedDate?.slice(0, 10) ?? "Not fixed"} />
@@ -121,11 +127,11 @@ export function IssueDetailContent({
         </dl>
 
         {issue.comments ? (
-          <TextBlock label="Comments" value={issue.comments} />
+          <BulletTextBlock label="Comments" value={issue.comments} />
         ) : null}
 
         {issue.remark ? (
-          <TextBlock label="Remark" value={issue.remark} />
+          <BulletTextBlock label="Remark" value={issue.remark} />
         ) : null}
       </div>
     </div>
@@ -154,11 +160,20 @@ function DetailItem({
   );
 }
 
-function TextBlock({ label, value }: { label: string; value: string }) {
+function BulletTextBlock({ label, value }: { label: string; value: string }) {
+  const items = splitBulletItems(value);
+
   return (
     <div className="border-l-2 border-emerald-500/60 pl-4">
       <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
-      <div className="mt-1 whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">{value}</div>
+      <ul className="mt-2 space-y-1.5 text-sm">
+        {items.map((item, index) => (
+          <li key={index} className="flex min-w-0 gap-2 [overflow-wrap:anywhere]">
+            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-emerald-500" />
+            <span className="min-w-0 break-words">{item}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
