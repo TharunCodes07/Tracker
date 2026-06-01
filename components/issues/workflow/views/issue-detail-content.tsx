@@ -48,7 +48,7 @@ export function IssueDetailContent({
       className={cn(
         "space-y-6 py-4",
         variant === "sheet" &&
-          "lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(19rem,0.85fr)] lg:gap-6 lg:space-y-0"
+          "lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(19rem,0.85fr)] lg:gap-6 lg:space-y-0",
       )}
     >
       <div className="min-w-0 space-y-6">
@@ -60,7 +60,9 @@ export function IssueDetailContent({
                   <Badge variant="secondary" className="font-mono">
                     {issue.key}
                   </Badge>
-                  <Badge variant="outline">{labelFor(ISSUE_TYPE_OPTIONS, issue.issueType)}</Badge>
+                  <Badge variant="outline">
+                    {labelFor(ISSUE_TYPE_OPTIONS, issue.issueType)}
+                  </Badge>
                   <IssueStatusBadge status={issue.status} />
                   <IssuePriorityBadge priority={issue.priority} />
                 </div>
@@ -70,7 +72,11 @@ export function IssueDetailContent({
               </div>
 
               {onEdit ? (
-                <Button type="button" variant="outline" onClick={() => onEdit(issue)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onEdit(issue)}
+                >
                   <Pencil className="h-4 w-4" />
                   Edit
                 </Button>
@@ -100,19 +106,54 @@ export function IssueDetailContent({
         <dl
           className={cn(
             "grid gap-x-8 gap-y-0 border-y border-border/70",
-            variant === "sheet" ? "md:grid-cols-1" : "md:grid-cols-2"
+            variant === "sheet" ? "md:grid-cols-1" : "md:grid-cols-2",
           )}
         >
-          <DetailItem icon={Folder} label="Module" value={issue.moduleName ?? "Unassigned"} />
-          <DetailItem icon={Component} label="Component" value={issue.componentName ?? "No component"} />
-          <DetailItem icon={GitBranch} label="Epic" value={issue.epicTitle ?? "None"} />
-          <DetailItem icon={CalendarDays} label="Sprint" value={issue.sprintName ?? "Backlog"} />
-          <DetailItem icon={PackageCheck} label="Release" value={issue.releaseName ?? "None"} />
-          <DetailItem icon={UserRound} label="Development owner" value={getIssueAssignmentLabel(issue)} />
-          <DetailItem icon={TestTube2} label="Testing owner" value={getIssueTesterAssignmentLabel(issue)} />
-          <DetailItem icon={UserRound} label="Reporter" value={issue.reporterName ?? "Unknown"} />
-          <DetailItem icon={TestTube2} label="Tested by" value={issue.testedByName ?? "Not tested"} />
-          <DetailItem icon={CalendarDays} label="Fixed date" value={issue.fixedDate?.slice(0, 10) ?? "Not fixed"} />
+          <DetailItem
+            icon={Folder}
+            label="Module"
+            value={issue.moduleName ?? "Unassigned"}
+          />
+          <DetailItem
+            icon={Component}
+            label="Component"
+            value={issue.componentName ?? "No component"}
+          />
+          <DetailItem
+            icon={GitBranch}
+            label="Epic"
+            value={issue.epicTitle ?? "None"}
+          />
+          <DetailItem
+            icon={CalendarDays}
+            label="Sprint"
+            value={issue.sprintName ?? "Backlog"}
+          />
+          <DetailItem
+            icon={PackageCheck}
+            label="Release"
+            value={issue.releaseName ?? "None"}
+          />
+          <DetailItem
+            icon={UserRound}
+            label="Developer"
+            value={getIssueAssignmentLabel(issue)}
+          />
+          <DetailItem
+            icon={TestTube2}
+            label="Tester"
+            value={getIssueTesterAssignmentLabel(issue)}
+          />
+          <DetailItem
+            icon={UserRound}
+            label="Reporter"
+            value={issue.reporterName ?? "Unknown"}
+          />
+          <DetailItem
+            icon={CalendarDays}
+            label="Fixed date"
+            value={issue.fixedDate?.slice(0, 10) ?? "Not fixed"}
+          />
           <DetailItem
             icon={ClipboardList}
             label="Development"
@@ -123,7 +164,11 @@ export function IssueDetailContent({
             label="Deployment"
             value={issue.deploymentStatus.replaceAll("_", " ")}
           />
-          <DetailItem icon={MessageSquareText} label="Comment count" value={`${issue.commentCount} comments`} />
+          <DetailItem
+            icon={MessageSquareText}
+            label="Comment count"
+            value={`${issue.commentCount} comments`}
+          />
         </dl>
 
         {issue.comments ? (
@@ -151,7 +196,9 @@ function DetailItem({
     <div className="flex min-w-0 items-start gap-3 border-b border-border/60 py-3 last:border-b-0">
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
       <div className="min-w-0">
-        <dt className="text-xs font-medium uppercase text-muted-foreground">{label}</dt>
+        <dt className="text-xs font-medium uppercase text-muted-foreground">
+          {label}
+        </dt>
         <dd className="mt-1 break-words text-sm font-medium capitalize [overflow-wrap:anywhere]">
           {value}
         </dd>
@@ -165,10 +212,15 @@ function BulletTextBlock({ label, value }: { label: string; value: string }) {
 
   return (
     <div className="border-l-2 border-emerald-500/60 pl-4">
-      <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
+      <div className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </div>
       <ul className="mt-2 space-y-1.5 text-sm">
         {items.map((item, index) => (
-          <li key={index} className="flex min-w-0 gap-2 [overflow-wrap:anywhere]">
+          <li
+            key={index}
+            className="flex min-w-0 gap-2 [overflow-wrap:anywhere]"
+          >
             <span className="mt-2 size-1.5 shrink-0 rounded-full bg-emerald-500" />
             <span className="min-w-0 break-words">{item}</span>
           </li>

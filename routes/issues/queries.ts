@@ -1431,13 +1431,13 @@ function toIssueExcelRow(issue: IssueListItem): IssueExcelRow {
     priority:
       ISSUE_PRIORITY_OPTIONS.find((option) => option.value === issue.priority)
         ?.label ?? issue.priority,
-    assignedToName: issue.assigneeName,
+    assignedToName: issue.assignedToName,
+    testerAssignedToName: issue.testerAssignedToName,
     status:
       ISSUE_STATUS_OPTIONS.find((option) => option.value === issue.status)
         ?.label ?? issue.status,
     comments: issue.comments,
     remark: issue.remark,
-    testedByName: issue.testedByName,
     fixedDate: issue.fixedDate,
     developmentStatus:
       DEVELOPMENT_STATUS_OPTIONS.find(

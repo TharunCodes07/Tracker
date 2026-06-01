@@ -629,20 +629,10 @@ async function validateIssueFields(
       testedById ?? "",
     ]),
     assigneeGroup === "development"
-      ? assertUserHasTeamRole(
-          teamId,
-          assigneeId,
-          "developer",
-          "Development owner",
-        )
+      ? assertUserHasTeamRole(teamId, assigneeId, "developer", "Developer")
       : Promise.resolve(),
     testerAssigneeGroup === "testing"
-      ? assertUserHasTeamRole(
-          teamId,
-          testerAssigneeId,
-          "tester",
-          "Testing owner",
-        )
+      ? assertUserHasTeamRole(teamId, testerAssigneeId, "tester", "Tester")
       : Promise.resolve(),
     assertModuleBelongsToProject(projectId, moduleId),
     assertEpicBelongsToProject(projectId, epicId),

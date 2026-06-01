@@ -82,11 +82,11 @@ export const ISSUE_EXCEL_HEADERS = [
   "Component",
   "Issue",
   "Priority",
-  "Assigned to",
+  "Developer",
   "Status",
   "Comments",
   "Remark",
-  "Tested By",
+  "Tester",
   "Fixed Date",
   "Development",
   "Deployment",
@@ -548,10 +548,10 @@ export interface IssueExcelRow {
   title: string | null;
   priority: string | null;
   assignedToName: string | null;
+  testerAssignedToName: string | null;
   status: string | null;
   comments: string | null;
   remark: string | null;
-  testedByName: string | null;
   fixedDate: string | null;
   developmentStatus: string | null;
   deploymentStatus: string | null;

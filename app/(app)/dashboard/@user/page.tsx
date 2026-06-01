@@ -58,9 +58,9 @@ export default async function DashboardPage() {
       <section className="flex flex-col gap-4 border-b border-border/70 pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="w-fit">
+            {/* <Badge variant="outline" className="w-fit">
               Dashboard
-            </Badge>
+            </Badge> */}
 
             {overview.claimableRoleIssues > 0 ? (
               <Badge variant="secondary" className="w-fit">
@@ -69,7 +69,7 @@ export default async function DashboardPage() {
             ) : null}
           </div>
 
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
             Your work queue
           </h1>
 
@@ -100,7 +100,7 @@ export default async function DashboardPage() {
         <DashboardMetric
           label="Assigned to me"
           value={overview.myAssignedIssues}
-          caption="Open dev or testing ownership"
+          caption="Open developer or tester assignments"
           icon={UserCheck}
           tone="assigned"
         />

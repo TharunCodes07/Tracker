@@ -309,7 +309,7 @@ export function getIssueTableColumns({
     {
       accessorKey: "assigneeName",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Dev owner" />
+        <DataTableColumnHeader column={column} title="Developer" />
       ),
       cell: ({ row }) => (
         <PersonCell
@@ -319,13 +319,13 @@ export function getIssueTableColumns({
       ),
       size: 180,
       meta: {
-        label: "Dev owner",
+        label: "Developer",
       },
     },
     {
       accessorKey: "testerAssigneeName",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Testing owner" />
+        <DataTableColumnHeader column={column} title="Tester" />
       ),
       cell: ({ row }) => (
         <PersonCell
@@ -335,7 +335,7 @@ export function getIssueTableColumns({
       ),
       size: 180,
       meta: {
-        label: "Testing owner",
+        label: "Tester",
       },
     },
     {
@@ -408,19 +408,6 @@ export function getIssueTableColumns({
       size: 190,
       meta: {
         label: "Component",
-      },
-    },
-    {
-      accessorKey: "testedByName",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Tested By" />
-      ),
-      cell: ({ row }) => (
-        <PersonCell value={row.original.testedByName} fallback="Not tested" />
-      ),
-      size: 180,
-      meta: {
-        label: "Tested By",
       },
     },
     {

@@ -250,20 +250,14 @@ export function IssueCardView({
                   ) : null}
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <UserRound className="h-3 w-3 shrink-0" />
-                    <span className="truncate">Dev {assignedTo}</span>
+                    <span className="truncate">Developer {assignedTo}</span>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <UserCheck className="h-3 w-3 shrink-0" />
                     <span className="truncate">
-                      Test {getIssueTesterAssignmentLabel(issue)}
+                      Tester {getIssueTesterAssignmentLabel(issue)}
                     </span>
                   </div>
-                  {issue.testedByName && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <UserCheck className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{issue.testedByName}</span>
-                    </div>
-                  )}
                 </div>
 
                 {(issue.developmentStatus || issue.deploymentStatus) && (

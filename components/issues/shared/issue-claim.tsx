@@ -68,7 +68,7 @@ export function IssueClaimActions({
           onClick={() => onClaim(role)}
         >
           <Hand className="h-3.5 w-3.5" />
-          Claim {role === "developer" ? "dev" : "test"}
+          Claim {role === "developer" ? "developer" : "tester"}
         </Button>
       ))}
     </div>

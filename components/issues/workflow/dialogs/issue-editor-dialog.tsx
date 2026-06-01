@@ -446,9 +446,9 @@ export function IssueEditorDialog({
                 </section>
 
                 <section id="issue-editor-owners" className="space-y-4">
-                  <SectionHeader icon={UserRound} title="Owners" />
+                  <SectionHeader icon={UserRound} title="Assignments" />
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                    <Field label="Development owner">
+                    <Field label="Developer">
                       <RoleAssignmentSelect
                         role="developer"
                         value={developmentAssignmentValue}
@@ -461,7 +461,7 @@ export function IssueEditorDialog({
                         }
                       />
                     </Field>
-                    <Field label="Testing owner">
+                    <Field label="Tester">
                       <RoleAssignmentSelect
                         role="tester"
                         value={testingAssignmentValue}
@@ -487,29 +487,6 @@ export function IssueEditorDialog({
                             {reporterFallbackLabel}
                           </SelectItem>
                           {workspace.members.map((member) => (
-                            <SelectItem
-                              key={member.userId}
-                              value={member.userId}
-                            >
-                              {formatMemberName(member, currentUserId)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field label="Tested by">
-                      <Select
-                        value={form.testedById}
-                        onValueChange={(value) =>
-                          updateForm({ testedById: value })
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={NONE_VALUE}>Not tested</SelectItem>
-                          {testerMembers.map((member) => (
                             <SelectItem
                               key={member.userId}
                               value={member.userId}
@@ -694,7 +671,7 @@ function RoleAssignmentSelect({
 }) {
   const teamValue = role === "developer" ? "team:development" : "team:testing";
   const teamLabel = role === "developer" ? "Development team" : "Testing team";
-  const groupLabel = role === "developer" ? "Development" : "Testing";
+  const groupLabel = role === "developer" ? "Developer" : "Tester";
 
   return (
     <Select value={value} onValueChange={onChange}>

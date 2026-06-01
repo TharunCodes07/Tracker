@@ -65,11 +65,14 @@ export function IssueSheet({
         showCloseButton={false}
         className={cn(
           "flex h-[min(900px,92svh)] w-full max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl border border-border/70 bg-background p-0 shadow-2xl sm:max-w-6xl",
-          selectedIssue && getIssuePriorityCardAccentClassName(selectedIssue.priority)
+          selectedIssue &&
+            getIssuePriorityCardAccentClassName(selectedIssue.priority),
         )}
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>{selectedIssue ? selectedIssue.key : "Issue detail"}</DialogTitle>
+          <DialogTitle>
+            {selectedIssue ? selectedIssue.key : "Issue detail"}
+          </DialogTitle>
         </DialogHeader>
 
         {selectedIssue ? (
@@ -138,7 +141,9 @@ export function IssueSheet({
                 issue={selectedIssue}
                 mediaActionPending={mediaActionPending}
                 onRemoveMedia={
-                  canEdit ? (mediaId) => onRemoveMedia(selectedIssue, mediaId) : undefined
+                  canEdit
+                    ? (mediaId) => onRemoveMedia(selectedIssue, mediaId)
+                    : undefined
                 }
               />
             </div>
@@ -163,18 +168,35 @@ function IssueOperationsDetail({
       <div className="grid gap-2 md:grid-cols-4">
         <SummaryTile label="Status" value={issue.status.replaceAll("_", " ")} />
         <SummaryTile label="Priority" value={issue.priority} />
-        <SummaryTile label="Dev owner" value={getIssueAssignmentLabel(issue)} />
+        <SummaryTile label="Developer" value={getIssueAssignmentLabel(issue)} />
         <SummaryTile label="Comments" value={`${issue.commentCount}`} />
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <main className="min-w-0 space-y-4">
-          <TextSection title="Description" value={issue.description || "No description provided."} />
+          <TextSection
+            title="Description"
+            value={issue.description || "No description provided."}
+          />
           <div className="grid gap-4 lg:grid-cols-2">
-            <BulletTextSection title="Comments" value={issue.comments} fallback="No comments." subtle />
-            <BulletTextSection title="Remark" value={issue.remark} fallback="No remark." subtle />
+            <BulletTextSection
+              title="Comments"
+              value={issue.comments}
+              fallback="No comments."
+              subtle
+            />
+            <BulletTextSection
+              title="Remark"
+              value={issue.remark}
+              fallback="No remark."
+              subtle
+            />
           </div>
-          <MetaPanel title="Delivery" items={deliveryItems(issue)} columns="two" />
+          <MetaPanel
+            title="Delivery"
+            items={deliveryItems(issue)}
+            columns="two"
+          />
           <MediaSection
             issue={issue}
             mediaActionPending={mediaActionPending}
@@ -195,11 +217,15 @@ function IssueOperationsDetail({
 function StatusPanel({ issue }: { issue: IssueListItem }) {
   return (
     <section className="rounded-xl border border-border/70 bg-muted/20 p-3">
-      <div className="mb-3 text-xs font-medium uppercase text-muted-foreground">Current state</div>
+      <div className="mb-3 text-xs font-medium uppercase text-muted-foreground">
+        Current state
+      </div>
       <div className="flex flex-wrap gap-2">
         <IssueStatusBadge status={issue.status} />
         <IssuePriorityBadge priority={issue.priority} />
-        <Badge variant="outline">{labelFor(ISSUE_TYPE_OPTIONS, issue.issueType)}</Badge>
+        <Badge variant="outline">
+          {labelFor(ISSUE_TYPE_OPTIONS, issue.issueType)}
+        </Badge>
       </div>
     </section>
   );
@@ -216,11 +242,13 @@ function TextSection({
 }) {
   return (
     <section className="min-w-0 rounded-xl border border-border/70 bg-background p-4">
-      <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">{title}</div>
+      <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+        {title}
+      </div>
       <p
         className={cn(
           "whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]",
-          subtle && "text-muted-foreground"
+          subtle && "text-muted-foreground",
         )}
       >
         {value}
@@ -244,18 +272,32 @@ function BulletTextSection({
 
   return (
     <section className="min-w-0 rounded-xl border border-border/70 bg-background p-4">
-      <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">{title}</div>
+      <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+        {title}
+      </div>
       {items.length > 0 ? (
-        <ul className={cn("space-y-1.5 text-sm leading-6", subtle && "text-muted-foreground")}>
+        <ul
+          className={cn(
+            "space-y-1.5 text-sm leading-6",
+            subtle && "text-muted-foreground",
+          )}
+        >
           {items.map((item, index) => (
-            <li key={index} className="flex min-w-0 gap-2 [overflow-wrap:anywhere]">
+            <li
+              key={index}
+              className="flex min-w-0 gap-2 [overflow-wrap:anywhere]"
+            >
               <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-emerald-500" />
               <span className="min-w-0 break-words">{item}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className={cn("text-sm leading-6", subtle && "text-muted-foreground")}>{fallback}</p>
+        <p
+          className={cn("text-sm leading-6", subtle && "text-muted-foreground")}
+        >
+          {fallback}
+        </p>
       )}
     </section>
   );
@@ -280,7 +322,9 @@ function MediaSection({
 
   return (
     <section className="min-w-0 rounded-xl border border-border/70 bg-background p-4">
-      <div className="mb-3 text-xs font-medium uppercase text-muted-foreground">Media</div>
+      <div className="mb-3 text-xs font-medium uppercase text-muted-foreground">
+        Media
+      </div>
       <IssueMediaAttachmentList
         issueId={issue.id}
         media={issue.media}
@@ -299,18 +343,24 @@ function MetaPanel({
   columns = "one",
 }: {
   title: string;
-  items: Array<{ label: string; value: string; icon: ComponentType<{ className?: string }> }>;
+  items: Array<{
+    label: string;
+    value: string;
+    icon: ComponentType<{ className?: string }>;
+  }>;
   dense?: boolean;
   columns?: "one" | "two";
 }) {
   return (
     <section className="rounded-xl border border-border/70 bg-background p-3">
-      <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">{title}</div>
+      <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+        {title}
+      </div>
       <dl
         className={cn(
           "grid divide-y divide-border/60",
           dense && "text-xs",
-          columns === "two" && "gap-x-4 sm:grid-cols-2 sm:divide-y-0"
+          columns === "two" && "gap-x-4 sm:grid-cols-2 sm:divide-y-0",
         )}
       >
         {items.map((item) => (
@@ -319,7 +369,7 @@ function MetaPanel({
             className={cn(
               "flex min-w-0 gap-2 border-border/60 py-2",
               dense && "py-1.5",
-              columns === "two" && "sm:border-b"
+              columns === "two" && "sm:border-b",
             )}
           >
             <item.icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
@@ -338,7 +388,9 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 truncate text-sm font-semibold capitalize">{value}</div>
+      <div className="mt-1 truncate text-sm font-semibold capitalize">
+        {value}
+      </div>
     </div>
   );
 }
@@ -346,27 +398,66 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
 function planningItems(issue: IssueListItem) {
   return [
     { label: "Module", value: issue.moduleName ?? "Unassigned", icon: Folder },
-    { label: "Component", value: issue.componentName ?? "No component", icon: Component },
+    {
+      label: "Component",
+      value: issue.componentName ?? "No component",
+      icon: Component,
+    },
     { label: "Epic", value: issue.epicTitle ?? "None", icon: GitBranch },
-    { label: "Sprint", value: issue.sprintName ?? "Backlog", icon: CalendarDays },
-    { label: "Release", value: issue.releaseName ?? "None", icon: PackageCheck },
+    {
+      label: "Sprint",
+      value: issue.sprintName ?? "Backlog",
+      icon: CalendarDays,
+    },
+    {
+      label: "Release",
+      value: issue.releaseName ?? "None",
+      icon: PackageCheck,
+    },
   ];
 }
 
 function peopleItems(issue: IssueListItem) {
   return [
-    { label: "Development owner", value: getIssueAssignmentLabel(issue), icon: UserRound },
-    { label: "Testing owner", value: getIssueTesterAssignmentLabel(issue), icon: TestTube2 },
-    { label: "Reporter", value: issue.reporterName ?? "Unknown", icon: UserRound },
-    { label: "Tested by", value: issue.testedByName ?? "Not tested", icon: TestTube2 },
+    {
+      label: "Developer",
+      value: getIssueAssignmentLabel(issue),
+      icon: UserRound,
+    },
+    {
+      label: "Tester",
+      value: getIssueTesterAssignmentLabel(issue),
+      icon: TestTube2,
+    },
+    {
+      label: "Reporter",
+      value: issue.reporterName ?? "Unknown",
+      icon: UserRound,
+    },
   ];
 }
 
 function deliveryItems(issue: IssueListItem) {
   return [
-    { label: "Fixed date", value: issue.fixedDate?.slice(0, 10) ?? "Not fixed", icon: CalendarDays },
-    { label: "Development", value: issue.developmentStatus.replaceAll("_", " "), icon: ClipboardList },
-    { label: "Deployment", value: issue.deploymentStatus.replaceAll("_", " "), icon: PackageCheck },
-    { label: "Comment count", value: `${issue.commentCount} comments`, icon: ListChecks },
+    {
+      label: "Fixed date",
+      value: issue.fixedDate?.slice(0, 10) ?? "Not fixed",
+      icon: CalendarDays,
+    },
+    {
+      label: "Development",
+      value: issue.developmentStatus.replaceAll("_", " "),
+      icon: ClipboardList,
+    },
+    {
+      label: "Deployment",
+      value: issue.deploymentStatus.replaceAll("_", " "),
+      icon: PackageCheck,
+    },
+    {
+      label: "Comment count",
+      value: `${issue.commentCount} comments`,
+      icon: ListChecks,
+    },
   ];
 }

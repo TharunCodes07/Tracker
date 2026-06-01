@@ -114,10 +114,10 @@ export function WorkflowIssueCard({
         ) : null}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span>Dev {getIssueAssignmentLabel(issue)}</span>
-        <span>Test {getIssueTesterAssignmentLabel(issue)}</span>
+        <span>Developer {getIssueAssignmentLabel(issue)}</span>
+        <span>Tester {getIssueTesterAssignmentLabel(issue)}</span>
         <span className="capitalize">
-          Dev {issue.developmentStatus.replaceAll("_", " ")}
+          Development {issue.developmentStatus.replaceAll("_", " ")}
         </span>
         <span className="capitalize">
           Deploy {issue.deploymentStatus.replaceAll("_", " ")}

@@ -47,7 +47,6 @@ export type IssueBulkPatch = Partial<
     | "assigneeId"
     | "testerAssigneeGroup"
     | "testerAssigneeId"
-    | "testedById"
     | "developmentStatus"
     | "deploymentStatus"
   >
@@ -63,7 +62,6 @@ type BulkAction =
   | "releaseId"
   | "developmentAssignment"
   | "testingAssignment"
-  | "testedById"
   | "developmentStatus"
   | "deploymentStatus";
 
@@ -80,9 +78,8 @@ const ACTION_OPTIONS: { value: BulkAction; label: string }[] = [
   { value: "epicId", label: "Move to epic" },
   { value: "sprintId", label: "Move to sprint" },
   { value: "releaseId", label: "Move to release" },
-  { value: "developmentAssignment", label: "Assign development" },
-  { value: "testingAssignment", label: "Assign testing" },
-  { value: "testedById", label: "Set tested by" },
+  { value: "developmentAssignment", label: "Assign developer" },
+  { value: "testingAssignment", label: "Assign tester" },
   { value: "developmentStatus", label: "Development" },
   { value: "deploymentStatus", label: "Deployment" },
 ];
@@ -102,7 +99,10 @@ function buildTargetOptions(options: {
 }): BulkOption[] {
   switch (options.action) {
     case "status":
-      return ISSUE_STATUS_OPTIONS.map((status) => ({ value: status.value, label: status.label }));
+      return ISSUE_STATUS_OPTIONS.map((status) => ({
+        value: status.value,
+        label: status.label,
+      }));
     case "priority":
       return ISSUE_PRIORITY_OPTIONS.map((priority) => ({
         value: priority.value,
@@ -110,8 +110,11 @@ function buildTargetOptions(options: {
       }));
     case "moduleId":
       return nullableOptions(
-        options.modules.map((moduleItem) => ({ value: moduleItem.id, label: moduleItem.name })),
-        "No module"
+        options.modules.map((moduleItem) => ({
+          value: moduleItem.id,
+          label: moduleItem.name,
+        })),
+        "No module",
       );
     case "componentId":
       return nullableOptions(
@@ -119,22 +122,28 @@ function buildTargetOptions(options: {
           value: component.id,
           label: `${component.moduleName} / ${component.name}`,
         })),
-        "No component"
+        "No component",
       );
     case "epicId":
       return nullableOptions(
         options.epics.map((epic) => ({ value: epic.id, label: epic.name })),
-        "No epic"
+        "No epic",
       );
     case "sprintId":
       return nullableOptions(
-        options.sprints.map((sprint) => ({ value: sprint.id, label: sprint.name })),
-        "Backlog"
+        options.sprints.map((sprint) => ({
+          value: sprint.id,
+          label: sprint.name,
+        })),
+        "Backlog",
       );
     case "releaseId":
       return nullableOptions(
-        options.releases.map((release) => ({ value: release.id, label: release.name })),
-        "No release"
+        options.releases.map((release) => ({
+          value: release.id,
+          label: release.name,
+        })),
+        "No release",
       );
     case "developmentAssignment":
       return [
@@ -142,7 +151,10 @@ function buildTargetOptions(options: {
         { value: "team:development", label: "Development team" },
         ...options.members
           .filter((member) => member.roles.includes("developer"))
-          .map((member) => ({ value: `user:development:${member.userId}`, label: member.name })),
+          .map((member) => ({
+            value: `user:development:${member.userId}`,
+            label: member.name,
+          })),
       ];
     case "testingAssignment":
       return [
@@ -150,13 +162,11 @@ function buildTargetOptions(options: {
         { value: "team:testing", label: "Testing team" },
         ...options.members
           .filter((member) => member.roles.includes("tester"))
-          .map((member) => ({ value: `user:testing:${member.userId}`, label: member.name })),
+          .map((member) => ({
+            value: `user:testing:${member.userId}`,
+            label: member.name,
+          })),
       ];
-    case "testedById":
-      return nullableOptions(
-        options.members.map((member) => ({ value: member.userId, label: member.name })),
-        "Not tested"
-      );
     case "developmentStatus":
       return DEVELOPMENT_STATUS_OPTIONS.map((status) => ({
         value: status.value,
@@ -170,7 +180,10 @@ function buildTargetOptions(options: {
   }
 }
 
-function parseAssignmentPatch(value: string, role: "development" | "testing"): IssueBulkPatch {
+function parseAssignmentPatch(
+  value: string,
+  role: "development" | "testing",
+): IssueBulkPatch {
   if (value === NONE_VALUE) {
     return role === "development"
       ? {
@@ -249,12 +262,12 @@ export function IssueBulkActionBar({
         releases,
         members,
       }),
-    [action, components, epics, members, modules, releases, sprints]
+    [action, components, epics, members, modules, releases, sprints],
   );
   const [target, setTarget] = useState(targetOptions[0]?.value ?? "");
   const selectedTarget = targetOptions.some((option) => option.value === target)
     ? target
-    : targetOptions[0]?.value ?? "";
+    : (targetOptions[0]?.value ?? "");
 
   function handleActionChange(value: string) {
     const nextAction = value as BulkAction;
@@ -309,14 +322,17 @@ export function IssueBulkActionBar({
       case "testingAssignment":
         onApply(parseAssignmentPatch(selectedTarget, "testing"));
         return;
-      case "testedById":
-        onApply({ testedById: selectedTarget });
-        return;
       case "developmentStatus":
-        onApply({ developmentStatus: selectedTarget as IssueFormState["developmentStatus"] });
+        onApply({
+          developmentStatus:
+            selectedTarget as IssueFormState["developmentStatus"],
+        });
         return;
       case "deploymentStatus":
-        onApply({ deploymentStatus: selectedTarget as IssueFormState["deploymentStatus"] });
+        onApply({
+          deploymentStatus:
+            selectedTarget as IssueFormState["deploymentStatus"],
+        });
         return;
     }
   }
@@ -352,7 +368,9 @@ export function IssueBulkActionBar({
           <SelectTrigger className="w-full sm:w-56">
             <SelectValue placeholder="Choose target" />
           </SelectTrigger>
-          <SelectContent className={action.includes("Assignment") ? "min-w-72" : undefined}>
+          <SelectContent
+            className={action.includes("Assignment") ? "min-w-72" : undefined}
+          >
             {action === "developmentAssignment" ? (
               <AssignmentTargetItems members={members} role="development" />
             ) : action === "testingAssignment" ? (
@@ -368,7 +386,11 @@ export function IssueBulkActionBar({
         </Select>
 
         <div className="flex gap-2">
-          <Button type="button" onClick={handleApply} disabled={pending || !selectedTarget}>
+          <Button
+            type="button"
+            onClick={handleApply}
+            disabled={pending || !selectedTarget}
+          >
             <Check className="h-4 w-4" />
             Apply
           </Button>
@@ -395,12 +417,19 @@ function AssignmentTargetItems({
   members: TeamMemberListItem[];
   role: "development" | "testing";
 }) {
-  const developerMembers = members.filter((member) => member.roles.includes("developer"));
-  const testerMembers = members.filter((member) => member.roles.includes("tester"));
-  const visibleMembers = role === "development" ? developerMembers : testerMembers;
-  const roleLabel = role === "development" ? "Development" : "Testing";
-  const teamLabel = role === "development" ? "Development team" : "Testing team";
-  const emptyLabel = role === "development" ? "No developer members" : "No tester members";
+  const developerMembers = members.filter((member) =>
+    member.roles.includes("developer"),
+  );
+  const testerMembers = members.filter((member) =>
+    member.roles.includes("tester"),
+  );
+  const visibleMembers =
+    role === "development" ? developerMembers : testerMembers;
+  const roleLabel = role === "development" ? "Developer" : "Tester";
+  const teamLabel =
+    role === "development" ? "Development team" : "Testing team";
+  const emptyLabel =
+    role === "development" ? "No developer members" : "No tester members";
 
   return (
     <>
@@ -410,7 +439,10 @@ function AssignmentTargetItems({
         <SelectLabel>{roleLabel}</SelectLabel>
         <SelectItem value={`team:${role}`}>{teamLabel}</SelectItem>
         {visibleMembers.map((member) => (
-          <SelectItem key={`${role}:${member.userId}`} value={`user:${role}:${member.userId}`}>
+          <SelectItem
+            key={`${role}:${member.userId}`}
+            value={`user:${role}:${member.userId}`}
+          >
             {member.name}
           </SelectItem>
         ))}
