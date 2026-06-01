@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { Boxes, CalendarDays, CheckSquare, File, Folder, Loader2, Search, Square } from "lucide-react";
+import {
+  Boxes,
+  CalendarDays,
+  CheckSquare,
+  File,
+  Folder,
+  Loader2,
+  Search,
+  Square,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { IssueStatusBadge } from "@/components/issues/shared/issue-display";
@@ -30,7 +39,7 @@ import { MultiFilterSelect } from "../ui";
 type AssignmentMode = "sprint" | "module";
 
 const DEFAULT_ASSIGNMENT_STATUS_FILTERS = ISSUE_STATUS_OPTIONS.filter(
-  (option) => option.value !== "fixed"
+  (option) => option.value !== "fixed",
 ).map((option) => option.value);
 
 export interface PlanningAssignmentTarget {
@@ -39,7 +48,10 @@ export interface PlanningAssignmentTarget {
   name: string;
 }
 
-function isIssueAlreadyInTarget(issue: IssueListItem, target: PlanningAssignmentTarget) {
+function isIssueAlreadyInTarget(
+  issue: IssueListItem,
+  target: PlanningAssignmentTarget,
+) {
   if (target.kind === "release") return issue.releaseId === target.id;
   if (target.kind === "sprint") return issue.sprintId === target.id;
   return issue.epicId === target.id;
@@ -65,21 +77,34 @@ export function PlanningAssignmentDialog({
   onAssign: (target: PlanningAssignmentTarget, issues: IssueListItem[]) => void;
 }) {
   const canChooseSprintMode = target.kind === "release";
-  const [mode, setMode] = useState<AssignmentMode>(canChooseSprintMode ? "sprint" : "module");
+  const [mode, setMode] = useState<AssignmentMode>(
+    canChooseSprintMode ? "sprint" : "module",
+  );
   const [selectedSprintIds, setSelectedSprintIds] = useState<string[]>([]);
   const [selectedModuleIds, setSelectedModuleIds] = useState<string[]>([]);
-  const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>([]);
-  const [selectedStatusFilters, setSelectedStatusFilters] = useState<IssueStatus[]>(
-    DEFAULT_ASSIGNMENT_STATUS_FILTERS
+  const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>(
+    [],
   );
+  const [selectedStatusFilters, setSelectedStatusFilters] = useState<
+    IssueStatus[]
+  >(DEFAULT_ASSIGNMENT_STATUS_FILTERS);
   const [candidateIssues, setCandidateIssues] = useState<IssueListItem[]>([]);
   const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
   const [issueSearch, setIssueSearch] = useState("");
   const [loadingIssues, setLoadingIssues] = useState(false);
 
-  const selectedModuleIdSet = useMemo(() => new Set(selectedModuleIds), [selectedModuleIds]);
-  const selectedComponentIdSet = useMemo(() => new Set(selectedComponentIds), [selectedComponentIds]);
-  const selectedIssueIdSet = useMemo(() => new Set(selectedIssueIds), [selectedIssueIds]);
+  const selectedModuleIdSet = useMemo(
+    () => new Set(selectedModuleIds),
+    [selectedModuleIds],
+  );
+  const selectedComponentIdSet = useMemo(
+    () => new Set(selectedComponentIds),
+    [selectedComponentIds],
+  );
+  const selectedIssueIdSet = useMemo(
+    () => new Set(selectedIssueIds),
+    [selectedIssueIds],
+  );
   const scopeKey = `${mode}:${selectedSprintIds.join(",")}:${selectedModuleIds.join(",")}:${selectedComponentIds.join(",")}:${selectedStatusFilters.join(",")}`;
   const hasScope =
     mode === "sprint"
@@ -105,15 +130,19 @@ export function PlanningAssignmentDialog({
           sortDirection: "asc",
         });
 
-        selectedStatusFilters.forEach((status) => searchParams.append("statusFilter", status));
+        selectedStatusFilters.forEach((status) =>
+          searchParams.append("statusFilter", status),
+        );
 
         if (mode === "sprint") {
-          selectedSprintIds.forEach((sprintId) => searchParams.append("sprintFilter", sprintId));
+          selectedSprintIds.forEach((sprintId) =>
+            searchParams.append("sprintFilter", sprintId),
+          );
         }
 
         const data = await requestJson<ProjectIssuesListResponse>(
           `/api/teams/${teamId}/projects/${projectId}/issues?${searchParams.toString()}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
 
         if (!isActive) return;
@@ -123,16 +152,33 @@ export function PlanningAssignmentDialog({
             ? data.issues.filter(
                 (issue) =>
                   (issue.moduleId && selectedModuleIdSet.has(issue.moduleId)) ||
-                  (issue.componentId && selectedComponentIdSet.has(issue.componentId))
+                  (issue.componentId &&
+                    selectedComponentIdSet.has(issue.componentId)),
               )
             : data.issues;
-        const assignableIssues = scopedIssues.filter((issue) => !isIssueAlreadyInTarget(issue, target));
+        const assignableIssues = scopedIssues.filter(
+          (issue) => !isIssueAlreadyInTarget(issue, target),
+        );
 
         setCandidateIssues(assignableIssues);
-        setSelectedIssueIds(assignableIssues.map((issue) => issue.id));
+        setSelectedIssueIds((currentIssueIds) => {
+          const currentIssueIdSet = new Set(currentIssueIds);
+          const assignableIssueIds = assignableIssues.map((issue) => issue.id);
+          const nextIssueIds = assignableIssueIds.filter((issueId) =>
+            currentIssueIdSet.has(issueId),
+          );
+
+          return currentIssueIds.length === 0
+            ? assignableIssueIds
+            : nextIssueIds;
+        });
       } catch (error) {
         if (isActive) {
-          toast.error(error instanceof Error ? error.message : "Could not load assignable issues.");
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Could not load assignable issues.",
+          );
         }
       } finally {
         if (isActive) {
@@ -164,22 +210,31 @@ export function PlanningAssignmentDialog({
 
   const scopedCandidateIssues = useMemo(
     () => (hasScope && selectedStatusFilters.length > 0 ? candidateIssues : []),
-    [candidateIssues, hasScope, selectedStatusFilters.length]
+    [candidateIssues, hasScope, selectedStatusFilters.length],
   );
+  const showIssueLoading =
+    loadingIssues && hasScope && selectedStatusFilters.length > 0;
   const filteredCandidateIssues = useMemo(() => {
     const normalizedSearch = issueSearch.trim().toLowerCase();
 
     if (!normalizedSearch) return scopedCandidateIssues;
 
     return scopedCandidateIssues.filter((issue) =>
-      [issue.key, issue.title, issue.moduleName, issue.componentName, issue.assigneeName]
+      [
+        issue.key,
+        issue.title,
+        issue.moduleName,
+        issue.componentName,
+        issue.assigneeName,
+      ]
         .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(normalizedSearch))
+        .some((value) => value!.toLowerCase().includes(normalizedSearch)),
     );
   }, [issueSearch, scopedCandidateIssues]);
   const selectedIssues = useMemo(
-    () => scopedCandidateIssues.filter((issue) => selectedIssueIdSet.has(issue.id)),
-    [scopedCandidateIssues, selectedIssueIdSet]
+    () =>
+      scopedCandidateIssues.filter((issue) => selectedIssueIdSet.has(issue.id)),
+    [scopedCandidateIssues, selectedIssueIdSet],
   );
 
   function toggleValue(values: string[], value: string) {
@@ -189,11 +244,15 @@ export function PlanningAssignmentDialog({
   }
 
   function handleModuleToggle(moduleId: string) {
-    setSelectedModuleIds((currentValues) => toggleValue(currentValues, moduleId));
+    setSelectedModuleIds((currentValues) =>
+      toggleValue(currentValues, moduleId),
+    );
   }
 
   function handleComponentToggle(componentId: string) {
-    setSelectedComponentIds((currentValues) => toggleValue(currentValues, componentId));
+    setSelectedComponentIds((currentValues) =>
+      toggleValue(currentValues, componentId),
+    );
   }
 
   function handleIssueToggle(issueId: string) {
@@ -201,18 +260,22 @@ export function PlanningAssignmentDialog({
   }
 
   function selectAllVisibleIssues() {
-    const visibleIssueIds = new Set(filteredCandidateIssues.map((issue) => issue.id));
+    const visibleIssueIds = new Set(
+      filteredCandidateIssues.map((issue) => issue.id),
+    );
 
     setSelectedIssueIds((currentValues) =>
-      Array.from(new Set([...currentValues, ...visibleIssueIds]))
+      Array.from(new Set([...currentValues, ...visibleIssueIds])),
     );
   }
 
   function clearVisibleIssues() {
-    const visibleIssueIds = new Set(filteredCandidateIssues.map((issue) => issue.id));
+    const visibleIssueIds = new Set(
+      filteredCandidateIssues.map((issue) => issue.id),
+    );
 
     setSelectedIssueIds((currentValues) =>
-      currentValues.filter((issueId) => !visibleIssueIds.has(issueId))
+      currentValues.filter((issueId) => !visibleIssueIds.has(issueId)),
     );
   }
 
@@ -228,7 +291,8 @@ export function PlanningAssignmentDialog({
         <DialogHeader className="border-b border-border/70 p-5 pr-12">
           <DialogTitle>Assign issues to {target.name}</DialogTitle>
           <DialogDescription>
-            Issues already assigned here are hidden. Done is excluded by default.
+            Issues already assigned here are hidden. Done is excluded by
+            default.
           </DialogDescription>
         </DialogHeader>
 
@@ -259,7 +323,9 @@ export function PlanningAssignmentDialog({
 
             {mode === "sprint" ? (
               <div className="space-y-2">
-                <div className="text-xs font-medium uppercase text-muted-foreground">Sprints</div>
+                <div className="text-xs font-medium uppercase text-muted-foreground">
+                  Sprints
+                </div>
                 {workspace.sprints.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-3 text-sm text-muted-foreground">
                     No sprints are available in this project.
@@ -274,12 +340,14 @@ export function PlanningAssignmentDialog({
                         checked={selectedSprintIds.includes(sprint.id)}
                         onCheckedChange={() =>
                           setSelectedSprintIds((currentValues) =>
-                            toggleValue(currentValues, sprint.id)
+                            toggleValue(currentValues, sprint.id),
                           )
                         }
                       />
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">{sprint.name}</span>
+                        <span className="block truncate text-sm font-medium">
+                          {sprint.name}
+                        </span>
                         <span className="block text-xs capitalize text-muted-foreground">
                           {sprint.status}
                         </span>
@@ -300,15 +368,20 @@ export function PlanningAssignmentDialog({
                 ) : (
                   workspace.modules.map((moduleItem) => {
                     const childComponents = workspace.components.filter(
-                      (component) => component.moduleId === moduleItem.id
+                      (component) => component.moduleId === moduleItem.id,
                     );
 
                     return (
-                      <div key={moduleItem.id} className="rounded-lg border border-border/70 p-2">
+                      <div
+                        key={moduleItem.id}
+                        className="rounded-lg border border-border/70 p-2"
+                      >
                         <label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/50">
                           <Checkbox
                             checked={selectedModuleIds.includes(moduleItem.id)}
-                            onCheckedChange={() => handleModuleToggle(moduleItem.id)}
+                            onCheckedChange={() =>
+                              handleModuleToggle(moduleItem.id)
+                            }
                           />
                           <Folder className="h-4 w-4 text-muted-foreground" />
                           <span className="min-w-0 flex-1 truncate text-sm font-medium">
@@ -317,7 +390,9 @@ export function PlanningAssignmentDialog({
                         </label>
                         <div className="ml-9 mt-1 space-y-1 border-l border-border/70 pl-3">
                           {childComponents.length === 0 ? (
-                            <div className="py-1 text-xs text-muted-foreground">No components</div>
+                            <div className="py-1 text-xs text-muted-foreground">
+                              No components
+                            </div>
                           ) : (
                             childComponents.map((component) => (
                               <label
@@ -329,8 +404,12 @@ export function PlanningAssignmentDialog({
                                     selectedModuleIds.includes(moduleItem.id) ||
                                     selectedComponentIds.includes(component.id)
                                   }
-                                  onCheckedChange={() => handleComponentToggle(component.id)}
-                                  disabled={selectedModuleIds.includes(moduleItem.id)}
+                                  onCheckedChange={() =>
+                                    handleComponentToggle(component.id)
+                                  }
+                                  disabled={selectedModuleIds.includes(
+                                    moduleItem.id,
+                                  )}
                                 />
                                 <File className="h-3.5 w-3.5 text-muted-foreground" />
                                 <span className="min-w-0 flex-1 truncate text-sm">
@@ -394,7 +473,7 @@ export function PlanningAssignmentDialog({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {loadingIssues ? (
+              {showIssueLoading ? (
                 <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Loading issues
@@ -410,7 +489,7 @@ export function PlanningAssignmentDialog({
                       key={issue.id}
                       className={cn(
                         "flex cursor-pointer items-start gap-3 p-3 hover:bg-muted/40",
-                        selectedIssueIdSet.has(issue.id) && "bg-muted/30"
+                        selectedIssueIdSet.has(issue.id) && "bg-muted/30",
                       )}
                     >
                       <Checkbox
@@ -422,12 +501,16 @@ export function PlanningAssignmentDialog({
                           <span className="font-mono text-xs font-medium text-muted-foreground">
                             {issue.key}
                           </span>
-                          <span className="min-w-0 truncate text-sm font-medium">{issue.title}</span>
+                          <span className="min-w-0 truncate text-sm font-medium">
+                            {issue.title}
+                          </span>
                           <IssueStatusBadge status={issue.status} />
                         </span>
                         <span className="mt-1 block truncate text-xs text-muted-foreground">
                           {issue.moduleName ?? "No module"}
-                          {issue.componentName ? ` / ${issue.componentName}` : ""}
+                          {issue.componentName
+                            ? ` / ${issue.componentName}`
+                            : ""}
                           {issue.assigneeName ? ` - ${issue.assigneeName}` : ""}
                         </span>
                       </span>
@@ -439,12 +522,18 @@ export function PlanningAssignmentDialog({
           </section>
         </div>
 
-        <DialogFooter className="items-center justify-between sm:justify-between">
+        <DialogFooter className="mx-0 mb-0 items-center justify-between px-5 py-4 sm:justify-between">
           <div className="text-sm text-muted-foreground">
-            {selectedIssues.length} of {scopedCandidateIssues.length} issues selected
+            {selectedIssues.length} of {scopedCandidateIssues.length} issues
+            selected
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={pending}
+            >
               Cancel
             </Button>
             <Button

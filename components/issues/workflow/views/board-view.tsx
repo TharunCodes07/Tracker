@@ -4,6 +4,10 @@ import Link from "next/link";
 import { ArrowRight, Boxes, Flag, ListTodo, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type {
+  IssueClaimMember,
+  IssueClaimRole,
+} from "@/components/issues/shared/issue-claim";
 import {
   KanbanBoard,
   KanbanBoardSkeleton,
@@ -45,6 +49,9 @@ export function BoardView({
   onIssueSelectionChange,
   onCreateIssue,
   bulkActionBar,
+  currentMember,
+  onClaimIssue,
+  claimActionPending = false,
 }: {
   issues: IssueListItem[];
   issueByStatus: Map<IssueStatus, IssueListItem[]>;
@@ -57,13 +64,19 @@ export function BoardView({
   onOpenIssue: (issue: IssueListItem) => void;
   onStatusDrop: (status: IssueStatus, issueId: string) => void;
   onEpicStatusDrop: (status: EpicStatus, epicId: string) => void;
-  onReleaseStatusDrop: (status: ProjectReleaseStatus, releaseId: string) => void;
+  onReleaseStatusDrop: (
+    status: ProjectReleaseStatus,
+    releaseId: string,
+  ) => void;
   isUpdating: boolean;
   isLoading: boolean;
   selectedIssueIds: string[];
   onIssueSelectionChange: (issueId: string, selected: boolean) => void;
   onCreateIssue: () => void;
   bulkActionBar?: ReactNode;
+  currentMember?: IssueClaimMember | null;
+  onClaimIssue?: (issue: IssueListItem, role: IssueClaimRole) => void;
+  claimActionPending?: boolean;
 }) {
   const [boardTab, setBoardTab] = useState<BoardTab>("issues");
 
@@ -73,27 +86,41 @@ export function BoardView({
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Board</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Move work across status columns. The same board shell is used for issues, epics, and
-            releases.
+            Move work across status columns. The same board shell is used for
+            issues, epics, and releases.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
           <div className="inline-flex rounded-lg border border-border/70 bg-background p-1 shadow-sm">
-            <BoardTabButton active={boardTab === "issues"} onClick={() => setBoardTab("issues")}>
+            <BoardTabButton
+              active={boardTab === "issues"}
+              onClick={() => setBoardTab("issues")}
+            >
               <ListTodo className="h-3.5 w-3.5" />
               Issues
             </BoardTabButton>
-            <BoardTabButton active={boardTab === "epics"} onClick={() => setBoardTab("epics")}>
+            <BoardTabButton
+              active={boardTab === "epics"}
+              onClick={() => setBoardTab("epics")}
+            >
               <Boxes className="h-3.5 w-3.5" />
               Epics
             </BoardTabButton>
-            <BoardTabButton active={boardTab === "versions"} onClick={() => setBoardTab("versions")}>
+            <BoardTabButton
+              active={boardTab === "versions"}
+              onClick={() => setBoardTab("versions")}
+            >
               <Flag className="h-3.5 w-3.5" />
               Releases
             </BoardTabButton>
           </div>
           {canEdit ? (
-            <Button type="button" size="sm" onClick={onCreateIssue} className="w-full sm:w-fit">
+            <Button
+              type="button"
+              size="sm"
+              onClick={onCreateIssue}
+              className="w-full sm:w-fit"
+            >
               <Plus className="h-3.5 w-3.5" />
               Issue
             </Button>
@@ -104,7 +131,11 @@ export function BoardView({
       {bulkActionBar}
 
       {isLoading ? (
-        <KanbanBoardSkeleton columns={boardTab === "issues" ? ACTIVE_ISSUE_STATUS_OPTIONS.length : 4} />
+        <KanbanBoardSkeleton
+          columns={
+            boardTab === "issues" ? ACTIVE_ISSUE_STATUS_OPTIONS.length : 4
+          }
+        />
       ) : boardTab === "issues" ? (
         <KanbanBoard
           columns={ISSUE_BOARD_COLUMNS}
@@ -119,6 +150,9 @@ export function BoardView({
               selected={selectedIssueIds.includes(issue.id)}
               onSelectedChange={canEdit ? onIssueSelectionChange : undefined}
               draggable={canEdit}
+              currentMember={currentMember}
+              onClaimIssue={canEdit ? onClaimIssue : undefined}
+              claimActionPending={claimActionPending}
             />
           )}
         />
@@ -163,22 +197,31 @@ function BoardTabButton({
   onClick: () => void;
 }) {
   return (
-    <Button type="button" variant={active ? "secondary" : "ghost"} size="sm" onClick={onClick}>
+    <Button
+      type="button"
+      variant={active ? "secondary" : "ghost"}
+      size="sm"
+      onClick={onClick}
+    >
       {children}
     </Button>
   );
 }
 
-const ISSUE_BOARD_COLUMNS: readonly KanbanColumn<IssueStatus>[] = ACTIVE_ISSUE_STATUS_OPTIONS.map(
-  (status) => ({
+const ISSUE_BOARD_COLUMNS: readonly KanbanColumn<IssueStatus>[] =
+  ACTIVE_ISSUE_STATUS_OPTIONS.map((status) => ({
     value: status.value,
     label: status.label,
-  })
-);
+  }));
 
 function PlanningKanban<
   TStatus extends string,
-  T extends { id: string; name: string; status: TStatus; description?: string | null },
+  T extends {
+    id: string;
+    name: string;
+    status: TStatus;
+    description?: string | null;
+  },
 >({
   columns,
   items,
@@ -204,15 +247,17 @@ function PlanningKanban<
     for (const column of columns) groupedItems.set(column.value, []);
     for (const item of items) {
       const targetGroup =
-        groupedItems.get(item.status) ?? (columns[0] ? groupedItems.get(columns[0].value) : undefined);
+        groupedItems.get(item.status) ??
+        (columns[0] ? groupedItems.get(columns[0].value) : undefined);
       targetGroup?.push(item);
     }
 
     return groupedItems;
   }, [columns, items]);
   const kanbanColumns = useMemo(
-    () => columns.map((column) => ({ value: column.value, label: column.label })),
-    [columns]
+    () =>
+      columns.map((column) => ({ value: column.value, label: column.label })),
+    [columns],
   );
 
   if (items.length === 0) {
@@ -253,7 +298,9 @@ function PlanningKanban<
             <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-emerald-400/70 to-cyan-400/70" />
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="line-clamp-2 break-words text-sm font-medium">{item.name}</div>
+                <div className="line-clamp-2 break-words text-sm font-medium">
+                  {item.name}
+                </div>
                 <p className="mt-1 line-clamp-2 break-words text-xs text-muted-foreground">
                   {item.description ?? "No description."}
                 </p>
@@ -262,13 +309,17 @@ function PlanningKanban<
             </div>
             <div className="mt-3">
               <div className="mb-1.5 flex justify-between gap-3 text-xs text-muted-foreground">
-                <span>{done}/{total} done</span>
+                <span>
+                  {done}/{total} done
+                </span>
                 <span>{progress}%</span>
               </div>
               <ProgressBar value={progress} />
             </div>
             {isUpdating ? (
-              <div className="mt-2 text-xs text-muted-foreground">Saving change...</div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Saving change...
+              </div>
             ) : null}
           </Link>
         );

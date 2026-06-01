@@ -13,7 +13,10 @@ import {
 import { TeamInviteNotificationAction } from "@/components/notifications/team-invite-notification-action";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { requireServerSession, withServerOrganization } from "@/lib/auth-session";
+import {
+  requireServerSession,
+  withServerOrganization,
+} from "@/lib/auth-session";
 import { cn } from "@/lib/utils";
 import { listNotificationsForUser } from "@/routes/notifications/queries";
 import type { NotificationListItem } from "@/routes/notifications/types";
@@ -21,7 +24,10 @@ import type { NotificationListItem } from "@/routes/notifications/types";
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
 
-function parsePositiveInteger(value: string | string[] | undefined, fallback: number) {
+function parsePositiveInteger(
+  value: string | string[] | undefined,
+  fallback: number,
+) {
   const rawValue = Array.isArray(value) ? value[0] : value;
 
   if (!rawValue) {
@@ -30,7 +36,9 @@ function parsePositiveInteger(value: string | string[] | undefined, fallback: nu
 
   const parsedValue = Number.parseInt(rawValue, 10);
 
-  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
+  return Number.isFinite(parsedValue) && parsedValue > 0
+    ? parsedValue
+    : fallback;
 }
 
 function parseUnreadOnly(value: string | string[] | undefined) {
@@ -67,13 +75,18 @@ function getNotificationAccentClassName(notification: NotificationListItem) {
   switch (notification.trigger) {
     case "team.invited":
       return "border-sky-400/30 bg-sky-400/10 text-sky-700 dark:text-sky-300";
+    case "team.role_assigned":
+      return "border-emerald-400/30 bg-emerald-400/10 text-emerald-700 dark:text-emerald-300";
     case "issue.ready_for_test":
+    case "issue.fixed":
+    case "issue.deployed":
       return "border-cyan-400/30 bg-cyan-400/10 text-cyan-700 dark:text-cyan-300";
     case "issue.marked_for_review":
       return "border-indigo-400/30 bg-indigo-400/10 text-indigo-700 dark:text-indigo-300";
     case "issue.reopened":
       return "border-amber-400/30 bg-amber-400/10 text-amber-700 dark:text-amber-300";
     case "issue.assigned":
+    case "issue.assigned_to_role":
       return "border-emerald-400/30 bg-emerald-400/10 text-emerald-700 dark:text-emerald-300";
     case "project.created":
       return "border-violet-400/30 bg-violet-400/10 text-violet-700 dark:text-violet-300";
@@ -87,13 +100,20 @@ function getNotificationLabel(notification: NotificationListItem) {
   switch (notification.trigger) {
     case "team.invited":
       return "Invite";
+    case "team.role_assigned":
+      return "Team role";
     case "issue.ready_for_test":
       return "Ready for test";
+    case "issue.fixed":
+      return "Fixed";
+    case "issue.deployed":
+      return "Deployed";
     case "issue.marked_for_review":
       return "Review";
     case "issue.reopened":
       return "Reopened";
     case "issue.assigned":
+    case "issue.assigned_to_role":
       return "Assigned";
     case "project.created":
       return "Project";
@@ -115,7 +135,10 @@ export default async function NotificationsPage({
   const resolvedSearchParams = await searchParams;
   const unreadOnly = parseUnreadOnly(resolvedSearchParams.unreadOnly);
   const page = parsePositiveInteger(resolvedSearchParams.page, DEFAULT_PAGE);
-  const pageSize = parsePositiveInteger(resolvedSearchParams.pageSize, DEFAULT_PAGE_SIZE);
+  const pageSize = parsePositiveInteger(
+    resolvedSearchParams.pageSize,
+    DEFAULT_PAGE_SIZE,
+  );
   const notificationCenter = await withServerOrganization(
     () =>
       listNotificationsForUser(session.user.id, {
@@ -123,7 +146,7 @@ export default async function NotificationsPage({
         pageSize,
         unreadOnly,
       }),
-    { roles: ["ADMIN", "USER"] }
+    { roles: ["ADMIN", "USER"] },
   );
 
   return (
@@ -144,8 +167,9 @@ export default async function NotificationsPage({
                 Team activity in one place
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Scan the latest project and issue updates, filter unread activity, and jump back
-                into the exact workspace that needs attention.
+                Scan the latest project and issue updates, filter unread
+                activity, and jump back into the exact workspace that needs
+                attention.
               </p>
             </div>
           </div>
@@ -158,7 +182,9 @@ export default async function NotificationsPage({
               <div className="mt-2 text-3xl font-semibold text-foreground">
                 {notificationCenter.pagination.totalItems}
               </div>
-              <div className="mt-1 text-sm text-muted-foreground">matching this view</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                matching this view
+              </div>
             </div>
 
             <div className="rounded-3xl border border-border/60 bg-background/75 px-4 py-4">
@@ -168,7 +194,9 @@ export default async function NotificationsPage({
               <div className="mt-2 text-3xl font-semibold text-foreground">
                 {notificationCenter.unreadCount}
               </div>
-              <div className="mt-1 text-sm text-muted-foreground">still need review</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                still need review
+              </div>
             </div>
 
             <div className="rounded-3xl border border-border/60 bg-background/75 px-4 py-4">
@@ -178,7 +206,9 @@ export default async function NotificationsPage({
               <div className="mt-2 text-xl font-semibold text-foreground">
                 {notificationCenter.unreadOnly ? "Unread only" : "All activity"}
               </div>
-              <div className="mt-1 text-sm text-muted-foreground">switch from the controls below</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                switch from the controls below
+              </div>
             </div>
           </div>
         </div>
@@ -199,11 +229,21 @@ export default async function NotificationsPage({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant={notificationCenter.unreadOnly ? "outline" : "default"}>
-              <Link href={buildNotificationsHref({ unreadOnly: false })}>All notifications</Link>
+            <Button
+              asChild
+              variant={notificationCenter.unreadOnly ? "outline" : "default"}
+            >
+              <Link href={buildNotificationsHref({ unreadOnly: false })}>
+                All notifications
+              </Link>
             </Button>
-            <Button asChild variant={notificationCenter.unreadOnly ? "default" : "outline"}>
-              <Link href={buildNotificationsHref({ unreadOnly: true })}>Unread only</Link>
+            <Button
+              asChild
+              variant={notificationCenter.unreadOnly ? "default" : "outline"}
+            >
+              <Link href={buildNotificationsHref({ unreadOnly: true })}>
+                Unread only
+              </Link>
             </Button>
           </div>
         </div>
@@ -212,9 +252,12 @@ export default async function NotificationsPage({
       <section className="rounded-[30px] border border-border/60 bg-card/80 shadow-sm">
         <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-4 sm:px-5">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Notifications</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              Notifications
+            </h2>
             <p className="text-sm text-muted-foreground">
-              Page {notificationCenter.pagination.page} of {notificationCenter.pagination.totalPages}
+              Page {notificationCenter.pagination.page} of{" "}
+              {notificationCenter.pagination.totalPages}
             </p>
           </div>
           <Badge variant="outline" className="w-fit">
@@ -228,7 +271,9 @@ export default async function NotificationsPage({
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-border/60 bg-background/70 text-muted-foreground">
               <Inbox className="h-6 w-6" />
             </div>
-            <h3 className="mt-4 text-lg font-semibold text-foreground">Nothing here yet</h3>
+            <h3 className="mt-4 text-lg font-semibold text-foreground">
+              Nothing here yet
+            </h3>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
               {notificationCenter.unreadOnly
                 ? "You are fully caught up. Switch back to all notifications to review older activity."
@@ -246,7 +291,7 @@ export default async function NotificationsPage({
                   <span
                     className={cn(
                       "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
-                      notification.isRead ? "bg-border" : "bg-rose-500"
+                      notification.isRead ? "bg-border" : "bg-rose-500",
                     )}
                   />
 
@@ -254,7 +299,10 @@ export default async function NotificationsPage({
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge
                         variant="outline"
-                        className={cn("rounded-full", getNotificationAccentClassName(notification))}
+                        className={cn(
+                          "rounded-full",
+                          getNotificationAccentClassName(notification),
+                        )}
                       >
                         {getNotificationLabel(notification)}
                       </Badge>
@@ -291,7 +339,12 @@ export default async function NotificationsPage({
                       teamId={notification.teamId}
                     />
                   ) : (
-                    <Button asChild variant="ghost" size="sm" className="shrink-0">
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0"
+                    >
                       <Link href={notification.href}>
                         Open
                         <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -323,7 +376,9 @@ export default async function NotificationsPage({
                       pageSize: notificationCenter.pagination.pageSize,
                       unreadOnly: notificationCenter.unreadOnly,
                     })}
-                    aria-disabled={!notificationCenter.pagination.hasPreviousPage}
+                    aria-disabled={
+                      !notificationCenter.pagination.hasPreviousPage
+                    }
                     className={
                       !notificationCenter.pagination.hasPreviousPage
                         ? "pointer-events-none opacity-50"

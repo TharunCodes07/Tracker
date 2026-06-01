@@ -98,15 +98,27 @@ export const ISSUE_EXCEL_HEADERS = [
 export type IssueType = (typeof ISSUE_TYPE_OPTIONS)[number]["value"];
 export type IssuePriority = (typeof ISSUE_PRIORITY_OPTIONS)[number]["value"];
 export type IssueStatus = (typeof ISSUE_STATUS_OPTIONS)[number]["value"];
-export type DevelopmentStatus = (typeof DEVELOPMENT_STATUS_OPTIONS)[number]["value"];
-export type DeploymentStatus = (typeof DEPLOYMENT_STATUS_OPTIONS)[number]["value"];
-export type IssueAssignmentGroup = (typeof ISSUE_ASSIGNMENT_GROUP_OPTIONS)[number]["value"];
+export type DevelopmentStatus =
+  (typeof DEVELOPMENT_STATUS_OPTIONS)[number]["value"];
+export type DeploymentStatus =
+  (typeof DEPLOYMENT_STATUS_OPTIONS)[number]["value"];
+export type IssueAssignmentGroup =
+  (typeof ISSUE_ASSIGNMENT_GROUP_OPTIONS)[number]["value"];
 export type EpicStatus = (typeof EPIC_STATUS_OPTIONS)[number]["value"];
-export type ProjectReleaseStatus = (typeof RELEASE_STATUS_OPTIONS)[number]["value"];
+export type ProjectReleaseStatus =
+  (typeof RELEASE_STATUS_OPTIONS)[number]["value"];
 export type SprintStatus = (typeof SPRINT_STATUS_OPTIONS)[number]["value"];
 export type IssueMediaType = (typeof ISSUE_MEDIA_TYPES)[number];
-export type IssueResolutionFilter = "all" | "open" | "review" | "resolved" | "reopened";
-export type IssueAssigneeFilterValue = "current-user" | "unassigned";
+export type IssueResolutionFilter =
+  | "all"
+  | "open"
+  | "review"
+  | "resolved"
+  | "reopened";
+export type IssueAssigneeFilterValue =
+  | "current-user"
+  | "current-role"
+  | "unassigned";
 export type IssueReporterFilterValue = "current-user";
 export type IssueTestedByFilterValue = "current-user" | "untested";
 

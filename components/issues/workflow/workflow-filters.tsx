@@ -10,11 +10,19 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   ISSUE_PRIORITY_OPTIONS,
   ISSUE_STATUS_OPTIONS,
   ISSUE_TYPE_OPTIONS,
+  type IssueAssigneeFilterValue,
   type IssuePriority,
   type IssueStatus,
   type IssueType,
@@ -28,11 +36,23 @@ import {
 import type { ProjectWorkflowView } from "./types";
 import { EntityMultiFilterSelect, MultiFilterSelect } from "./ui";
 
+type WorkflowAssignmentFilter = IssueAssigneeFilterValue | "all";
+
 type ActiveFilter = {
   key: string;
   label: string;
   onRemove: () => void;
 };
+
+const ASSIGNMENT_FILTER_OPTIONS: readonly {
+  value: WorkflowAssignmentFilter;
+  label: string;
+}[] = [
+  { value: "all", label: "All assignments" },
+  { value: "current-user", label: "Assigned to me" },
+  { value: "current-role", label: "Assigned to my role" },
+  { value: "unassigned", label: "Unassigned" },
+];
 
 export function WorkflowFilters({
   search,
@@ -44,7 +64,7 @@ export function WorkflowFilters({
   sprintFilters,
   releaseFilters,
   priorityFilters,
-  assignedToMe,
+  assignmentFilter,
   modules,
   components,
   epics,
@@ -60,7 +80,7 @@ export function WorkflowFilters({
   onSprintFiltersChange,
   onReleaseFiltersChange,
   onPriorityFiltersChange,
-  onAssignedToMeChange,
+  onAssignmentFilterChange,
   onClearFilters,
 }: {
   search: string;
@@ -72,7 +92,7 @@ export function WorkflowFilters({
   sprintFilters: string[];
   releaseFilters: string[];
   priorityFilters: IssuePriority[];
-  assignedToMe: boolean;
+  assignmentFilter: WorkflowAssignmentFilter;
   modules: ProjectModuleListItem[];
   components: ProjectComponentListItem[];
   epics: ProjectEpicListItem[];
@@ -88,7 +108,7 @@ export function WorkflowFilters({
   onSprintFiltersChange: (values: string[]) => void;
   onReleaseFiltersChange: (values: string[]) => void;
   onPriorityFiltersChange: (values: IssuePriority[]) => void;
-  onAssignedToMeChange: (value: boolean) => void;
+  onAssignmentFilterChange: (value: WorkflowAssignmentFilter) => void;
   onClearFilters: () => void;
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -103,46 +123,86 @@ export function WorkflowFilters({
         onRemove: () => onSearchChange(""),
       });
     }
-    pushOptionFilters(filters, "type", "Type", ISSUE_TYPE_OPTIONS, typeFilters, onTypeFiltersChange);
+    pushOptionFilters(
+      filters,
+      "type",
+      "Type",
+      ISSUE_TYPE_OPTIONS,
+      typeFilters,
+      onTypeFiltersChange,
+    );
     pushOptionFilters(
       filters,
       "status",
       "Status",
       ISSUE_STATUS_OPTIONS,
       statusFilters,
-      onStatusFiltersChange
+      onStatusFiltersChange,
     );
-    pushEntityFilters(filters, "module", "Module", modules, moduleFilters, onModuleFiltersChange);
+    pushEntityFilters(
+      filters,
+      "module",
+      "Module",
+      modules,
+      moduleFilters,
+      onModuleFiltersChange,
+    );
     pushEntityFilters(
       filters,
       "component",
       "Component",
       components,
       componentFilters,
-      onComponentFiltersChange
+      onComponentFiltersChange,
     );
-    pushEntityFilters(filters, "epic", "Epic", epics, epicFilters, onEpicFiltersChange);
-    pushEntityFilters(filters, "sprint", "Sprint", sprints, sprintFilters, onSprintFiltersChange);
-    pushEntityFilters(filters, "release", "Release", releases, releaseFilters, onReleaseFiltersChange);
+    pushEntityFilters(
+      filters,
+      "epic",
+      "Epic",
+      epics,
+      epicFilters,
+      onEpicFiltersChange,
+    );
+    pushEntityFilters(
+      filters,
+      "sprint",
+      "Sprint",
+      sprints,
+      sprintFilters,
+      onSprintFiltersChange,
+    );
+    pushEntityFilters(
+      filters,
+      "release",
+      "Release",
+      releases,
+      releaseFilters,
+      onReleaseFiltersChange,
+    );
     pushOptionFilters(
       filters,
       "priority",
       "Priority",
       ISSUE_PRIORITY_OPTIONS,
       priorityFilters,
-      onPriorityFiltersChange
+      onPriorityFiltersChange,
     );
-    if (assignedToMe) {
+    if (assignmentFilter !== "all") {
+      const label =
+        ASSIGNMENT_FILTER_OPTIONS.find(
+          (option) => option.value === assignmentFilter,
+        )?.label ?? assignmentFilter;
+
       filters.push({
-        key: "assigned-to-me",
-        label: "Assigned to me",
-        onRemove: () => onAssignedToMeChange(false),
+        key: `assignment:${assignmentFilter}`,
+        label: `Assignment: ${label}`,
+        onRemove: () => onAssignmentFilterChange("all"),
       });
     }
 
     return filters;
   }, [
-    assignedToMe,
+    assignmentFilter,
     componentFilters,
     components,
     epicFilters,
@@ -157,7 +217,7 @@ export function WorkflowFilters({
     sprints,
     statusFilters,
     typeFilters,
-    onAssignedToMeChange,
+    onAssignmentFilterChange,
     onComponentFiltersChange,
     onEpicFiltersChange,
     onModuleFiltersChange,
@@ -170,7 +230,10 @@ export function WorkflowFilters({
   ]);
   const showActiveFilterRow = filtersOpen || activeFilters.length > 0;
 
-  function renderFilterControls(triggerClassName?: string, contentClassName?: string) {
+  function renderFilterControls(
+    triggerClassName?: string,
+    contentClassName?: string,
+  ) {
     return [
       <MultiFilterSelect
         key="type"
@@ -262,15 +325,24 @@ export function WorkflowFilters({
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:shrink-0">
-          <Button
-            type="button"
-            variant={assignedToMe ? "secondary" : "outline"}
-            onClick={() => onAssignedToMeChange(!assignedToMe)}
-            className="rounded-full border-border/60 px-3 shadow-sm"
+          <Select
+            value={assignmentFilter}
+            onValueChange={(value) =>
+              onAssignmentFilterChange(value as WorkflowAssignmentFilter)
+            }
           >
-            <UserCheck className="h-4 w-4" />
-            Assigned to me
-          </Button>
+            <SelectTrigger className="h-9 w-full rounded-full border-border/60 bg-background/80 px-3 shadow-sm sm:w-52">
+              <UserCheck className="h-4 w-4 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {ASSIGNMENT_FILTER_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             variant={filtersOpen ? "secondary" : "outline"}
@@ -282,7 +354,7 @@ export function WorkflowFilters({
             <ChevronDown
               className={cn(
                 "ml-auto h-4 w-4 text-muted-foreground transition-transform sm:ml-1",
-                filtersOpen && "rotate-180"
+                filtersOpen && "rotate-180",
               )}
             />
           </Button>
@@ -292,7 +364,9 @@ export function WorkflowFilters({
       <div
         className={cn(
           "grid transition-[grid-template-rows,opacity] duration-300 ease-out",
-          showActiveFilterRow ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          showActiveFilterRow
+            ? "grid-rows-[1fr] opacity-100"
+            : "grid-rows-[0fr] opacity-0",
         )}
       >
         <div className="overflow-hidden">
@@ -340,20 +414,22 @@ export function WorkflowFilters({
       <div
         className={cn(
           "grid transition-[grid-template-rows,opacity] duration-300 ease-out",
-          filtersOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          filtersOpen
+            ? "grid-rows-[1fr] opacity-100"
+            : "grid-rows-[0fr] opacity-0",
         )}
       >
         <div className="overflow-hidden">
           <div
             className={cn(
               "rounded-xl border border-border/70 bg-muted/20 p-3 shadow-sm transition-transform duration-300 ease-out",
-              filtersOpen ? "translate-y-0" : "-translate-y-1"
+              filtersOpen ? "translate-y-0" : "-translate-y-1",
             )}
           >
             <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-2">
               {renderFilterControls(
                 "h-9 w-full rounded-full border-border/70 bg-background px-3 shadow-none transition-colors",
-                "rounded-xl p-1.5"
+                "rounded-xl p-1.5",
               )}
             </div>
           </div>
@@ -369,7 +445,7 @@ function pushOptionFilters<T extends string>(
   label: string,
   options: readonly { value: T; label: string }[],
   values: T[],
-  onValuesChange: (values: T[]) => void
+  onValuesChange: (values: T[]) => void,
 ) {
   if (values.length === 0) return;
 
@@ -377,7 +453,8 @@ function pushOptionFilters<T extends string>(
     filters.push({
       key: `${keyPrefix}:${value}`,
       label: `${label}: ${options.find((option) => option.value === value)?.label ?? value}`,
-      onRemove: () => onValuesChange(values.filter((currentValue) => currentValue !== value)),
+      onRemove: () =>
+        onValuesChange(values.filter((currentValue) => currentValue !== value)),
     });
   }
 }
@@ -388,7 +465,7 @@ function pushEntityFilters(
   label: string,
   items: { id: string; name: string }[],
   values: string[],
-  onValuesChange: (values: string[]) => void
+  onValuesChange: (values: string[]) => void,
 ) {
   if (values.length === 0) return;
 
@@ -396,7 +473,8 @@ function pushEntityFilters(
     filters.push({
       key: `${keyPrefix}:${value}`,
       label: `${label}: ${items.find((item) => item.id === value)?.name ?? value}`,
-      onRemove: () => onValuesChange(values.filter((currentValue) => currentValue !== value)),
+      onRemove: () =>
+        onValuesChange(values.filter((currentValue) => currentValue !== value)),
     });
   }
 }

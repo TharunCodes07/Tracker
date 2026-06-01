@@ -1,7 +1,11 @@
 import { after, NextRequest, NextResponse } from "next/server";
 
 import { withOrganizationScope } from "@/db";
-import { handleRouteError, readJsonBody, withRouteOrganization } from "@/routes/http";
+import {
+  handleRouteError,
+  readJsonBody,
+  withRouteOrganization,
+} from "@/routes/http";
 import { readListProjectIssuesInput } from "@/routes/issues/http";
 import { createIssue } from "@/routes/issues/mutations";
 import { listProjectIssuesForUser } from "@/routes/issues/queries";
@@ -15,31 +19,44 @@ import type {
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ teamId: string; projectId: string }> }
+  context: { params: Promise<{ teamId: string; projectId: string }> },
 ) {
   try {
     return await withRouteOrganization(request, async (actor) => {
       const { teamId, projectId } = await context.params;
       const listInput = readListProjectIssuesInput(request, {
         maxPageSize:
-          request.nextUrl.searchParams.get("assignment") === "true" ? 2147483647 : 1000,
+          request.nextUrl.searchParams.get("assignment") === "true"
+            ? 2147483647
+            : 1000,
       });
-      const projectIssues = await listProjectIssuesForUser(actor.id, teamId, projectId, listInput);
+      const projectIssues = await listProjectIssuesForUser(
+        actor.id,
+        teamId,
+        projectId,
+        listInput,
+      );
 
       if (!projectIssues) {
-        return NextResponse.json({ message: "Project not found." }, { status: 404 });
+        return NextResponse.json(
+          { message: "Project not found." },
+          { status: 404 },
+        );
       }
 
       return NextResponse.json<ProjectIssuesListResponse>(projectIssues);
     });
   } catch (error) {
-    return handleRouteError(error, "Something went wrong while handling the issue request.");
+    return handleRouteError(
+      error,
+      "Something went wrong while handling the issue request.",
+    );
   }
 }
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ teamId: string; projectId: string }> }
+  context: { params: Promise<{ teamId: string; projectId: string }> },
 ) {
   try {
     return await withRouteOrganization(request, async (actor) => {
@@ -70,7 +87,7 @@ export async function POST(
           issueId: issue.id,
           issueNo: issue.no,
           issueTitle: issue.title,
-          reviewerId: issue.testedById,
+          reviewerId: issue.testerAssigneeId,
         });
       }
 
@@ -88,8 +105,82 @@ export async function POST(
         });
       }
 
+      if (issue.testerAssigneeId) {
+        notificationEvents.push({
+          type: "issue.assigned",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          assigneeId: issue.testerAssigneeId,
+        });
+      }
+
+      if (issue.assigneeGroup === "development" && !issue.assigneeId) {
+        notificationEvents.push({
+          type: "issue.assigned_to_role",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          role: "developer",
+        });
+      }
+
+      if (issue.testerAssigneeGroup === "testing" && !issue.testerAssigneeId) {
+        notificationEvents.push({
+          type: "issue.assigned_to_role",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          role: "tester",
+        });
+      }
+
+      if (issue.status === "fixed") {
+        notificationEvents.push({
+          type: "issue.fixed",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          testerId: issue.testerAssigneeId,
+        });
+      }
+
+      if (issue.deploymentStatus === "deployed") {
+        notificationEvents.push({
+          type: "issue.deployed",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          testerId: issue.testerAssigneeId,
+        });
+      }
+
       if (actor.organizationId) {
-        after(() => withOrganizationScope(actor.organizationId!, () => dispatchNotificationEvents(notificationEvents)));
+        after(() =>
+          withOrganizationScope(actor.organizationId!, () =>
+            dispatchNotificationEvents(notificationEvents),
+          ),
+        );
       }
 
       return NextResponse.json<IssueMutationResponse>(
@@ -99,10 +190,13 @@ export async function POST(
         },
         {
           status: 201,
-        }
+        },
       );
     });
   } catch (error) {
-    return handleRouteError(error, "Something went wrong while handling the issue request.");
+    return handleRouteError(
+      error,
+      "Something went wrong while handling the issue request.",
+    );
   }
 }

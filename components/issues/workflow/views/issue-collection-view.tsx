@@ -1,9 +1,20 @@
 import { useMemo, type ReactNode } from "react";
 
-import type { OnChangeFn, RowSelectionState, SortingState } from "@tanstack/react-table";
+import type {
+  OnChangeFn,
+  RowSelectionState,
+  SortingState,
+} from "@tanstack/react-table";
 import { Download } from "lucide-react";
 
-import { IssueCardView, IssueEmptyState } from "@/components/issues/cards/issue-card-view";
+import {
+  IssueCardView,
+  IssueEmptyState,
+} from "@/components/issues/cards/issue-card-view";
+import type {
+  IssueClaimMember,
+  IssueClaimRole,
+} from "@/components/issues/shared/issue-claim";
 import { getIssueTableColumns } from "@/components/issues/table/issue-table-columns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +49,9 @@ export function IssueCollectionView({
   onSelectedIssueIdsChange,
   bulkActionBar,
   toolbarActions,
+  currentMember,
+  onClaimIssue,
+  claimActionPending = false,
 }: {
   title: string;
   description: string;
@@ -63,6 +77,9 @@ export function IssueCollectionView({
   onSelectedIssueIdsChange?: (issueIds: string[]) => void;
   bulkActionBar?: ReactNode;
   toolbarActions?: ReactNode;
+  currentMember?: IssueClaimMember | null;
+  onClaimIssue?: (issue: IssueListItem, role: IssueClaimRole) => void;
+  claimActionPending?: boolean;
 }) {
   const canSelectIssues = canEdit && Boolean(onSelectedIssueIdsChange);
   const columns = useMemo(
@@ -73,8 +90,18 @@ export function IssueCollectionView({
         onDelete: onDeleteIssue,
         actionPending: false,
         issueTextMode: "full",
+        currentMember,
+        onClaim: onClaimIssue,
+        claimActionPending,
       }),
-    [canEdit, onDeleteIssue, onEditIssue]
+    [
+      canEdit,
+      claimActionPending,
+      currentMember,
+      onClaimIssue,
+      onDeleteIssue,
+      onEditIssue,
+    ],
   );
   const rowSelection = useMemo<RowSelectionState>(
     () =>
@@ -82,18 +109,19 @@ export function IssueCollectionView({
         selection[issueId] = true;
         return selection;
       }, {}),
-    [selectedIssueIds]
+    [selectedIssueIds],
   );
 
   const handleRowSelectionChange: OnChangeFn<RowSelectionState> = (updater) => {
     if (!onSelectedIssueIdsChange) return;
 
-    const nextSelection = typeof updater === "function" ? updater(rowSelection) : updater;
+    const nextSelection =
+      typeof updater === "function" ? updater(rowSelection) : updater;
 
     onSelectedIssueIdsChange(
       Object.entries(nextSelection)
         .filter(([, selected]) => selected)
-        .map(([issueId]) => issueId)
+        .map(([issueId]) => issueId),
     );
   };
 
@@ -135,9 +163,14 @@ export function IssueCollectionView({
             canEdit={canEdit}
             onIssueClick={onOpenIssue}
             selectedIssueIds={selectedIssueIds}
-            onSelectedIssueIdsChange={canSelectIssues ? onSelectedIssueIdsChange : undefined}
+            onSelectedIssueIdsChange={
+              canSelectIssues ? onSelectedIssueIdsChange : undefined
+            }
             onPageIndexChange={onPageIndexChange}
             onPageSizeChange={onPageSizeChange}
+            currentMember={currentMember}
+            onClaimIssue={onClaimIssue}
+            claimActionPending={claimActionPending}
           />
         )
       ) : (
@@ -159,7 +192,9 @@ export function IssueCollectionView({
           onPageSizeChange={onPageSizeChange}
           isLoading={isLoading}
           maxTableHeight="min(70vh, 760px)"
-          emptyMessage={<IssueEmptyState className="border-0 bg-transparent py-10 shadow-none" />}
+          emptyMessage={
+            <IssueEmptyState className="border-0 bg-transparent py-10 shadow-none" />
+          }
           enableFullscreen
           toolbarExtras={
             <div className="flex flex-1 justify-end">

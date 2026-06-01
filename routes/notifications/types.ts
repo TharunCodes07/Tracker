@@ -1,10 +1,14 @@
 export const NOTIFICATION_TRIGGER_VALUES = [
   "team.invited",
+  "team.role_assigned",
   "project.created",
   "issue.created",
   "issue.assigned",
+  "issue.assigned_to_role",
   "issue.marked_for_review",
   "issue.ready_for_test",
+  "issue.fixed",
+  "issue.deployed",
   "issue.reopened",
 ] as const;
 
@@ -69,6 +73,13 @@ export interface TeamInvitedNotificationEvent extends NotificationEventBase {
   teamName: string;
 }
 
+export interface TeamRoleAssignedNotificationEvent extends NotificationEventBase {
+  type: "team.role_assigned";
+  memberUserId: string;
+  teamName: string;
+  roles: string[];
+}
+
 export interface IssueCreatedNotificationEvent extends NotificationEventBase {
   type: "issue.created";
   projectId: string;
@@ -85,6 +96,15 @@ export interface IssueAssignedNotificationEvent extends NotificationEventBase {
   issueNo: number;
   issueTitle: string;
   assigneeId: string;
+}
+
+export interface IssueAssignedToRoleNotificationEvent extends NotificationEventBase {
+  type: "issue.assigned_to_role";
+  projectId: string;
+  issueId: string;
+  issueNo: number;
+  issueTitle: string;
+  role: "developer" | "tester";
 }
 
 export interface IssueMarkedForReviewNotificationEvent extends NotificationEventBase {
@@ -104,6 +124,24 @@ export interface IssueReadyForTestNotificationEvent extends NotificationEventBas
   issueTitle: string;
 }
 
+export interface IssueFixedNotificationEvent extends NotificationEventBase {
+  type: "issue.fixed";
+  projectId: string;
+  issueId: string;
+  issueNo: number;
+  issueTitle: string;
+  testerId: string | null;
+}
+
+export interface IssueDeployedNotificationEvent extends NotificationEventBase {
+  type: "issue.deployed";
+  projectId: string;
+  issueId: string;
+  issueNo: number;
+  issueTitle: string;
+  testerId: string | null;
+}
+
 export interface IssueReopenedNotificationEvent extends NotificationEventBase {
   type: "issue.reopened";
   projectId: string;
@@ -115,9 +153,13 @@ export interface IssueReopenedNotificationEvent extends NotificationEventBase {
 
 export type NotificationEvent =
   | TeamInvitedNotificationEvent
+  | TeamRoleAssignedNotificationEvent
   | ProjectCreatedNotificationEvent
   | IssueCreatedNotificationEvent
   | IssueAssignedNotificationEvent
+  | IssueAssignedToRoleNotificationEvent
   | IssueMarkedForReviewNotificationEvent
   | IssueReadyForTestNotificationEvent
+  | IssueFixedNotificationEvent
+  | IssueDeployedNotificationEvent
   | IssueReopenedNotificationEvent;

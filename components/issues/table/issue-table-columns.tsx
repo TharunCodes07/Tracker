@@ -12,6 +12,12 @@ import {
   IssueStatusBadge,
 } from "@/components/issues/shared/issue-display";
 import {
+  getClaimableIssueRoles,
+  IssueClaimActions,
+  type IssueClaimMember,
+  type IssueClaimRole,
+} from "@/components/issues/shared/issue-claim";
+import {
   getIssueAssignmentLabel,
   getIssueTesterAssignmentLabel,
   splitBulletItems,
@@ -35,11 +41,15 @@ interface IssueTableColumnOptions {
   onDelete: (issue: IssueListItem) => void;
   actionPending?: boolean;
   issueTextMode?: "compact" | "full";
+  currentMember?: IssueClaimMember | null;
+  onClaim?: (issue: IssueListItem, role: IssueClaimRole) => void;
+  claimActionPending?: boolean;
 }
 
 const ISSUE_TEXT_WIDTH_CLASS = "max-w-[28rem]";
 const LONG_TEXT_WIDTH_CLASS = "max-w-[18rem]";
-const LONG_TEXT_HEIGHT_CLASS = "tracker-thin-scrollbar min-h-10 max-h-28 overflow-y-auto pr-1";
+const LONG_TEXT_HEIGHT_CLASS =
+  "tracker-thin-scrollbar min-h-10 max-h-28 overflow-y-auto pr-1";
 
 function stopRowClick(event: MouseEvent<HTMLButtonElement>) {
   event.stopPropagation();
@@ -47,7 +57,7 @@ function stopRowClick(event: MouseEvent<HTMLButtonElement>) {
 
 function optionLabel<T extends string>(
   options: readonly { value: T; label: string }[],
-  value: T
+  value: T,
 ) {
   return options.find((option) => option.value === value)?.label ?? value;
 }
@@ -60,7 +70,13 @@ function TypeBadge({ issue }: { issue: IssueListItem }) {
   );
 }
 
-function TextCell({ value, fallback }: { value: string | null; fallback: string }) {
+function TextCell({
+  value,
+  fallback,
+}: {
+  value: string | null;
+  fallback: string;
+}) {
   const displayValue = value?.trim() ? value : fallback;
 
   return (
@@ -68,7 +84,7 @@ function TextCell({ value, fallback }: { value: string | null; fallback: string 
       className={cn(
         "min-w-0 whitespace-pre-wrap text-left leading-5 [overflow-wrap:anywhere]",
         LONG_TEXT_WIDTH_CLASS,
-        LONG_TEXT_HEIGHT_CLASS
+        LONG_TEXT_HEIGHT_CLASS,
       )}
       title={displayValue}
     >
@@ -77,7 +93,13 @@ function TextCell({ value, fallback }: { value: string | null; fallback: string 
   );
 }
 
-function BulletTextCell({ value, fallback }: { value: string | null; fallback: string }) {
+function BulletTextCell({
+  value,
+  fallback,
+}: {
+  value: string | null;
+  fallback: string;
+}) {
   const items = splitBulletItems(value);
 
   if (items.length === 0) {
@@ -89,7 +111,7 @@ function BulletTextCell({ value, fallback }: { value: string | null; fallback: s
       className={cn(
         "min-w-0 space-y-1 text-left leading-5 [overflow-wrap:anywhere]",
         LONG_TEXT_WIDTH_CLASS,
-        LONG_TEXT_HEIGHT_CLASS
+        LONG_TEXT_HEIGHT_CLASS,
       )}
       title={items.join("\n")}
     >
@@ -103,7 +125,13 @@ function BulletTextCell({ value, fallback }: { value: string | null; fallback: s
   );
 }
 
-function PersonCell({ value, fallback }: { value: string | null; fallback: string }) {
+function PersonCell({
+  value,
+  fallback,
+}: {
+  value: string | null;
+  fallback: string;
+}) {
   return (
     <div className="mx-auto min-w-0 max-w-[180px] text-center">
       <span className="line-clamp-2 break-words">{value ?? fallback}</span>
@@ -129,7 +157,7 @@ function StatusTextBadge({
       className={cn(
         type === "development"
           ? "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-          : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+          : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
       )}
     >
       {label}
@@ -171,13 +199,18 @@ export function getIssueTableColumns({
   onDelete,
   actionPending = false,
   issueTextMode = "compact",
+  currentMember,
+  onClaim,
+  claimActionPending = false,
 }: IssueTableColumnOptions): ColumnDef<IssueListItem>[] {
   const showFullIssueText = issueTextMode === "full";
 
   return [
     {
       accessorKey: "serialNumber",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="No" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="No" />
+      ),
       cell: ({ row }) => (
         <span className="font-mono text-xs text-muted-foreground">
           {row.original.serialNumber}
@@ -190,14 +223,20 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "title",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Issue" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Issue" />
+      ),
       cell: ({ row }) => (
         <div
           className={cn(
             "min-w-0 space-y-1 [overflow-wrap:anywhere]",
             showFullIssueText
-              ? cn("text-left", ISSUE_TEXT_WIDTH_CLASS, "tracker-thin-scrollbar max-h-40 overflow-y-auto pr-1")
-              : "mx-auto max-w-[320px] text-center"
+              ? cn(
+                  "text-left",
+                  ISSUE_TEXT_WIDTH_CLASS,
+                  "tracker-thin-scrollbar max-h-40 overflow-y-auto pr-1",
+                )
+              : "mx-auto max-w-[320px] text-center",
           )}
         >
           <div className="flex flex-wrap items-center gap-2">
@@ -206,7 +245,9 @@ export function getIssueTableColumns({
           <div
             className={cn(
               "break-words font-medium text-foreground",
-              showFullIssueText ? "whitespace-normal leading-5" : "line-clamp-2"
+              showFullIssueText
+                ? "whitespace-normal leading-5"
+                : "line-clamp-2",
             )}
             title={row.original.title}
           >
@@ -216,7 +257,9 @@ export function getIssueTableColumns({
             <div
               className={cn(
                 "break-words text-sm text-muted-foreground",
-                showFullIssueText ? "whitespace-normal leading-5" : "line-clamp-2"
+                showFullIssueText
+                  ? "whitespace-normal leading-5"
+                  : "line-clamp-2",
               )}
               title={row.original.description}
             >
@@ -236,8 +279,12 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "priority",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Priority" />,
-      cell: ({ row }) => <IssuePriorityBadge priority={row.original.priority} />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Priority" />
+      ),
+      cell: ({ row }) => (
+        <IssuePriorityBadge priority={row.original.priority} />
+      ),
       size: 130,
       meta: {
         label: "Priority",
@@ -245,7 +292,9 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "status",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Status" />
+      ),
       cell: ({ row }) => (
         <div className="flex flex-col items-center gap-1">
           <IssueStatusBadge status={row.original.status} />
@@ -259,8 +308,15 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "assigneeName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Dev owner" />,
-      cell: ({ row }) => <PersonCell value={getIssueAssignmentLabel(row.original)} fallback="Unassigned" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Dev owner" />
+      ),
+      cell: ({ row }) => (
+        <PersonCell
+          value={getIssueAssignmentLabel(row.original)}
+          fallback="Unassigned"
+        />
+      ),
       size: 180,
       meta: {
         label: "Dev owner",
@@ -268,9 +324,14 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "testerAssigneeName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Testing owner" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Testing owner" />
+      ),
       cell: ({ row }) => (
-        <PersonCell value={getIssueTesterAssignmentLabel(row.original)} fallback="Unassigned" />
+        <PersonCell
+          value={getIssueTesterAssignmentLabel(row.original)}
+          fallback="Unassigned"
+        />
       ),
       size: 180,
       meta: {
@@ -279,11 +340,17 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "comments",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Comments" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Comments" />
+      ),
       cell: ({ row }) => (
         <BulletTextCell
           value={row.original.comments}
-          fallback={row.original.commentCount > 0 ? `${row.original.commentCount} comments` : "-"}
+          fallback={
+            row.original.commentCount > 0
+              ? `${row.original.commentCount} comments`
+              : "-"
+          }
         />
       ),
       enableSorting: false,
@@ -298,8 +365,12 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "remark",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Remark" />,
-      cell: ({ row }) => <BulletTextCell value={row.original.remark} fallback="-" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Remark" />
+      ),
+      cell: ({ row }) => (
+        <BulletTextCell value={row.original.remark} fallback="-" />
+      ),
       enableSorting: false,
       size: 220,
       minSize: 160,
@@ -312,8 +383,12 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "moduleName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Module" />,
-      cell: ({ row }) => <PersonCell value={row.original.moduleName} fallback="Unassigned" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Module" />
+      ),
+      cell: ({ row }) => (
+        <PersonCell value={row.original.moduleName} fallback="Unassigned" />
+      ),
       size: 180,
       meta: {
         label: "Module",
@@ -321,8 +396,15 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "componentName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Component" />,
-      cell: ({ row }) => <PersonCell value={row.original.componentName} fallback="No component" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Component" />
+      ),
+      cell: ({ row }) => (
+        <PersonCell
+          value={row.original.componentName}
+          fallback="No component"
+        />
+      ),
       size: 190,
       meta: {
         label: "Component",
@@ -330,8 +412,12 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "testedByName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Tested By" />,
-      cell: ({ row }) => <PersonCell value={row.original.testedByName} fallback="Not tested" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Tested By" />
+      ),
+      cell: ({ row }) => (
+        <PersonCell value={row.original.testedByName} fallback="Not tested" />
+      ),
       size: 180,
       meta: {
         label: "Tested By",
@@ -339,7 +425,9 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "fixedDate",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Fixed Date" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Fixed Date" />
+      ),
       cell: ({ row }) => formatDate(row.original.fixedDate),
       size: 140,
       meta: {
@@ -348,9 +436,14 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "developmentStatus",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Development" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Development" />
+      ),
       cell: ({ row }) => (
-        <StatusTextBadge value={row.original.developmentStatus} type="development" />
+        <StatusTextBadge
+          value={row.original.developmentStatus}
+          type="development"
+        />
       ),
       size: 160,
       meta: {
@@ -359,9 +452,14 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "deploymentStatus",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Deployment" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Deployment" />
+      ),
       cell: ({ row }) => (
-        <StatusTextBadge value={row.original.deploymentStatus} type="deployment" />
+        <StatusTextBadge
+          value={row.original.deploymentStatus}
+          type="deployment"
+        />
       ),
       size: 150,
       meta: {
@@ -370,8 +468,12 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "epicTitle",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Epic" />,
-      cell: ({ row }) => <PersonCell value={row.original.epicTitle} fallback="No epic" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Epic" />
+      ),
+      cell: ({ row }) => (
+        <PersonCell value={row.original.epicTitle} fallback="No epic" />
+      ),
       size: 220,
       meta: {
         label: "Epic",
@@ -379,8 +481,12 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "sprintName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Sprint" />,
-      cell: ({ row }) => <PersonCell value={row.original.sprintName} fallback="Backlog" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Sprint" />
+      ),
+      cell: ({ row }) => (
+        <PersonCell value={row.original.sprintName} fallback="Backlog" />
+      ),
       size: 170,
       meta: {
         label: "Sprint",
@@ -388,8 +494,12 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "releaseName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Release" />,
-      cell: ({ row }) => <PersonCell value={row.original.releaseName} fallback="No release" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Release" />
+      ),
+      cell: ({ row }) => (
+        <PersonCell value={row.original.releaseName} fallback="No release" />
+      ),
       size: 180,
       meta: {
         label: "Release",
@@ -397,7 +507,9 @@ export function getIssueTableColumns({
     },
     {
       accessorKey: "updatedAt",
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Updated At" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Updated At" />
+      ),
       cell: ({ row }) => formatDateTime(row.original.updatedAt),
       size: 180,
       meta: {
@@ -407,9 +519,24 @@ export function getIssueTableColumns({
     {
       id: "actions",
       header: () => <div className="text-center">Actions</div>,
-      cell: ({ row }) =>
-        canEdit ? (
+      cell: ({ row }) => {
+        const claimableRoles = getClaimableIssueRoles(
+          row.original,
+          currentMember ?? null,
+        );
+
+        return canEdit ? (
           <div className="flex items-center justify-center gap-1">
+            {onClaim && claimableRoles.length > 0 ? (
+              <div onClick={(event) => event.stopPropagation()}>
+                <IssueClaimActions
+                  roles={claimableRoles}
+                  pending={claimActionPending}
+                  onClaim={(role) => onClaim(row.original, role)}
+                  className="flex items-center gap-1"
+                />
+              </div>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
@@ -441,9 +568,10 @@ export function getIssueTableColumns({
           </div>
         ) : (
           <span className="text-muted-foreground">-</span>
-        ),
+        );
+      },
       enableSorting: false,
-      size: 120,
+      size: 220,
     },
   ];
 }

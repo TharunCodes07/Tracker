@@ -4,6 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IssueMediaSummary } from "@/components/issues/media/issue-media";
 import {
+  getClaimableIssueRoles,
+  IssueClaimActions,
+  type IssueClaimMember,
+  type IssueClaimRole,
+} from "@/components/issues/shared/issue-claim";
+import {
   IssuePriorityBadge,
   IssueStatusBadge,
 } from "@/components/issues/shared/issue-display";
@@ -21,13 +27,21 @@ export function WorkflowIssueCard({
   selected = false,
   onSelectedChange,
   draggable = false,
+  currentMember,
+  onClaimIssue,
+  claimActionPending = false,
 }: {
   issue: IssueListItem;
   onOpen: (issue: IssueListItem) => void;
   selected?: boolean;
   onSelectedChange?: (issueId: string, selected: boolean) => void;
   draggable?: boolean;
+  currentMember?: IssueClaimMember | null;
+  onClaimIssue?: (issue: IssueListItem, role: IssueClaimRole) => void;
+  claimActionPending?: boolean;
 }) {
+  const claimableRoles = getClaimableIssueRoles(issue, currentMember ?? null);
+
   function handleKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.currentTarget !== event.target) return;
 
@@ -60,7 +74,9 @@ export function WorkflowIssueCard({
             <div onClick={(event) => event.stopPropagation()}>
               <Checkbox
                 checked={selected}
-                onCheckedChange={(checked) => onSelectedChange(issue.id, checked === true)}
+                onCheckedChange={(checked) =>
+                  onSelectedChange(issue.id, checked === true)
+                }
                 aria-label={`Select ${issue.key}`}
               />
             </div>
@@ -78,21 +94,52 @@ export function WorkflowIssueCard({
         {issue.title}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <Badge variant="secondary">{labelFor(ISSUE_TYPE_OPTIONS, issue.issueType)}</Badge>
-        {issue.moduleName ? <Badge variant="outline">{issue.moduleName}</Badge> : null}
-        {issue.componentName ? <Badge variant="outline">{issue.componentName}</Badge> : null}
-        {issue.epicTitle ? <Badge variant="outline">{issue.epicTitle}</Badge> : null}
-        {issue.sprintName ? <Badge variant="outline">{issue.sprintName}</Badge> : null}
-        {issue.releaseName ? <Badge variant="outline">{issue.releaseName}</Badge> : null}
+        <Badge variant="secondary">
+          {labelFor(ISSUE_TYPE_OPTIONS, issue.issueType)}
+        </Badge>
+        {issue.moduleName ? (
+          <Badge variant="outline">{issue.moduleName}</Badge>
+        ) : null}
+        {issue.componentName ? (
+          <Badge variant="outline">{issue.componentName}</Badge>
+        ) : null}
+        {issue.epicTitle ? (
+          <Badge variant="outline">{issue.epicTitle}</Badge>
+        ) : null}
+        {issue.sprintName ? (
+          <Badge variant="outline">{issue.sprintName}</Badge>
+        ) : null}
+        {issue.releaseName ? (
+          <Badge variant="outline">{issue.releaseName}</Badge>
+        ) : null}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>Dev {getIssueAssignmentLabel(issue)}</span>
         <span>Test {getIssueTesterAssignmentLabel(issue)}</span>
-        <span className="capitalize">Dev {issue.developmentStatus.replaceAll("_", " ")}</span>
-        <span className="capitalize">Deploy {issue.deploymentStatus.replaceAll("_", " ")}</span>
+        <span className="capitalize">
+          Dev {issue.developmentStatus.replaceAll("_", " ")}
+        </span>
+        <span className="capitalize">
+          Deploy {issue.deploymentStatus.replaceAll("_", " ")}
+        </span>
       </div>
+      {onClaimIssue && claimableRoles.length > 0 ? (
+        <div className="mt-3" onClick={(event) => event.stopPropagation()}>
+          <IssueClaimActions
+            roles={claimableRoles}
+            pending={claimActionPending}
+            onClaim={(role) => onClaimIssue(issue, role)}
+            className="flex flex-wrap gap-1"
+          />
+        </div>
+      ) : null}
       {issue.media.length > 0 ? (
-        <IssueMediaSummary issueId={issue.id} media={issue.media} className="mt-3 justify-start" compact />
+        <IssueMediaSummary
+          issueId={issue.id}
+          media={issue.media}
+          className="mt-3 justify-start"
+          compact
+        />
       ) : null}
     </article>
   );

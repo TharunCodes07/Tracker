@@ -1,8 +1,16 @@
 import { after, NextResponse } from "next/server";
 
 import { withOrganizationScope } from "@/db";
-import { handleRouteError, readJsonBody, withRouteOrganization } from "@/routes/http";
-import { deleteIssue, updateIssue, updateIssueStatus } from "@/routes/issues/mutations";
+import {
+  handleRouteError,
+  readJsonBody,
+  withRouteOrganization,
+} from "@/routes/http";
+import {
+  deleteIssue,
+  updateIssue,
+  updateIssueStatus,
+} from "@/routes/issues/mutations";
 import { getProjectIssueForUser } from "@/routes/issues/queries";
 import { dispatchNotificationEvents } from "@/routes/notifications/service";
 import type { NotificationEvent } from "@/routes/notifications/types";
@@ -14,15 +22,25 @@ import type {
 
 export async function GET(
   request: Request,
-  context: { params: Promise<{ teamId: string; projectId: string; issueId: string }> }
+  context: {
+    params: Promise<{ teamId: string; projectId: string; issueId: string }>;
+  },
 ) {
   try {
     return await withRouteOrganization(request, async (actor) => {
       const { teamId, projectId, issueId } = await context.params;
-      const issue = await getProjectIssueForUser(actor.id, teamId, projectId, issueId);
+      const issue = await getProjectIssueForUser(
+        actor.id,
+        teamId,
+        projectId,
+        issueId,
+      );
 
       if (!issue) {
-        return NextResponse.json({ message: "Issue not found." }, { status: 404 });
+        return NextResponse.json(
+          { message: "Issue not found." },
+          { status: 404 },
+        );
       }
 
       return NextResponse.json<IssueMutationResponse>({
@@ -31,22 +49,42 @@ export async function GET(
       });
     });
   } catch (error) {
-    return handleRouteError(error, "Something went wrong while handling the issue request.");
+    return handleRouteError(
+      error,
+      "Something went wrong while handling the issue request.",
+    );
   }
 }
 
 export async function PATCH(
   request: Request,
-  context: { params: Promise<{ teamId: string; projectId: string; issueId: string }> }
+  context: {
+    params: Promise<{ teamId: string; projectId: string; issueId: string }>;
+  },
 ) {
   try {
     return await withRouteOrganization(request, async (actor) => {
       const { teamId, projectId, issueId } = await context.params;
       const body = await readJsonBody<UpdateIssueInput>(request);
-      const { issue, previousAssignedTo, previousTesterAssignedTo, previousStatus, reopened } =
+      const {
+        issue,
+        previousAssignedTo,
+        previousTesterAssignedTo,
+        previousAssigneeGroup,
+        previousTesterAssigneeGroup,
+        previousStatus,
+        previousDeploymentStatus,
+        reopened,
+      } =
         body.title && body.issueType && body.priority
           ? await updateIssue(actor, teamId, projectId, issueId, body)
-          : await updateIssueStatus(actor, teamId, projectId, issueId, body.status);
+          : await updateIssueStatus(
+              actor,
+              teamId,
+              projectId,
+              issueId,
+              body.status,
+            );
       const notificationEvents: NotificationEvent[] = [];
 
       if (issue.assigneeId && issue.assigneeId !== previousAssignedTo) {
@@ -63,7 +101,10 @@ export async function PATCH(
         });
       }
 
-      if (issue.testerAssigneeId && issue.testerAssigneeId !== previousTesterAssignedTo) {
+      if (
+        issue.testerAssigneeId &&
+        issue.testerAssigneeId !== previousTesterAssignedTo
+      ) {
         notificationEvents.push({
           type: "issue.assigned",
           actorId: actor.id,
@@ -77,6 +118,43 @@ export async function PATCH(
         });
       }
 
+      if (
+        issue.assigneeGroup === "development" &&
+        !issue.assigneeId &&
+        (previousAssigneeGroup !== "development" || previousAssignedTo !== null)
+      ) {
+        notificationEvents.push({
+          type: "issue.assigned_to_role",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          role: "developer",
+        });
+      }
+
+      if (
+        issue.testerAssigneeGroup === "testing" &&
+        !issue.testerAssigneeId &&
+        (previousTesterAssigneeGroup !== "testing" ||
+          previousTesterAssignedTo !== null)
+      ) {
+        notificationEvents.push({
+          type: "issue.assigned_to_role",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          role: "tester",
+        });
+      }
+
       if (previousStatus !== "review" && issue.status === "review") {
         notificationEvents.push({
           type: "issue.marked_for_review",
@@ -87,7 +165,38 @@ export async function PATCH(
           issueId: issue.id,
           issueNo: issue.no,
           issueTitle: issue.title,
-          reviewerId: issue.testedById,
+          reviewerId: issue.testerAssigneeId,
+        });
+      }
+
+      if (previousStatus !== "fixed" && issue.status === "fixed") {
+        notificationEvents.push({
+          type: "issue.fixed",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          testerId: issue.testerAssigneeId,
+        });
+      }
+
+      if (
+        previousDeploymentStatus !== "deployed" &&
+        issue.deploymentStatus === "deployed"
+      ) {
+        notificationEvents.push({
+          type: "issue.deployed",
+          actorId: actor.id,
+          actorName: actor.name ?? "",
+          teamId,
+          projectId,
+          issueId: issue.id,
+          issueNo: issue.no,
+          issueTitle: issue.title,
+          testerId: issue.testerAssigneeId,
         });
       }
 
@@ -106,22 +215,33 @@ export async function PATCH(
       }
 
       if (notificationEvents.length > 0 && actor.organizationId) {
-        after(() => withOrganizationScope(actor.organizationId!, () => dispatchNotificationEvents(notificationEvents)));
+        after(() =>
+          withOrganizationScope(actor.organizationId!, () =>
+            dispatchNotificationEvents(notificationEvents),
+          ),
+        );
       }
 
       return NextResponse.json<IssueMutationResponse>({
         issue,
-        message: reopened ? `${issue.title} has been reopened.` : `${issue.title} has been updated.`,
+        message: reopened
+          ? `${issue.title} has been reopened.`
+          : `${issue.title} has been updated.`,
       });
     });
   } catch (error) {
-    return handleRouteError(error, "Something went wrong while handling the issue request.");
+    return handleRouteError(
+      error,
+      "Something went wrong while handling the issue request.",
+    );
   }
 }
 
 export async function DELETE(
   request: Request,
-  context: { params: Promise<{ teamId: string; projectId: string; issueId: string }> }
+  context: {
+    params: Promise<{ teamId: string; projectId: string; issueId: string }>;
+  },
 ) {
   try {
     return await withRouteOrganization(request, async (actor) => {
@@ -134,6 +254,9 @@ export async function DELETE(
       });
     });
   } catch (error) {
-    return handleRouteError(error, "Something went wrong while handling the issue request.");
+    return handleRouteError(
+      error,
+      "Something went wrong while handling the issue request.",
+    );
   }
 }

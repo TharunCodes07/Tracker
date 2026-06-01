@@ -31,7 +31,9 @@ function parsePositiveInteger(value: string | null, fallback: number) {
 
   const parsedValue = Number.parseInt(value, 10);
 
-  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
+  return Number.isFinite(parsedValue) && parsedValue > 0
+    ? parsedValue
+    : fallback;
 }
 
 function parseSortBy(value: string | null): IssueListSortField {
@@ -69,15 +71,17 @@ function parseIssueTypes(values: string[]): IssueType[] {
   const allowed = new Set(ISSUE_TYPE_OPTIONS.map((option) => option.value));
 
   return uniqueStrings(values).filter((value): value is IssueType =>
-    allowed.has(value as IssueType)
+    allowed.has(value as IssueType),
   );
 }
 
 function parseStatuses(values: string[]): IssueStatus[] {
-  const allowed = new Set<string>(ISSUE_STATUS_OPTIONS.map((option) => option.value));
+  const allowed = new Set<string>(
+    ISSUE_STATUS_OPTIONS.map((option) => option.value),
+  );
 
   return uniqueStrings(values).filter((value): value is IssueStatus =>
-    allowed.has(value)
+    allowed.has(value),
   );
 }
 
@@ -85,27 +89,29 @@ function parsePriorities(values: string[]): IssuePriority[] {
   const allowed = new Set(ISSUE_PRIORITY_OPTIONS.map((option) => option.value));
 
   return uniqueStrings(values).filter((value): value is IssuePriority =>
-    allowed.has(value as IssuePriority)
+    allowed.has(value as IssuePriority),
   );
 }
 
 function parseAssigneeFilters(values: string[]): IssueAssigneeFilterValue[] {
   return uniqueStrings(values).filter(
     (value): value is IssueAssigneeFilterValue =>
-      value === "current-user" || value === "unassigned"
+      value === "current-user" ||
+      value === "current-role" ||
+      value === "unassigned",
   );
 }
 
 function parseReporterFilters(values: string[]): IssueReporterFilterValue[] {
   return uniqueStrings(values).filter(
-    (value): value is IssueReporterFilterValue => value === "current-user"
+    (value): value is IssueReporterFilterValue => value === "current-user",
   );
 }
 
 function parseTestedByFilters(values: string[]): IssueTestedByFilterValue[] {
   return uniqueStrings(values).filter(
     (value): value is IssueTestedByFilterValue =>
-      value === "current-user" || value === "untested"
+      value === "current-user" || value === "untested",
   );
 }
 
@@ -114,7 +120,7 @@ export function readListProjectIssuesInput(
   options?: {
     defaultPageSize?: number;
     maxPageSize?: number;
-  }
+  },
 ): ListProjectIssuesInput {
   const { searchParams } = request.nextUrl;
   const defaultPageSize = options?.defaultPageSize ?? DEFAULT_PAGE_SIZE;
@@ -124,12 +130,18 @@ export function readListProjectIssuesInput(
     ...searchParams.getAll("issueTypeFilter"),
   ]);
   const moduleFilters = uniqueStrings(searchParams.getAll("moduleFilter"));
-  const componentFilters = uniqueStrings(searchParams.getAll("componentFilter"));
+  const componentFilters = uniqueStrings(
+    searchParams.getAll("componentFilter"),
+  );
 
   return {
     page: parsePositiveInteger(searchParams.get("page"), DEFAULT_PAGE),
-    pageSize: Math.min(parsePositiveInteger(searchParams.get("pageSize"), defaultPageSize), maxPageSize),
-    search: searchParams.get("search")?.trim().slice(0, MAX_SEARCH_LENGTH) ?? "",
+    pageSize: Math.min(
+      parsePositiveInteger(searchParams.get("pageSize"), defaultPageSize),
+      maxPageSize,
+    ),
+    search:
+      searchParams.get("search")?.trim().slice(0, MAX_SEARCH_LENGTH) ?? "",
     resolution: parseResolution(searchParams.get("resolution")),
     typeFilters: issueTypeFilters,
     statusFilters: parseStatuses(searchParams.getAll("statusFilter")),
@@ -139,9 +151,15 @@ export function readListProjectIssuesInput(
     releaseFilters: uniqueStrings(searchParams.getAll("releaseFilter")),
     sprintFilters: uniqueStrings(searchParams.getAll("sprintFilter")),
     priorityFilters: parsePriorities(searchParams.getAll("priorityFilter")),
-    assigneeFilters: parseAssigneeFilters(searchParams.getAll("assigneeFilter")),
-    reporterFilters: parseReporterFilters(searchParams.getAll("reporterFilter")),
-    testedByFilters: parseTestedByFilters(searchParams.getAll("testedByFilter")),
+    assigneeFilters: parseAssigneeFilters(
+      searchParams.getAll("assigneeFilter"),
+    ),
+    reporterFilters: parseReporterFilters(
+      searchParams.getAll("reporterFilter"),
+    ),
+    testedByFilters: parseTestedByFilters(
+      searchParams.getAll("testedByFilter"),
+    ),
     backlogOnly: searchParams.get("backlog") === "true",
     sortBy: parseSortBy(searchParams.get("sortBy")),
     sortDirection: parseSortDirection(searchParams.get("sortDirection")),

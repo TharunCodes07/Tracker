@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  type FormEvent,
+} from "react";
 
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { useParams, useRouter } from "next/navigation";
@@ -8,12 +14,14 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { usePersistedViewMode } from "@/hooks/use-persisted-view-mode";
+import type { IssueClaimRole } from "@/components/issues/shared/issue-claim";
 import { saveRecentProject } from "@/components/nav/hooks/use-recent-projects";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ACTIVE_ISSUE_STATUS_OPTIONS,
   type EpicStatus,
+  type IssueAssigneeFilterValue,
   type IssueListItem,
   type IssueMediaType,
   type IssueMediaUploadResponse,
@@ -41,7 +49,10 @@ import {
   createIssueFormFromIssue,
 } from "./forms";
 import { requestJson } from "./http";
-import { IssueBulkActionBar, type IssueBulkPatch } from "./issue-bulk-action-bar";
+import {
+  IssueBulkActionBar,
+  type IssueBulkPatch,
+} from "./issue-bulk-action-bar";
 import { ProjectError } from "./project-error";
 import { buildIssueListSearchParams } from "./query";
 import type { IssueFormState, ProjectWorkflowView } from "./types";
@@ -52,7 +63,12 @@ import { BoardView } from "./views/board-view";
 import { IssueCollectionView } from "./views/issue-collection-view";
 import { IssueDetailContent } from "./views/issue-detail-content";
 import { ModulesView } from "./views/modules-view";
-import { EpicsView, PlanningDetailView, ReleasesView, SprintsView } from "./views/planning-views";
+import {
+  EpicsView,
+  PlanningDetailView,
+  ReleasesView,
+  SprintsView,
+} from "./views/planning-views";
 import { SettingsView } from "./views/settings-view";
 import { SummaryView } from "./views/summary-view";
 
@@ -72,19 +88,29 @@ function getIssueMediaTypeFromFile(file: File): IssueMediaType {
   throw new Error(`${file.name} is not an image or video.`);
 }
 
-async function uploadIssueMediaFile(teamId: string, projectId: string, file: File) {
+async function uploadIssueMediaFile(
+  teamId: string,
+  projectId: string,
+  file: File,
+) {
   const formData = new FormData();
 
   formData.append("file", file);
   formData.append("mediaType", getIssueMediaTypeFromFile(file));
 
-  const response = await fetch(`/api/teams/${teamId}/projects/${projectId}/issue-media`, {
-    method: "POST",
-    body: formData,
-  });
-  const data = (await response.json().catch(() => null)) as IssueMediaUploadResponse | {
-    message?: string;
-  } | null;
+  const response = await fetch(
+    `/api/teams/${teamId}/projects/${projectId}/issue-media`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+  const data = (await response.json().catch(() => null)) as
+    | IssueMediaUploadResponse
+    | {
+        message?: string;
+      }
+    | null;
 
   if (!response.ok) {
     const message = data && "message" in data ? data.message : undefined;
@@ -104,13 +130,26 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     epicId?: string | string[];
   }>();
   const router = useRouter();
-  const teamId = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
-  const projectId = Array.isArray(params.projectId) ? params.projectId[0] : params.projectId;
-  const routeIssueKey = Array.isArray(params.issueKey) ? params.issueKey[0] : params.issueKey;
-  const routeReleaseId = Array.isArray(params.releaseId) ? params.releaseId[0] : params.releaseId;
-  const routeSprintId = Array.isArray(params.sprintId) ? params.sprintId[0] : params.sprintId;
-  const routeEpicId = Array.isArray(params.epicId) ? params.epicId[0] : params.epicId;
-  const basePath = teamId && projectId ? `/teams/${teamId}/projects/${projectId}` : "";
+  const teamId = Array.isArray(params.teamId)
+    ? params.teamId[0]
+    : params.teamId;
+  const projectId = Array.isArray(params.projectId)
+    ? params.projectId[0]
+    : params.projectId;
+  const routeIssueKey = Array.isArray(params.issueKey)
+    ? params.issueKey[0]
+    : params.issueKey;
+  const routeReleaseId = Array.isArray(params.releaseId)
+    ? params.releaseId[0]
+    : params.releaseId;
+  const routeSprintId = Array.isArray(params.sprintId)
+    ? params.sprintId[0]
+    : params.sprintId;
+  const routeEpicId = Array.isArray(params.epicId)
+    ? params.epicId[0]
+    : params.epicId;
+  const basePath =
+    teamId && projectId ? `/teams/${teamId}/projects/${projectId}` : "";
   const hasRequiredParams = Boolean(teamId && projectId);
   const activeView =
     view === "components" || view === "reports"
@@ -123,21 +162,38 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
             ? "epics"
             : view;
   const isPlanningDetailView =
-    view === "release-detail" || view === "sprint-detail" || view === "epic-detail";
+    view === "release-detail" ||
+    view === "sprint-detail" ||
+    view === "epic-detail";
   const { viewMode, setViewMode } = usePersistedViewMode(
     `project-issue-workflow-view:${activeView}`,
-    activeView === "issues" ? "table" : "grid"
+    activeView === "issues" ? "table" : "grid",
   );
 
-  const [workspace, setWorkspace] = useState<ProjectIssuesWorkspaceResponse | null>(null);
+  const [workspace, setWorkspace] =
+    useState<ProjectIssuesWorkspaceResponse | null>(null);
   const [issues, setIssues] = useState<IssueListItem[]>([]);
-  const [pagination, setPagination] = useState<ProjectIssuesListResponse["pagination"] | null>(null);
-  const [summary, setSummary] = useState<ProjectIssuesListResponse["summary"] | null>(null);
-  const [moduleCounts, setModuleCounts] = useState<ProjectIssuesListResponse["moduleCounts"]>([]);
-  const [componentCounts, setComponentCounts] = useState<ProjectIssuesListResponse["componentCounts"]>([]);
-  const [releaseCounts, setReleaseCounts] = useState<ProjectIssuesListResponse["releaseCounts"]>([]);
-  const [epicCounts, setEpicCounts] = useState<ProjectIssuesListResponse["epicCounts"]>([]);
-  const [sprintCounts, setSprintCounts] = useState<ProjectIssuesListResponse["sprintCounts"]>([]);
+  const [pagination, setPagination] = useState<
+    ProjectIssuesListResponse["pagination"] | null
+  >(null);
+  const [summary, setSummary] = useState<
+    ProjectIssuesListResponse["summary"] | null
+  >(null);
+  const [moduleCounts, setModuleCounts] = useState<
+    ProjectIssuesListResponse["moduleCounts"]
+  >([]);
+  const [componentCounts, setComponentCounts] = useState<
+    ProjectIssuesListResponse["componentCounts"]
+  >([]);
+  const [releaseCounts, setReleaseCounts] = useState<
+    ProjectIssuesListResponse["releaseCounts"]
+  >([]);
+  const [epicCounts, setEpicCounts] = useState<
+    ProjectIssuesListResponse["epicCounts"]
+  >([]);
+  const [sprintCounts, setSprintCounts] = useState<
+    ProjectIssuesListResponse["sprintCounts"]
+  >([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [, setIsLoadingWorkspace] = useState(hasRequiredParams);
   const [isLoadingIssues, setIsLoadingIssues] = useState(hasRequiredParams);
@@ -152,23 +208,35 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
   const [releaseFilters, setReleaseFilters] = useState<string[]>([]);
   const [sprintFilters, setSprintFilters] = useState<string[]>([]);
   const [priorityFilters, setPriorityFilters] = useState<IssuePriority[]>([]);
-  const [assignedToMe, setAssignedToMe] = useState(false);
+  const [assignmentFilter, setAssignmentFilter] = useState<
+    IssueAssigneeFilterValue | "all"
+  >("all");
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(20);
 
-  const [selectedIssue, setSelectedIssue] = useState<IssueListItem | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<IssueListItem | null>(
+    null,
+  );
   const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
   const [isIssueSheetOpen, setIsIssueSheetOpen] = useState(false);
   const [isIssueDialogOpen, setIsIssueDialogOpen] = useState(false);
-  const [assignmentTarget, setAssignmentTarget] = useState<PlanningAssignmentTarget | null>(null);
+  const [assignmentTarget, setAssignmentTarget] =
+    useState<PlanningAssignmentTarget | null>(null);
   const [editingIssue, setEditingIssue] = useState<IssueListItem | null>(null);
-  const [issueToDelete, setIssueToDelete] = useState<IssueListItem | null>(null);
-  const [issueForm, setIssueForm] = useState<IssueFormState>(createEmptyIssueForm);
+  const [issueToDelete, setIssueToDelete] = useState<IssueListItem | null>(
+    null,
+  );
+  const [issueForm, setIssueForm] =
+    useState<IssueFormState>(createEmptyIssueForm);
   const [isSavingIssue, startIssueTransition] = useTransition();
   const [isDeletingIssue, startDeleteTransition] = useTransition();
   const [isExporting, startExportTransition] = useTransition();
-  const entityDialogs = useWorkflowEntityDialogs({ teamId, projectId, onRefresh: refresh });
+  const entityDialogs = useWorkflowEntityDialogs({
+    teamId,
+    projectId,
+    onRefresh: refresh,
+  });
 
   useEffect(() => {
     if (!teamId || !projectId) {
@@ -184,7 +252,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
       try {
         const data = await requestJson<ProjectIssuesWorkspaceResponse>(
           `/api/teams/${teamId}/projects/${projectId}/issues/workspace`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
 
         if (isActive) {
@@ -192,7 +260,8 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
         }
       } catch (error) {
         if (isActive) {
-          const message = error instanceof Error ? error.message : "Could not load project.";
+          const message =
+            error instanceof Error ? error.message : "Could not load project.";
           setLoadError(message);
           toast.error(message);
         }
@@ -231,17 +300,23 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           statusFilters,
           moduleFilters,
           componentFilters,
-          epicFilters: view === "epic-detail" && routeEpicId ? [routeEpicId] : epicFilters,
+          epicFilters:
+            view === "epic-detail" && routeEpicId ? [routeEpicId] : epicFilters,
           releaseFilters:
-            view === "release-detail" && routeReleaseId ? [routeReleaseId] : releaseFilters,
-          sprintFilters: view === "sprint-detail" && routeSprintId ? [routeSprintId] : sprintFilters,
+            view === "release-detail" && routeReleaseId
+              ? [routeReleaseId]
+              : releaseFilters,
+          sprintFilters:
+            view === "sprint-detail" && routeSprintId
+              ? [routeSprintId]
+              : sprintFilters,
           priorityFilters,
-          assignedToMe,
+          assignmentFilter,
         });
 
         const data = await requestJson<ProjectIssuesListResponse>(
           `/api/teams/${teamId}/projects/${projectId}/issues?${searchParams.toString()}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
 
         if (!isActive) return;
@@ -256,11 +331,14 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
         setSprintCounts(data.sprintCounts);
         setSelectedIssueIds((currentIssueIds) => {
           const visibleIssueIds = new Set(data.issues.map((issue) => issue.id));
-          return currentIssueIds.filter((issueId) => visibleIssueIds.has(issueId));
+          return currentIssueIds.filter((issueId) =>
+            visibleIssueIds.has(issueId),
+          );
         });
       } catch (error) {
         if (isActive) {
-          const message = error instanceof Error ? error.message : "Could not load issues.";
+          const message =
+            error instanceof Error ? error.message : "Could not load issues.";
           setLoadError(message);
           toast.error(message);
         }
@@ -278,7 +356,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     };
   }, [
     activeView,
-    assignedToMe,
+    assignmentFilter,
     componentFilters,
     epicFilters,
     moduleFilters,
@@ -311,7 +389,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
       try {
         const data = await requestJson<IssueMutationResponse>(
           `/api/teams/${teamId}/projects/${projectId}/issues/${routeIssueKey}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
 
         if (isActive) {
@@ -319,7 +397,10 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
         }
       } catch (error) {
         if (isActive) {
-          const message = error instanceof Error ? error.message : "Could not load the issue.";
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Could not load the issue.";
           setLoadError(message);
           toast.error(message);
         }
@@ -335,7 +416,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
 
   const currentUser = useMemo(
     () => workspace?.members.find((member) => member.isCurrentUser) ?? null,
-    [workspace?.members]
+    [workspace?.members],
   );
 
   useEffect(() => {
@@ -355,21 +436,27 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
   const filteredComponents = useMemo(
     () =>
       workspace?.components.filter(
-        (component) => moduleFilters.length === 0 || moduleFilters.includes(component.moduleId)
+        (component) =>
+          moduleFilters.length === 0 ||
+          moduleFilters.includes(component.moduleId),
       ) ?? [],
-    [moduleFilters, workspace?.components]
+    [moduleFilters, workspace?.components],
   );
   const issueByStatus = useMemo(() => {
     const groups = new Map<IssueStatus, IssueListItem[]>();
 
-    for (const status of ACTIVE_ISSUE_STATUS_OPTIONS) groups.set(status.value, []);
+    for (const status of ACTIVE_ISSUE_STATUS_OPTIONS)
+      groups.set(status.value, []);
     for (const issue of issues) groups.get(issue.status)?.push(issue);
 
     return groups;
   }, [issues]);
   const criticalIssues = useMemo(
-    () => issues.filter((issue) => issue.priority === "critical" && issue.status !== "fixed"),
-    [issues]
+    () =>
+      issues.filter(
+        (issue) => issue.priority === "critical" && issue.status !== "fixed",
+      ),
+    [issues],
   );
   const canEdit = workspace?.team.canEdit ?? false;
   const isLoading = isLoadingIssues;
@@ -396,7 +483,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     setReleaseFilters([]);
     setSprintFilters([]);
     setPriorityFilters([]);
-    setAssignedToMe(false);
+    setAssignmentFilter("all");
     setPageIndex(0);
   }
 
@@ -408,8 +495,10 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     if (epicFilters.length === 1) form.epicId = epicFilters[0];
     if (releaseFilters.length === 1) form.releaseId = releaseFilters[0];
     if (sprintFilters.length === 1) form.sprintId = sprintFilters[0];
-    if (view === "release-detail" && routeReleaseId) form.releaseId = routeReleaseId;
-    if (view === "sprint-detail" && routeSprintId) form.sprintId = routeSprintId;
+    if (view === "release-detail" && routeReleaseId)
+      form.releaseId = routeReleaseId;
+    if (view === "sprint-detail" && routeSprintId)
+      form.sprintId = routeSprintId;
     if (view === "epic-detail" && routeEpicId) form.epicId = routeEpicId;
 
     setEditingIssue(null);
@@ -433,12 +522,27 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
 
     if (!teamId || !projectId) return;
 
+    const submitter = (event.nativeEvent as SubmitEvent)
+      .submitter as HTMLElement | null;
+    const shouldReopen = submitter?.dataset.intent === "reopen";
+    const submittedIssueForm = shouldReopen
+      ? {
+          ...issueForm,
+          reopen: true,
+        }
+      : {
+          ...issueForm,
+          reopen: false,
+        };
+
     startIssueTransition(async () => {
       try {
         const uploadedMedia: UploadedIssueMediaInput[] =
-          issueForm.mediaFiles.length > 0
+          submittedIssueForm.mediaFiles.length > 0
             ? await Promise.all(
-                issueForm.mediaFiles.map((file) => uploadIssueMediaFile(teamId, projectId, file))
+                submittedIssueForm.mediaFiles.map((file) =>
+                  uploadIssueMediaFile(teamId, projectId, file),
+                ),
               )
             : [];
         const data = await requestJson<IssueMutationResponse>(
@@ -447,8 +551,10 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
             : `/api/teams/${teamId}/projects/${projectId}/issues`,
           {
             method: editingIssue ? "PATCH" : "POST",
-            body: JSON.stringify(buildIssuePayload(issueForm, uploadedMedia)),
-          }
+            body: JSON.stringify(
+              buildIssuePayload(submittedIssueForm, uploadedMedia),
+            ),
+          },
         );
 
         setSelectedIssue(data.issue);
@@ -456,7 +562,9 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
         refresh();
         toast.success(data.message);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not save the issue.");
+        toast.error(
+          error instanceof Error ? error.message : "Could not save the issue.",
+        );
       }
     });
   }
@@ -468,14 +576,17 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
 
     startDeleteTransition(async () => {
       try {
-        const data = await requestJson<{ deletedIssueId: string; message: string }>(
+        const data = await requestJson<{
+          deletedIssueId: string;
+          message: string;
+        }>(
           `/api/teams/${teamId}/projects/${projectId}/issues/${deletingIssue.id}`,
-          { method: "DELETE" }
+          { method: "DELETE" },
         );
 
         setIssueToDelete(null);
         setIssues((currentIssues) =>
-          currentIssues.filter((issue) => issue.id !== data.deletedIssueId)
+          currentIssues.filter((issue) => issue.id !== data.deletedIssueId),
         );
         if (selectedIssue?.id === deletingIssue.id) {
           setSelectedIssue(null);
@@ -484,7 +595,11 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
         refresh();
         toast.success(data.message);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not delete the issue.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not delete the issue.",
+        );
       }
     });
   }
@@ -502,18 +617,22 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           {
             method: "PATCH",
             body: JSON.stringify(buildIssuePayload(form)),
-          }
+          },
         );
 
         setSelectedIssue(data.issue);
         setIssues((currentIssues) =>
           currentIssues.map((currentIssue) =>
-            currentIssue.id === data.issue.id ? data.issue : currentIssue
-          )
+            currentIssue.id === data.issue.id ? data.issue : currentIssue,
+          ),
         );
         refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not remove the media.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not remove the media.",
+        );
       }
     });
   }
@@ -526,7 +645,9 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     if (!issue || issue.status === status) return;
 
     setIssues((currentIssues) =>
-      currentIssues.map((item) => (item.id === issueId ? { ...item, status } : item))
+      currentIssues.map((item) =>
+        item.id === issueId ? { ...item, status } : item,
+      ),
     );
 
     startIssueTransition(async () => {
@@ -536,18 +657,22 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           {
             method: "PATCH",
             body: JSON.stringify({ status }),
-          }
+          },
         );
 
         setIssues((currentIssues) =>
-          currentIssues.map((item) => (item.id === issueId ? data.issue : item))
+          currentIssues.map((item) =>
+            item.id === issueId ? data.issue : item,
+          ),
         );
         refresh();
       } catch (error) {
         setIssues((currentIssues) =>
-          currentIssues.map((item) => (item.id === issueId ? issue : item))
+          currentIssues.map((item) => (item.id === issueId ? issue : item)),
         );
-        toast.error(error instanceof Error ? error.message : "Could not move the issue.");
+        toast.error(
+          error instanceof Error ? error.message : "Could not move the issue.",
+        );
       }
     });
   }
@@ -564,10 +689,10 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
         ? {
             ...currentWorkspace,
             epics: currentWorkspace.epics.map((item) =>
-              item.id === epicId ? { ...item, status } : item
+              item.id === epicId ? { ...item, status } : item,
             ),
           }
-        : currentWorkspace
+        : currentWorkspace,
     );
 
     startIssueTransition(async () => {
@@ -577,7 +702,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           {
             method: "PATCH",
             body: JSON.stringify({ status }),
-          }
+          },
         );
 
         setWorkspace((currentWorkspace) =>
@@ -585,10 +710,10 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
             ? {
                 ...currentWorkspace,
                 epics: currentWorkspace.epics.map((item) =>
-                  item.id === epicId ? data.epic : item
+                  item.id === epicId ? data.epic : item,
                 ),
               }
-            : currentWorkspace
+            : currentWorkspace,
         );
         refresh();
       } catch (error) {
@@ -596,16 +721,23 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           currentWorkspace
             ? {
                 ...currentWorkspace,
-                epics: currentWorkspace.epics.map((item) => (item.id === epicId ? epic : item)),
+                epics: currentWorkspace.epics.map((item) =>
+                  item.id === epicId ? epic : item,
+                ),
               }
-            : currentWorkspace
+            : currentWorkspace,
         );
-        toast.error(error instanceof Error ? error.message : "Could not move the epic.");
+        toast.error(
+          error instanceof Error ? error.message : "Could not move the epic.",
+        );
       }
     });
   }
 
-  function handleReleaseStatusDrop(status: ProjectReleaseStatus, releaseId: string) {
+  function handleReleaseStatusDrop(
+    status: ProjectReleaseStatus,
+    releaseId: string,
+  ) {
     if (!teamId || !projectId || !workspace || !releaseId) return;
 
     const release = workspace.releases.find((item) => item.id === releaseId);
@@ -617,10 +749,10 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
         ? {
             ...currentWorkspace,
             releases: currentWorkspace.releases.map((item) =>
-              item.id === releaseId ? { ...item, status } : item
+              item.id === releaseId ? { ...item, status } : item,
             ),
           }
-        : currentWorkspace
+        : currentWorkspace,
     );
 
     startIssueTransition(async () => {
@@ -630,7 +762,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           {
             method: "PATCH",
             body: JSON.stringify({ status }),
-          }
+          },
         );
 
         setWorkspace((currentWorkspace) =>
@@ -638,10 +770,10 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
             ? {
                 ...currentWorkspace,
                 releases: currentWorkspace.releases.map((item) =>
-                  item.id === releaseId ? data.release : item
+                  item.id === releaseId ? data.release : item,
                 ),
               }
-            : currentWorkspace
+            : currentWorkspace,
         );
         refresh();
       } catch (error) {
@@ -650,12 +782,16 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
             ? {
                 ...currentWorkspace,
                 releases: currentWorkspace.releases.map((item) =>
-                  item.id === releaseId ? release : item
+                  item.id === releaseId ? release : item,
                 ),
               }
-            : currentWorkspace
+            : currentWorkspace,
         );
-        toast.error(error instanceof Error ? error.message : "Could not move the release.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not move the release.",
+        );
       }
     });
   }
@@ -675,13 +811,14 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
   }
 
   function handleBulkIssueUpdate(patch: IssueBulkPatch) {
-    if (!teamId || !projectId || !workspace || selectedIssues.length === 0) return;
+    if (!teamId || !projectId || !workspace || selectedIssues.length === 0)
+      return;
 
     const normalizedPatch = { ...patch };
 
     if (patch.componentId && patch.componentId !== NONE_VALUE) {
       const selectedComponent = workspace.components.find(
-        (component) => component.id === patch.componentId
+        (component) => component.id === patch.componentId,
       );
 
       if (selectedComponent) {
@@ -702,27 +839,77 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
               {
                 method: "PATCH",
                 body: JSON.stringify(buildIssuePayload(form)),
-              }
+              },
             );
 
             return data.issue;
-          })
+          }),
         );
-        const updatedIssueMap = new Map(updatedIssues.map((issue) => [issue.id, issue]));
+        const updatedIssueMap = new Map(
+          updatedIssues.map((issue) => [issue.id, issue]),
+        );
 
         setIssues((currentIssues) =>
-          currentIssues.map((issue) => updatedIssueMap.get(issue.id) ?? issue)
+          currentIssues.map((issue) => updatedIssueMap.get(issue.id) ?? issue),
         );
         setSelectedIssueIds([]);
         refresh();
         toast.success(`${updatedIssues.length} issues updated.`);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not update selected issues.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not update selected issues.",
+        );
       }
     });
   }
 
-  function handlePlanningIssueAssignment(target: PlanningAssignmentTarget, issuesToAssign: IssueListItem[]) {
+  function handleClaimIssue(issue: IssueListItem, role: IssueClaimRole) {
+    if (!teamId || !projectId || !currentUser) return;
+
+    const form = createIssueFormFromIssue(issue);
+
+    if (role === "developer") {
+      form.assigneeGroup = "development";
+      form.assigneeId = currentUser.userId;
+    } else {
+      form.testerAssigneeGroup = "testing";
+      form.testerAssigneeId = currentUser.userId;
+    }
+
+    startIssueTransition(async () => {
+      try {
+        const data = await requestJson<IssueMutationResponse>(
+          `/api/teams/${teamId}/projects/${projectId}/issues/${issue.id}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify(buildIssuePayload(form)),
+          },
+        );
+
+        setIssues((currentIssues) =>
+          currentIssues.map((currentIssue) =>
+            currentIssue.id === data.issue.id ? data.issue : currentIssue,
+          ),
+        );
+        setSelectedIssue((currentIssue) =>
+          currentIssue?.id === data.issue.id ? data.issue : currentIssue,
+        );
+        refresh();
+        toast.success(`${data.issue.key} assigned to you.`);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Could not claim the issue.",
+        );
+      }
+    });
+  }
+
+  function handlePlanningIssueAssignment(
+    target: PlanningAssignmentTarget,
+    issuesToAssign: IssueListItem[],
+  ) {
     if (!teamId || !projectId || issuesToAssign.length === 0) return;
 
     const patch: IssueBulkPatch =
@@ -745,23 +932,31 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
               {
                 method: "PATCH",
                 body: JSON.stringify(buildIssuePayload(form)),
-              }
+              },
             );
 
             return data.issue;
-          })
+          }),
         );
-        const updatedIssueMap = new Map(updatedIssues.map((issue) => [issue.id, issue]));
+        const updatedIssueMap = new Map(
+          updatedIssues.map((issue) => [issue.id, issue]),
+        );
 
         setIssues((currentIssues) =>
-          currentIssues.map((issue) => updatedIssueMap.get(issue.id) ?? issue)
+          currentIssues.map((issue) => updatedIssueMap.get(issue.id) ?? issue),
         );
         setSelectedIssueIds([]);
         setAssignmentTarget(null);
         refresh();
-        toast.success(`${updatedIssues.length} issues assigned to ${target.name}.`);
+        toast.success(
+          `${updatedIssues.length} issues assigned to ${target.name}.`,
+        );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not assign the selected issues.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not assign the selected issues.",
+        );
       }
     });
   }
@@ -790,36 +985,53 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           statusFilters,
           moduleFilters,
           componentFilters,
-          epicFilters: view === "epic-detail" && routeEpicId ? [routeEpicId] : epicFilters,
+          epicFilters:
+            view === "epic-detail" && routeEpicId ? [routeEpicId] : epicFilters,
           releaseFilters:
-            view === "release-detail" && routeReleaseId ? [routeReleaseId] : releaseFilters,
-          sprintFilters: view === "sprint-detail" && routeSprintId ? [routeSprintId] : sprintFilters,
+            view === "release-detail" && routeReleaseId
+              ? [routeReleaseId]
+              : releaseFilters,
+          sprintFilters:
+            view === "sprint-detail" && routeSprintId
+              ? [routeSprintId]
+              : sprintFilters,
           priorityFilters,
-          assignedToMe,
+          assignmentFilter,
         });
 
         filterParams.forEach((value, key) => {
-          if (key !== "page" && key !== "pageSize" && key !== "sortBy" && key !== "sortDirection") {
+          if (
+            key !== "page" &&
+            key !== "pageSize" &&
+            key !== "sortBy" &&
+            key !== "sortDirection"
+          ) {
             searchParams.append(key, value);
           }
         });
 
         const response = await fetch(
           `/api/teams/${teamId}/projects/${projectId}/issues/excel?${searchParams.toString()}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
         const errorPayload = !response.ok
-          ? ((await response.json().catch(() => null)) as { message?: string } | null)
+          ? ((await response.json().catch(() => null)) as {
+              message?: string;
+            } | null)
           : null;
 
         if (!response.ok) {
-          throw new Error(errorPayload?.message ?? "Could not export the issues.");
+          throw new Error(
+            errorPayload?.message ?? "Could not export the issues.",
+          );
         }
 
         const blob = await response.blob();
-        const contentDisposition = response.headers.get("content-disposition") ?? "";
+        const contentDisposition =
+          response.headers.get("content-disposition") ?? "";
         const fileNameMatch = /filename="([^"]+)"/i.exec(contentDisposition);
-        const fileName = fileNameMatch?.[1] ?? `${workspace.project.name}-issues.xlsx`;
+        const fileName =
+          fileNameMatch?.[1] ?? `${workspace.project.name}-issues.xlsx`;
         const objectUrl = URL.createObjectURL(blob);
         const link = document.createElement("a");
 
@@ -831,21 +1043,31 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
         URL.revokeObjectURL(objectUrl);
         toast.success("Issues exported to Excel.");
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not export the issues.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not export the issues.",
+        );
       }
     });
   }
 
   const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
     setSorting((currentSorting) => {
-      const nextSorting = typeof updater === "function" ? updater(currentSorting) : updater;
+      const nextSorting =
+        typeof updater === "function" ? updater(currentSorting) : updater;
       return nextSorting.length > 0 ? nextSorting : DEFAULT_SORTING;
     });
     setPageIndex(0);
   };
 
   if (!hasRequiredParams) {
-    return <ProjectError title="Project not found" message="The route is missing a team id or project id." />;
+    return (
+      <ProjectError
+        title="Project not found"
+        message="The route is missing a team id or project id."
+      />
+    );
   }
 
   if (loadError && !workspace) {
@@ -860,14 +1082,18 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
   const planningDetail =
     view === "release-detail" && routeReleaseId
       ? {
-          target: workspace.releases.find((release) => release.id === routeReleaseId),
+          target: workspace.releases.find(
+            (release) => release.id === routeReleaseId,
+          ),
           assignmentKind: "release" as const,
           collectionLabel: "Releases" as const,
           listHref: `${basePath}/releases`,
         }
       : view === "sprint-detail" && routeSprintId
         ? {
-            target: workspace.sprints.find((sprint) => sprint.id === routeSprintId),
+            target: workspace.sprints.find(
+              (sprint) => sprint.id === routeSprintId,
+            ),
             assignmentKind: "sprint" as const,
             collectionLabel: "Sprints" as const,
             listHref: `${basePath}/sprints`,
@@ -891,7 +1117,9 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
   const componentsForForm =
     issueForm.moduleId === NONE_VALUE
       ? workspace.components
-      : workspace.components.filter((component) => component.moduleId === issueForm.moduleId);
+      : workspace.components.filter(
+          (component) => component.moduleId === issueForm.moduleId,
+        );
   const bulkActionBar =
     canEdit && selectedIssueIds.length > 0 ? (
       <IssueBulkActionBar
@@ -926,6 +1154,9 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     selectedIssueIds,
     onSelectedIssueIdsChange: setSelectedIssueIds,
     bulkActionBar,
+    currentMember: currentUser,
+    onClaimIssue: handleClaimIssue,
+    claimActionPending: isSavingIssue,
   };
 
   return (
@@ -941,7 +1172,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           sprintFilters={sprintFilters}
           releaseFilters={releaseFilters}
           priorityFilters={priorityFilters}
-          assignedToMe={assignedToMe}
+          assignmentFilter={assignmentFilter}
           modules={workspace.modules}
           components={filteredComponents}
           epics={workspace.epics}
@@ -963,16 +1194,17 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           onModuleFiltersChange={(values) => {
             setModuleFilters(values);
             setComponentFilters((currentComponentFilters) => {
-              if (values.length === 0 || !workspace) return currentComponentFilters;
+              if (values.length === 0 || !workspace)
+                return currentComponentFilters;
 
               const allowedComponentIds = new Set(
                 workspace.components
                   .filter((component) => values.includes(component.moduleId))
-                  .map((component) => component.id)
+                  .map((component) => component.id),
               );
 
               return currentComponentFilters.filter((componentId) =>
-                allowedComponentIds.has(componentId)
+                allowedComponentIds.has(componentId),
               );
             });
             resetToFirstPage();
@@ -997,8 +1229,8 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
             setPriorityFilters(values);
             resetToFirstPage();
           }}
-          onAssignedToMeChange={(value) => {
-            setAssignedToMe(value);
+          onAssignmentFilterChange={(value) => {
+            setAssignmentFilter(value);
             resetToFirstPage();
           }}
           onClearFilters={clearFilters}
@@ -1140,7 +1372,9 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
         )
       ) : null}
 
-      {activeView === "settings" ? <SettingsView projectPrefix={project.keyPrefix} /> : null}
+      {activeView === "settings" ? (
+        <SettingsView projectPrefix={project.keyPrefix} />
+      ) : null}
 
       {view === "issue" ? (
         selectedIssue ? (
@@ -1238,7 +1472,10 @@ function ProjectWorkflowLoading({ view }: { view: ProjectWorkflowView }) {
         <PageHeadingSkeleton />
         <div className="grid min-h-[32rem] gap-3 overflow-hidden xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, columnIndex) => (
-            <div key={columnIndex} className="rounded-lg border border-border/70 bg-muted/20 p-3">
+            <div
+              key={columnIndex}
+              className="rounded-lg border border-border/70 bg-muted/20 p-3"
+            >
               <div className="mb-3 flex items-center justify-between">
                 <Skeleton className="h-5 w-24 rounded-full" />
                 <Skeleton className="h-4 w-6 rounded-full" />
@@ -1261,7 +1498,10 @@ function ProjectWorkflowLoading({ view }: { view: ProjectWorkflowView }) {
         <PageHeadingSkeleton />
         <div className="grid gap-4 xl:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="rounded-lg border border-border/70 bg-card p-4">
+            <div
+              key={index}
+              className="rounded-lg border border-border/70 bg-card p-4"
+            >
               <div className="flex items-start gap-3">
                 <Skeleton className="h-10 w-10 rounded-lg" />
                 <div className="min-w-0 flex-1 space-y-2">

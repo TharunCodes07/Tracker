@@ -13,6 +13,7 @@ import {
   projectReleases,
   projects,
   sprints,
+  teamMemberRoles,
   usersToTeams,
 } from "@/db/schema";
 import { RouteError } from "@/routes/errors";
@@ -73,7 +74,10 @@ export interface UpdateIssueResult {
   issue: IssueListItem;
   previousAssignedTo: string | null;
   previousTesterAssignedTo: string | null;
+  previousAssigneeGroup: IssueAssignmentGroup | null;
+  previousTesterAssigneeGroup: IssueAssignmentGroup | null;
   previousStatus: IssueStatus;
+  previousDeploymentStatus: DeploymentStatus;
   reopened: boolean;
 }
 
@@ -100,7 +104,11 @@ interface ValidatedIssueFields {
   deploymentStatus: DeploymentStatus;
 }
 
-function normalizeName(value: string, label: string, maxLength = NAME_MAX_LENGTH) {
+function normalizeName(
+  value: string,
+  label: string,
+  maxLength = NAME_MAX_LENGTH,
+) {
   const normalizedValue = value.trim();
 
   if (normalizedValue.length < 2) {
@@ -114,7 +122,10 @@ function normalizeName(value: string, label: string, maxLength = NAME_MAX_LENGTH
   return normalizedValue;
 }
 
-function normalizeOptionalText(value: string | null | undefined, label = "Description") {
+function normalizeOptionalText(
+  value: string | null | undefined,
+  label = "Description",
+) {
   const normalizedValue = value?.trim() ?? "";
 
   if (!normalizedValue) {
@@ -122,7 +133,9 @@ function normalizeOptionalText(value: string | null | undefined, label = "Descri
   }
 
   if (normalizedValue.length > ISSUE_TEXT_MAX_LENGTH) {
-    throw new RouteError(`${label} must be ${ISSUE_TEXT_MAX_LENGTH} characters or fewer.`);
+    throw new RouteError(
+      `${label} must be ${ISSUE_TEXT_MAX_LENGTH} characters or fewer.`,
+    );
   }
 
   return normalizedValue;
@@ -145,9 +158,15 @@ function normalizeTextItems(value: string | null | undefined, label: string) {
     .filter(Boolean);
 }
 
-function getNewCommentItems(inputComments: string | null | undefined, existingComments: string | null) {
+function getNewCommentItems(
+  inputComments: string | null | undefined,
+  existingComments: string | null,
+) {
   const normalizedComments = normalizeOptionalText(inputComments, "Comments");
-  const normalizedExistingComments = normalizeOptionalText(existingComments, "Comments");
+  const normalizedExistingComments = normalizeOptionalText(
+    existingComments,
+    "Comments",
+  );
 
   if (!normalizedComments) {
     return [];
@@ -164,12 +183,16 @@ function getNewCommentItems(inputComments: string | null | undefined, existingCo
   if (normalizedComments.startsWith(normalizedExistingComments)) {
     return normalizeTextItems(
       normalizedComments.slice(normalizedExistingComments.length),
-      "Comments"
+      "Comments",
     );
   }
 
-  const existingItems = new Set(normalizeTextItems(normalizedExistingComments, "Comments"));
-  return normalizeTextItems(normalizedComments, "Comments").filter((item) => !existingItems.has(item));
+  const existingItems = new Set(
+    normalizeTextItems(normalizedExistingComments, "Comments"),
+  );
+  return normalizeTextItems(normalizedComments, "Comments").filter(
+    (item) => !existingItems.has(item),
+  );
 }
 
 function normalizeOptionalId(value?: string | null) {
@@ -196,7 +219,7 @@ function normalizeOptionalDate(value?: string | null) {
 function assertOption<T extends string>(
   value: string,
   options: readonly { value: T; label: string }[],
-  message: string
+  message: string,
 ): T {
   if (options.some((option) => option.value === value)) {
     return value as T;
@@ -206,39 +229,67 @@ function assertOption<T extends string>(
 }
 
 function normalizeIssueType(input: CreateIssueInput | UpdateIssueInput) {
-  const value = input.issueType ?? input.type ?? (input.issueClassId as IssueType | undefined) ?? "bug";
+  const value =
+    input.issueType ??
+    input.type ??
+    (input.issueClassId as IssueType | undefined) ??
+    "bug";
   return assertOption(value, ISSUE_TYPE_OPTIONS, "Choose a valid issue type.");
 }
 
 function normalizeIssuePriority(value: string) {
-  return assertOption(value, ISSUE_PRIORITY_OPTIONS, "Choose a valid issue priority.");
+  return assertOption(
+    value,
+    ISSUE_PRIORITY_OPTIONS,
+    "Choose a valid issue priority.",
+  );
 }
 
 function normalizeIssueStatus(value: string) {
-  return assertOption(value, ISSUE_STATUS_OPTIONS, "Choose a valid issue status.");
+  return assertOption(
+    value,
+    ISSUE_STATUS_OPTIONS,
+    "Choose a valid issue status.",
+  );
 }
 
-function normalizeDevelopmentStatus(value?: string | null, status?: IssueStatus): DevelopmentStatus {
+function normalizeDevelopmentStatus(
+  value?: string | null,
+  status?: IssueStatus,
+): DevelopmentStatus {
   if (value === "done") {
     return "fixed";
   }
 
   if (value) {
-    return assertOption(value, DEVELOPMENT_STATUS_OPTIONS, "Choose a valid development status.");
+    return assertOption(
+      value,
+      DEVELOPMENT_STATUS_OPTIONS,
+      "Choose a valid development status.",
+    );
   }
 
   return status === "fixed" ? "fixed" : "not_started";
 }
 
-function normalizeDeploymentStatus(value?: string | null, deployed?: boolean): DeploymentStatus {
+function normalizeDeploymentStatus(
+  value?: string | null,
+  deployed?: boolean,
+): DeploymentStatus {
   if (value) {
-    return assertOption(value, DEPLOYMENT_STATUS_OPTIONS, "Choose a valid deployment status.");
+    return assertOption(
+      value,
+      DEPLOYMENT_STATUS_OPTIONS,
+      "Choose a valid deployment status.",
+    );
   }
 
   return deployed ? "deployed" : "not_deployed";
 }
 
-function normalizeIssueAssignmentGroup(value?: string | null): IssueAssignmentGroup | null {
+function normalizeIssueAssignmentGroup(
+  value?: string | null,
+): IssueAssignmentGroup | null {
   const normalizedValue = normalizeOptionalId(value);
 
   if (!normalizedValue) {
@@ -248,17 +299,20 @@ function normalizeIssueAssignmentGroup(value?: string | null): IssueAssignmentGr
   return assertOption(
     normalizedValue,
     ISSUE_ASSIGNMENT_GROUP_OPTIONS,
-    "Choose a valid assignment team."
+    "Choose a valid assignment team.",
   );
 }
 
-function isFixedWorkflowState(status: IssueStatus, developmentStatus: DevelopmentStatus) {
+function isFixedWorkflowState(
+  status: IssueStatus,
+  developmentStatus: DevelopmentStatus,
+) {
   return status === "fixed" || developmentStatus === "fixed";
 }
 
 function getAutomaticFixedDate(
   fields: Pick<ValidatedIssueFields, "status" | "developmentStatus">,
-  previousFixedDate?: string | Date | null
+  previousFixedDate?: string | Date | null,
 ) {
   if (!isFixedWorkflowState(fields.status, fields.developmentStatus)) {
     return null;
@@ -268,18 +322,34 @@ function getAutomaticFixedDate(
 }
 
 function normalizeEpicStatus(value?: string | null) {
-  return assertOption(value ?? "open", EPIC_STATUS_OPTIONS, "Choose a valid epic status.");
+  return assertOption(
+    value ?? "open",
+    EPIC_STATUS_OPTIONS,
+    "Choose a valid epic status.",
+  );
 }
 
 function normalizeReleaseStatus(value?: string | null) {
-  return assertOption(value ?? "planned", RELEASE_STATUS_OPTIONS, "Choose a valid release status.");
+  return assertOption(
+    value ?? "planned",
+    RELEASE_STATUS_OPTIONS,
+    "Choose a valid release status.",
+  );
 }
 
 function normalizeSprintStatus(value?: string | null) {
-  return assertOption(value ?? "planned", SPRINT_STATUS_OPTIONS, "Choose a valid sprint status.");
+  return assertOption(
+    value ?? "planned",
+    SPRINT_STATUS_OPTIONS,
+    "Choose a valid sprint status.",
+  );
 }
 
-async function requireEditableProjectForUser(actor: IssueActor, teamId: string, projectId: string) {
+async function requireEditableProjectForUser(
+  actor: IssueActor,
+  teamId: string,
+  projectId: string,
+) {
   const team = await getTeamForUser(actor.id, teamId);
 
   if (!team) {
@@ -313,16 +383,48 @@ async function assertUsersBelongToTeam(teamId: string, userIds: string[]) {
       and(
         eq(usersToTeams.teamId, teamId),
         eq(usersToTeams.membershipStatus, "active"),
-        inArray(usersToTeams.userId, normalizedUserIds)
-      )
+        inArray(usersToTeams.userId, normalizedUserIds),
+      ),
     );
 
   if (rows.length !== normalizedUserIds.length) {
-    throw new RouteError("Assignee, reporter, and tester must belong to this team.");
+    throw new RouteError(
+      "Assignee, reporter, and tester must belong to this team.",
+    );
   }
 }
 
-async function assertModuleBelongsToProject(projectId: string, moduleId: string | null) {
+async function assertUserHasTeamRole(
+  teamId: string,
+  userId: string | null,
+  role: "developer" | "tester",
+  label: string,
+) {
+  if (!userId) {
+    return;
+  }
+
+  const [roleRow] = await db
+    .select({ userId: teamMemberRoles.userId })
+    .from(teamMemberRoles)
+    .where(
+      and(
+        eq(teamMemberRoles.teamId, teamId),
+        eq(teamMemberRoles.userId, userId),
+        eq(teamMemberRoles.role, role),
+      ),
+    )
+    .limit(1);
+
+  if (!roleRow) {
+    throw new RouteError(`${label} must be assigned to a ${role} team member.`);
+  }
+}
+
+async function assertModuleBelongsToProject(
+  projectId: string,
+  moduleId: string | null,
+) {
   if (!moduleId) {
     return null;
   }
@@ -330,7 +432,12 @@ async function assertModuleBelongsToProject(projectId: string, moduleId: string 
   const [record] = await db
     .select({ id: projectModules.id, name: projectModules.name })
     .from(projectModules)
-    .where(and(eq(projectModules.projectId, projectId), eq(projectModules.id, moduleId)))
+    .where(
+      and(
+        eq(projectModules.projectId, projectId),
+        eq(projectModules.id, moduleId),
+      ),
+    )
     .limit(1);
 
   if (!record) {
@@ -340,7 +447,10 @@ async function assertModuleBelongsToProject(projectId: string, moduleId: string 
   return record;
 }
 
-async function assertComponentBelongsToProject(projectId: string, componentId: string | null) {
+async function assertComponentBelongsToProject(
+  projectId: string,
+  componentId: string | null,
+) {
   if (!componentId) {
     return null;
   }
@@ -352,7 +462,12 @@ async function assertComponentBelongsToProject(projectId: string, componentId: s
       name: projectComponents.name,
     })
     .from(projectComponents)
-    .where(and(eq(projectComponents.projectId, projectId), eq(projectComponents.id, componentId)))
+    .where(
+      and(
+        eq(projectComponents.projectId, projectId),
+        eq(projectComponents.id, componentId),
+      ),
+    )
     .limit(1);
 
   if (!record) {
@@ -362,7 +477,10 @@ async function assertComponentBelongsToProject(projectId: string, componentId: s
   return record;
 }
 
-async function assertEpicBelongsToProject(projectId: string, epicId: string | null) {
+async function assertEpicBelongsToProject(
+  projectId: string,
+  epicId: string | null,
+) {
   if (!epicId) {
     return;
   }
@@ -370,7 +488,9 @@ async function assertEpicBelongsToProject(projectId: string, epicId: string | nu
   const [record] = await db
     .select({ id: projectEpics.id })
     .from(projectEpics)
-    .where(and(eq(projectEpics.projectId, projectId), eq(projectEpics.id, epicId)))
+    .where(
+      and(eq(projectEpics.projectId, projectId), eq(projectEpics.id, epicId)),
+    )
     .limit(1);
 
   if (!record) {
@@ -378,7 +498,10 @@ async function assertEpicBelongsToProject(projectId: string, epicId: string | nu
   }
 }
 
-async function assertReleaseBelongsToProject(projectId: string, releaseId: string | null) {
+async function assertReleaseBelongsToProject(
+  projectId: string,
+  releaseId: string | null,
+) {
   if (!releaseId) {
     return;
   }
@@ -386,7 +509,12 @@ async function assertReleaseBelongsToProject(projectId: string, releaseId: strin
   const [record] = await db
     .select({ id: projectReleases.id })
     .from(projectReleases)
-    .where(and(eq(projectReleases.projectId, projectId), eq(projectReleases.id, releaseId)))
+    .where(
+      and(
+        eq(projectReleases.projectId, projectId),
+        eq(projectReleases.id, releaseId),
+      ),
+    )
     .limit(1);
 
   if (!record) {
@@ -394,7 +522,10 @@ async function assertReleaseBelongsToProject(projectId: string, releaseId: strin
   }
 }
 
-async function assertSprintBelongsToProject(projectId: string, sprintId: string | null) {
+async function assertSprintBelongsToProject(
+  projectId: string,
+  sprintId: string | null,
+) {
   if (!sprintId) {
     return;
   }
@@ -410,7 +541,11 @@ async function assertSprintBelongsToProject(projectId: string, sprintId: string 
   }
 }
 
-async function assertIssueBelongsToProject(projectId: string, issueId: string | null, label: string) {
+async function assertIssueBelongsToProject(
+  projectId: string,
+  issueId: string | null,
+  label: string,
+) {
   if (!issueId) {
     return;
   }
@@ -430,24 +565,35 @@ async function validateIssueFields(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  input: CreateIssueInput | UpdateIssueInput
+  input: CreateIssueInput | UpdateIssueInput,
 ): Promise<ValidatedIssueFields> {
   const issueType = normalizeIssueType(input);
-  const title = normalizeName(input.title, "Issue title", ISSUE_TITLE_MAX_LENGTH);
+  const title = normalizeName(
+    input.title,
+    "Issue title",
+    ISSUE_TITLE_MAX_LENGTH,
+  );
   const description = normalizeOptionalText(input.description);
   const status = normalizeIssueStatus(input.status);
   const priority = normalizeIssuePriority(input.priority);
-  const assigneeGroup = normalizeIssueAssignmentGroup(input.assigneeGroup ?? input.assignmentGroup);
+  const assigneeGroup = normalizeIssueAssignmentGroup(
+    input.assigneeGroup ?? input.assignmentGroup,
+  );
   const assigneeId = normalizeOptionalId(input.assigneeId ?? input.assignedTo);
   const testerAssigneeGroup = normalizeIssueAssignmentGroup(
-    input.testerAssigneeGroup ?? input.testerAssignmentGroup
+    input.testerAssigneeGroup ?? input.testerAssignmentGroup,
   );
-  const testerAssigneeId = normalizeOptionalId(input.testerAssigneeId ?? input.testerAssignedTo);
+  const testerAssigneeId = normalizeOptionalId(
+    input.testerAssigneeId ?? input.testerAssignedTo,
+  );
   const reporterId = normalizeOptionalId(input.reporterId) ?? actor.id;
   const testedById = normalizeOptionalId(input.testedById ?? input.testedBy);
   const componentId = normalizeOptionalId(input.componentId);
   const requestedModuleId = normalizeOptionalId(input.moduleId);
-  const component = await assertComponentBelongsToProject(projectId, componentId);
+  const component = await assertComponentBelongsToProject(
+    projectId,
+    componentId,
+  );
   const moduleId = component?.moduleId ?? requestedModuleId;
   const epicId = normalizeOptionalId(input.epicId);
   const sprintId = normalizeOptionalId(input.sprintId);
@@ -456,11 +602,18 @@ async function validateIssueFields(
   const remark = normalizeOptionalText(input.remark);
   const developmentStatus = normalizeDevelopmentStatus(
     input.developmentStatus,
-    input.development ? "fixed" : status
+    input.development ? "fixed" : status,
   );
-  const deploymentStatus = normalizeDeploymentStatus(input.deploymentStatus, input.deployment);
+  const deploymentStatus = normalizeDeploymentStatus(
+    input.deploymentStatus,
+    input.deployment,
+  );
 
-  if (component && requestedModuleId && component.moduleId !== requestedModuleId) {
+  if (
+    component &&
+    requestedModuleId &&
+    component.moduleId !== requestedModuleId
+  ) {
     throw new RouteError("Component must belong to the selected module.");
   }
 
@@ -475,6 +628,22 @@ async function validateIssueFields(
       reporterId,
       testedById ?? "",
     ]),
+    assigneeGroup === "development"
+      ? assertUserHasTeamRole(
+          teamId,
+          assigneeId,
+          "developer",
+          "Development owner",
+        )
+      : Promise.resolve(),
+    testerAssigneeGroup === "testing"
+      ? assertUserHasTeamRole(
+          teamId,
+          testerAssigneeId,
+          "tester",
+          "Testing owner",
+        )
+      : Promise.resolve(),
     assertModuleBelongsToProject(projectId, moduleId),
     assertEpicBelongsToProject(projectId, epicId),
     assertReleaseBelongsToProject(projectId, releaseId),
@@ -510,13 +679,15 @@ export async function createProjectModule(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  input: CreateProjectModuleInput
+  input: CreateProjectModuleInput,
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
 
   const name = normalizeName(input.name, "Module name");
   const description = normalizeOptionalText(input.description);
-  const sortOrder = Number.isFinite(input.sortOrder) ? Number(input.sortOrder) : 0;
+  const sortOrder = Number.isFinite(input.sortOrder)
+    ? Number(input.sortOrder)
+    : 0;
 
   const [createdModule] = await db
     .insert(projectModules)
@@ -542,7 +713,7 @@ export async function createProjectComponent(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  input: CreateProjectComponentInput
+  input: CreateProjectComponentInput,
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
 
@@ -556,7 +727,9 @@ export async function createProjectComponent(
   const name = normalizeName(input.name, "Component name");
   const description = normalizeOptionalText(input.description);
   const leadId = normalizeOptionalId(input.leadId);
-  const sortOrder = Number.isFinite(input.sortOrder) ? Number(input.sortOrder) : 0;
+  const sortOrder = Number.isFinite(input.sortOrder)
+    ? Number(input.sortOrder)
+    : 0;
 
   await assertUsersBelongToTeam(teamId, leadId ? [leadId] : []);
 
@@ -595,11 +768,15 @@ export async function createProjectEpic(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  input: CreateProjectEpicInput
+  input: CreateProjectEpicInput,
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
 
-  const title = normalizeName(input.title, "Epic title", ISSUE_TITLE_MAX_LENGTH);
+  const title = normalizeName(
+    input.title,
+    "Epic title",
+    ISSUE_TITLE_MAX_LENGTH,
+  );
   const description = normalizeOptionalText(input.description);
   const status = normalizeEpicStatus(input.status);
   const startDate = normalizeOptionalDate(input.startDate);
@@ -643,7 +820,7 @@ export async function createProjectRelease(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  input: CreateProjectReleaseInput
+  input: CreateProjectReleaseInput,
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
 
@@ -693,7 +870,7 @@ export async function updateProjectEpicStatus(
   teamId: string,
   projectId: string,
   epicId: string,
-  input: { status?: EpicStatus | null }
+  input: { status?: EpicStatus | null },
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
 
@@ -708,7 +885,9 @@ export async function updateProjectEpicStatus(
       status,
       updatedAt: new Date(),
     })
-    .where(and(eq(projectEpics.projectId, projectId), eq(projectEpics.id, epicId)))
+    .where(
+      and(eq(projectEpics.projectId, projectId), eq(projectEpics.id, epicId)),
+    )
     .returning({
       id: projectEpics.id,
       title: projectEpics.title,
@@ -732,7 +911,7 @@ export async function updateProjectReleaseStatus(
   teamId: string,
   projectId: string,
   releaseId: string,
-  input: { status?: ProjectReleaseStatus | null }
+  input: { status?: ProjectReleaseStatus | null },
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
 
@@ -747,7 +926,12 @@ export async function updateProjectReleaseStatus(
       status,
       updatedAt: new Date(),
     })
-    .where(and(eq(projectReleases.projectId, projectId), eq(projectReleases.id, releaseId)))
+    .where(
+      and(
+        eq(projectReleases.projectId, projectId),
+        eq(projectReleases.id, releaseId),
+      ),
+    )
     .returning({
       id: projectReleases.id,
       name: projectReleases.name,
@@ -771,7 +955,7 @@ export async function createProjectSprint(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  input: CreateProjectSprintInput
+  input: CreateProjectSprintInput,
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
 
@@ -816,15 +1000,19 @@ export async function createIssueClass(
   _actor: IssueActor,
   _teamId: string,
   _projectId: string,
-  input: CreateIssueClassInput
+  input: CreateIssueClassInput,
 ) {
   const normalizedName = input.name.trim().toLowerCase();
   const match = ISSUE_TYPE_OPTIONS.find(
-    (option) => option.value === normalizedName || option.label.toLowerCase() === normalizedName
+    (option) =>
+      option.value === normalizedName ||
+      option.label.toLowerCase() === normalizedName,
   );
 
   if (!match) {
-    throw new RouteError("Issue types are fixed to Bug, Task, Improvement, and Subtask.");
+    throw new RouteError(
+      "Issue types are fixed to Bug, Task, Improvement, and Subtask.",
+    );
   }
 
   const now = new Date(0).toISOString();
@@ -864,8 +1052,18 @@ async function allocateIssueKey(projectId: string) {
   };
 }
 
-async function loadIssueForActor(actor: IssueActor, teamId: string, projectId: string, issueId: string) {
-  const issue = await getProjectIssueForUser(actor.id, teamId, projectId, issueId);
+async function loadIssueForActor(
+  actor: IssueActor,
+  teamId: string,
+  projectId: string,
+  issueId: string,
+) {
+  const issue = await getProjectIssueForUser(
+    actor.id,
+    teamId,
+    projectId,
+    issueId,
+  );
 
   if (!issue) {
     throw new RouteError("Issue not found.", 404);
@@ -878,10 +1076,15 @@ export async function createIssue(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  input: CreateIssueInput
+  input: CreateIssueInput,
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
-  const validatedIssue = await validateIssueFields(actor, teamId, projectId, input);
+  const validatedIssue = await validateIssueFields(
+    actor,
+    teamId,
+    projectId,
+    input,
+  );
   const hasMediaUploads = Boolean(input.media?.length);
   const initialComments = normalizeTextItems(input.comments, "Comments");
   const fixedDate = getAutomaticFixedDate(validatedIssue);
@@ -917,7 +1120,7 @@ export async function createIssue(
           issueId: createdIssue.id,
           authorId: actor.id,
           body,
-        }))
+        })),
       );
     }
 
@@ -942,31 +1145,60 @@ export async function updateIssue(
   teamId: string,
   projectId: string,
   issueId: string,
-  input: UpdateIssueInput
+  input: UpdateIssueInput,
 ): Promise<UpdateIssueResult> {
   await requireEditableProjectForUser(actor, teamId, projectId);
-  const existingIssue = await loadIssueForActor(actor, teamId, projectId, issueId);
-  const validatedIssue = await validateIssueFields(actor, teamId, projectId, input);
+  const existingIssue = await loadIssueForActor(
+    actor,
+    teamId,
+    projectId,
+    issueId,
+  );
+  const validatedIssue = await validateIssueFields(
+    actor,
+    teamId,
+    projectId,
+    input,
+  );
   const isReopenRequest = Boolean(input.reopen);
-  const mediaChanged = Boolean(input.mediaChanged || input.media?.length || input.removeMediaIds?.length);
-  const commentsToAppend = getNewCommentItems(input.comments, existingIssue.comments);
+  const mediaChanged = Boolean(
+    input.mediaChanged || input.media?.length || input.removeMediaIds?.length,
+  );
+  const commentsToAppend = getNewCommentItems(
+    input.comments,
+    existingIssue.comments,
+  );
 
-  if (isReopenRequest && existingIssue.status !== "review" && existingIssue.status !== "fixed") {
-    throw new RouteError("Only issues in review or fixed status can be reopened.");
+  if (
+    isReopenRequest &&
+    existingIssue.status !== "review" &&
+    existingIssue.status !== "fixed"
+  ) {
+    throw new RouteError(
+      "Only issues in review or fixed status can be reopened.",
+    );
   }
 
   const issueFields: ValidatedIssueFields = isReopenRequest
     ? {
         ...validatedIssue,
-        status: "in_progress",
-        developmentStatus: "in_progress",
+        status: validatedIssue.status === "todo" ? "todo" : "in_progress",
+        developmentStatus:
+          validatedIssue.status === "todo" ? "not_started" : "in_progress",
         deploymentStatus: "not_deployed",
       }
     : validatedIssue;
-  const fixedDate = isReopenRequest ? null : getAutomaticFixedDate(issueFields, existingIssue.fixedDate);
+  const fixedDate = isReopenRequest
+    ? null
+    : getAutomaticFixedDate(issueFields, existingIssue.fixedDate);
 
   if (mediaChanged) {
-    validateIssueMediaMutationInput(teamId, projectId, input.media, input.removeMediaIds);
+    validateIssueMediaMutationInput(
+      teamId,
+      projectId,
+      input.media,
+      input.removeMediaIds,
+    );
   }
 
   await db
@@ -982,7 +1214,9 @@ export async function updateIssue(
         : {}),
       updatedAt: new Date(),
     })
-    .where(and(eq(issues.projectId, projectId), eq(issues.id, existingIssue.id)));
+    .where(
+      and(eq(issues.projectId, projectId), eq(issues.id, existingIssue.id)),
+    );
 
   if (existingIssue.status !== issueFields.status) {
     await db.insert(issueActivity).values({
@@ -1013,7 +1247,7 @@ export async function updateIssue(
         issueId: existingIssue.id,
         authorId: actor.id,
         body,
-      }))
+      })),
     );
   }
 
@@ -1028,13 +1262,21 @@ export async function updateIssue(
     });
   }
 
-  const issue = await loadIssueForActor(actor, teamId, projectId, existingIssue.id);
+  const issue = await loadIssueForActor(
+    actor,
+    teamId,
+    projectId,
+    existingIssue.id,
+  );
 
   return {
     issue,
     previousAssignedTo: existingIssue.assigneeId,
     previousTesterAssignedTo: existingIssue.testerAssigneeId,
+    previousAssigneeGroup: existingIssue.assigneeGroup,
+    previousTesterAssigneeGroup: existingIssue.testerAssigneeGroup,
     previousStatus: existingIssue.status,
+    previousDeploymentStatus: existingIssue.deploymentStatus,
     reopened: isReopenRequest,
   };
 }
@@ -1044,10 +1286,16 @@ export async function updateIssueStatus(
   teamId: string,
   projectId: string,
   issueId: string,
-  status: IssueStatus
+  status: IssueStatus,
 ) {
-  const existingIssue = await loadIssueForActor(actor, teamId, projectId, issueId);
-  const developmentStatus = status === "fixed" ? "fixed" : existingIssue.developmentStatus;
+  const existingIssue = await loadIssueForActor(
+    actor,
+    teamId,
+    projectId,
+    issueId,
+  );
+  const developmentStatus =
+    status === "fixed" ? "fixed" : existingIssue.developmentStatus;
 
   return updateIssue(actor, teamId, projectId, existingIssue.id, {
     title: existingIssue.title,
@@ -1077,13 +1325,15 @@ export async function deleteIssue(
   actor: IssueActor,
   teamId: string,
   projectId: string,
-  issueId: string
+  issueId: string,
 ) {
   await requireEditableProjectForUser(actor, teamId, projectId);
   const issue = await loadIssueForActor(actor, teamId, projectId, issueId);
 
   await deleteIssueMediaObjectsForIssue(projectId, issue.id);
-  await db.delete(issues).where(and(eq(issues.projectId, projectId), eq(issues.id, issue.id)));
+  await db
+    .delete(issues)
+    .where(and(eq(issues.projectId, projectId), eq(issues.id, issue.id)));
 
   return issue;
 }
@@ -1093,7 +1343,7 @@ export async function importIssuesFromExcel(
   _teamId: string,
   _projectId: string,
   _mainModuleId: string,
-  _importedSheets: IssueExcelSheet[]
+  _importedSheets: IssueExcelSheet[],
 ): Promise<IssueExcelImportResponse> {
   void _actor;
   void _teamId;
@@ -1101,5 +1351,8 @@ export async function importIssuesFromExcel(
   void _mainModuleId;
   void _importedSheets;
 
-  throw new RouteError("Excel import needs the new column-mapping flow before it can be enabled.", 410);
+  throw new RouteError(
+    "Excel import needs the new column-mapping flow before it can be enabled.",
+    410,
+  );
 }

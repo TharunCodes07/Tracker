@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -34,34 +34,47 @@ export interface DashboardOverview {
   openIssues: number;
   pendingTestIssues: number;
   criticalIssues: number;
+  myAssignedIssues: number;
+  claimableRoleIssues: number;
   unreadNotifications: number;
-  developerRoleCount: number;
-  testerRoleCount: number;
   recentNotifications: NotificationListItem[];
   topProjects: DashboardProjectHealthItem[];
 }
 
-export async function getDashboardOverviewForUser(userId: string): Promise<DashboardOverview> {
+export async function getDashboardOverviewForUser(
+  userId: string,
+): Promise<DashboardOverview> {
   const accessibleProjectIds = db
     .select({
       projectId: teamsToProjects.projectId,
     })
     .from(usersToTeams)
     .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
-    .where(and(eq(usersToTeams.userId, userId), eq(usersToTeams.membershipStatus, "active")))
+    .where(
+      and(
+        eq(usersToTeams.userId, userId),
+        eq(usersToTeams.membershipStatus, "active"),
+      ),
+    )
     .groupBy(teamsToProjects.projectId)
     .as("dashboard_accessible_project_ids");
 
   const accessibleProjectRouting = db
     .select({
       projectId: teamsToProjects.projectId,
-      teamId: sql<string>`(array_agg(${teamsToProjects.teamId} order by ${teamsToProjects.teamId}))[1]`.as(
-        "team_id_for_route"
-      ),
+      teamId:
+        sql<string>`(array_agg(${teamsToProjects.teamId} order by ${teamsToProjects.teamId}))[1]`.as(
+          "team_id_for_route",
+        ),
     })
     .from(usersToTeams)
     .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
-    .where(and(eq(usersToTeams.userId, userId), eq(usersToTeams.membershipStatus, "active")))
+    .where(
+      and(
+        eq(usersToTeams.userId, userId),
+        eq(usersToTeams.membershipStatus, "active"),
+      ),
+    )
     .groupBy(teamsToProjects.projectId)
     .as("dashboard_accessible_project_routing");
 
@@ -70,23 +83,51 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
       projectId: teamsToProjects.projectId,
       teamNames:
         sql<string>`string_agg(distinct ${teams.name}, ', ' order by ${teams.name})`.as(
-          "teamNames"
+          "teamNames",
         ),
     })
     .from(usersToTeams)
     .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
     .innerJoin(teams, eq(usersToTeams.teamId, teams.id))
-    .where(and(eq(usersToTeams.userId, userId), eq(usersToTeams.membershipStatus, "active")))
+    .where(
+      and(
+        eq(usersToTeams.userId, userId),
+        eq(usersToTeams.membershipStatus, "active"),
+      ),
+    )
     .groupBy(teamsToProjects.projectId)
     .as("dashboard_accessible_project_teams");
+
+  const accessibleProjectRoles = db
+    .select({
+      projectId: teamsToProjects.projectId,
+      role: teamMemberRoles.role,
+    })
+    .from(usersToTeams)
+    .innerJoin(teamsToProjects, eq(usersToTeams.teamId, teamsToProjects.teamId))
+    .innerJoin(
+      teamMemberRoles,
+      and(
+        eq(usersToTeams.userId, teamMemberRoles.userId),
+        eq(usersToTeams.teamId, teamMemberRoles.teamId),
+      ),
+    )
+    .where(
+      and(
+        eq(usersToTeams.userId, userId),
+        eq(usersToTeams.membershipStatus, "active"),
+      ),
+    )
+    .groupBy(teamsToProjects.projectId, teamMemberRoles.role)
+    .as("dashboard_accessible_project_roles");
 
   const [
     teamSummaryRow,
     projectSummaryRow,
     issueSummaryRow,
     unreadNotificationsRow,
-    developerRoleRow,
-    testerRoleRow,
+    myAssignedIssuesRow,
+    claimableRoleIssuesRow,
     topProjectRows,
     recentNotificationsResponse,
   ] = await Promise.all([
@@ -107,7 +148,12 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
       })
       .from(usersToTeams)
       .innerJoin(teams, eq(usersToTeams.teamId, teams.id))
-      .where(and(eq(usersToTeams.userId, userId), eq(usersToTeams.membershipStatus, "active")))
+      .where(
+        and(
+          eq(usersToTeams.userId, userId),
+          eq(usersToTeams.membershipStatus, "active"),
+        ),
+      )
       .then((rows) => rows[0] ?? null),
     db
       .select({
@@ -119,13 +165,13 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
       .select({
         totalIssues: count(issues.id),
         openIssues: sql<number>`cast(
-          count(${issues.id}) filter (where ${issues.status} <> 'done') as integer
+          count(${issues.id}) filter (where ${issues.status} <> 'fixed') as integer
         )`,
         pendingTestIssues: sql<number>`cast(
-          count(${issues.id}) filter (where ${issues.status} = 'testing') as integer
+          count(${issues.id}) filter (where ${issues.status} = 'review') as integer
         )`,
         criticalIssues: sql<number>`cast(
-          count(${issues.id}) filter (where ${issues.priority} = 'critical') as integer
+          count(${issues.id}) filter (where ${issues.priority} = 'critical' and ${issues.status} <> 'fixed') as integer
         )`,
       })
       .from(accessibleProjectIds)
@@ -136,21 +182,49 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
         unreadNotifications: count(notifications.id),
       })
       .from(notifications)
-      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)))
+      .where(
+        and(eq(notifications.userId, userId), isNull(notifications.readAt)),
+      )
       .then((rows) => rows[0] ?? null),
     db
       .select({
-        roleCount: count(teamMemberRoles.teamId),
+        myAssignedIssues: sql<number>`cast(count(${issues.id}) as integer)`,
       })
-      .from(teamMemberRoles)
-      .where(and(eq(teamMemberRoles.userId, userId), eq(teamMemberRoles.role, "developer")))
+      .from(accessibleProjectIds)
+      .innerJoin(issues, eq(accessibleProjectIds.projectId, issues.projectId))
+      .where(
+        and(
+          ne(issues.status, "fixed"),
+          or(
+            eq(issues.assigneeId, userId),
+            eq(issues.testerAssigneeId, userId),
+          ),
+        ),
+      )
       .then((rows) => rows[0] ?? null),
     db
       .select({
-        roleCount: count(teamMemberRoles.teamId),
+        claimableRoleIssues: sql<number>`cast(count(distinct ${issues.id}) as integer)`,
       })
-      .from(teamMemberRoles)
-      .where(and(eq(teamMemberRoles.userId, userId), eq(teamMemberRoles.role, "tester")))
+      .from(accessibleProjectRoles)
+      .innerJoin(issues, eq(accessibleProjectRoles.projectId, issues.projectId))
+      .where(
+        and(
+          ne(issues.status, "fixed"),
+          or(
+            and(
+              eq(accessibleProjectRoles.role, "developer"),
+              eq(issues.assigneeGroup, "development"),
+              isNull(issues.assigneeId),
+            ),
+            and(
+              eq(accessibleProjectRoles.role, "tester"),
+              eq(issues.testerAssigneeGroup, "testing"),
+              isNull(issues.testerAssigneeId),
+            ),
+          ),
+        ),
+      )
       .then((rows) => rows[0] ?? null),
     db
       .select({
@@ -160,30 +234,41 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
         teamNames: sql<string>`coalesce(${accessibleProjectTeams.teamNames}, 'Unassigned')`,
         totalIssues: sql<number>`cast(count(${issues.id}) as integer)`,
         openIssues: sql<number>`cast(
-          count(${issues.id}) filter (where ${issues.status} <> 'done') as integer
+          count(${issues.id}) filter (where ${issues.status} <> 'fixed') as integer
         )`,
         pendingTestIssues: sql<number>`cast(
-          count(${issues.id}) filter (where ${issues.status} = 'testing') as integer
+          count(${issues.id}) filter (where ${issues.status} = 'review') as integer
         )`,
         criticalIssues: sql<number>`cast(
-          count(${issues.id}) filter (where ${issues.priority} = 'critical') as integer
+          count(${issues.id}) filter (where ${issues.priority} = 'critical' and ${issues.status} <> 'fixed') as integer
         )`,
       })
       .from(accessibleProjectIds)
       .innerJoin(projects, eq(accessibleProjectIds.projectId, projects.id))
-      .innerJoin(accessibleProjectRouting, eq(accessibleProjectRouting.projectId, projects.id))
-      .leftJoin(accessibleProjectTeams, eq(accessibleProjectTeams.projectId, projects.id))
+      .innerJoin(
+        accessibleProjectRouting,
+        eq(accessibleProjectRouting.projectId, projects.id),
+      )
+      .leftJoin(
+        accessibleProjectTeams,
+        eq(accessibleProjectTeams.projectId, projects.id),
+      )
       .leftJoin(issues, eq(projects.id, issues.projectId))
-      .groupBy(projects.id, projects.name, accessibleProjectRouting.teamId, accessibleProjectTeams.teamNames)
+      .groupBy(
+        projects.id,
+        projects.name,
+        accessibleProjectRouting.teamId,
+        accessibleProjectTeams.teamNames,
+      )
       .orderBy(
         desc(
-          sql`count(${issues.id}) filter (where ${issues.status} <> 'done')`
+          sql`count(${issues.id}) filter (where ${issues.status} <> 'fixed')`,
         ),
         desc(
-          sql`count(${issues.id}) filter (where ${issues.status} = 'testing')`
+          sql`count(${issues.id}) filter (where ${issues.status} = 'review')`,
         ),
         desc(count(issues.id)),
-        projects.name
+        projects.name,
       )
       .limit(6),
     listNotificationsForUser(userId, {
@@ -201,9 +286,13 @@ export async function getDashboardOverviewForUser(userId: string): Promise<Dashb
     openIssues: Number(issueSummaryRow?.openIssues ?? 0),
     pendingTestIssues: Number(issueSummaryRow?.pendingTestIssues ?? 0),
     criticalIssues: Number(issueSummaryRow?.criticalIssues ?? 0),
-    unreadNotifications: Number(unreadNotificationsRow?.unreadNotifications ?? 0),
-    developerRoleCount: Number(developerRoleRow?.roleCount ?? 0),
-    testerRoleCount: Number(testerRoleRow?.roleCount ?? 0),
+    myAssignedIssues: Number(myAssignedIssuesRow?.myAssignedIssues ?? 0),
+    claimableRoleIssues: Number(
+      claimableRoleIssuesRow?.claimableRoleIssues ?? 0,
+    ),
+    unreadNotifications: Number(
+      unreadNotificationsRow?.unreadNotifications ?? 0,
+    ),
     recentNotifications: recentNotificationsResponse.notifications,
     topProjects: topProjectRows.map((row) => ({
       id: row.id,
