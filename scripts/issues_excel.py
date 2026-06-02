@@ -368,24 +368,7 @@ def import_rows(input_path: Path, output_path: Path) -> None:
 
         missing_headers = [
             header
-            for header_key, header in (
-                ("no", "No"),
-                ("moduleName", "Module"),
-                ("componentName", "Component"),
-                ("title", "Issue"),
-                ("priority", "Priority"),
-                ("assignedToName", "Developer"),
-                ("status", "Status"),
-                ("comments", "Comments"),
-                ("remark", "Remark"),
-                ("testerAssignedToName", "Tester"),
-                ("fixedDate", "Fixed Date"),
-                ("developmentStatus", "Development"),
-                ("deploymentStatus", "Deployment"),
-                ("epicTitle", "Epic"),
-                ("sprintName", "Sprint"),
-                ("releaseName", "Release"),
-            )
+            for header_key, header in (("title", "Issue"),)
             if header_key not in canonical_headers
         ]
 

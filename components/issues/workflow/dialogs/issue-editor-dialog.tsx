@@ -512,23 +512,19 @@ export function IssueEditorDialog({
             >
               Cancel
             </Button>
-            {canReopen ? (
-              <Button
-                type="submit"
-                variant="outline"
-                disabled={pending}
-                data-intent="reopen"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reopen
-              </Button>
-            ) : null}
-            <Button type="submit" disabled={pending}>
+            <Button
+              type="submit"
+              disabled={pending}
+              data-intent={canReopen ? "reopen" : undefined}
+            >
+              {canReopen ? <RotateCcw className="h-3.5 w-3.5" /> : null}
               {pending
                 ? "Saving..."
-                : editingIssue
-                  ? "Save issue"
-                  : "Create issue"}
+                : canReopen
+                  ? "Reopen issue"
+                  : editingIssue
+                    ? "Save issue"
+                    : "Create issue"}
             </Button>
           </div>
         </form>

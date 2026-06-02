@@ -1,11 +1,11 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useRef, type ChangeEvent, type ReactNode } from "react";
 
 import type {
   OnChangeFn,
   RowSelectionState,
   SortingState,
 } from "@tanstack/react-table";
-import { Download } from "lucide-react";
+import { ChevronDown, Download, FileDown, Loader2, Upload } from "lucide-react";
 
 import {
   IssueCardView,
@@ -19,6 +19,14 @@ import { getIssueTableColumns } from "@/components/issues/table/issue-table-colu
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ViewMode } from "@/hooks/use-persisted-view-mode";
 import type { IssueListItem } from "@/routes/issues/types";
 
@@ -44,7 +52,10 @@ export function IssueCollectionView({
   onEditIssue,
   onDeleteIssue,
   onExport,
+  onDownloadTemplate,
+  onImportExcel,
   isExporting,
+  isImportingExcel,
   selectedIssueIds = [],
   onSelectedIssueIdsChange,
   bulkActionBar,
@@ -72,7 +83,10 @@ export function IssueCollectionView({
   onEditIssue: (issue: IssueListItem) => void;
   onDeleteIssue: (issue: IssueListItem) => void;
   onExport: () => void;
+  onDownloadTemplate: () => void;
+  onImportExcel: (file: File) => void;
   isExporting: boolean;
+  isImportingExcel: boolean;
   selectedIssueIds?: string[];
   onSelectedIssueIdsChange?: (issueIds: string[]) => void;
   bulkActionBar?: ReactNode;
@@ -81,7 +95,20 @@ export function IssueCollectionView({
   onClaimIssue?: (issue: IssueListItem, role: IssueClaimRole) => void;
   claimActionPending?: boolean;
 }) {
+  const excelImportInputRef = useRef<HTMLInputElement>(null);
   const canSelectIssues = canEdit && Boolean(onSelectedIssueIdsChange);
+  const isExcelBusy = isExporting || isImportingExcel;
+  const excelBusyLabel = isImportingExcel
+    ? "Uploading..."
+    : isExporting
+      ? "Downloading..."
+      : "Excel";
+  const excelStatusTitle = isImportingExcel
+    ? "Uploading workbook"
+    : "Preparing Excel file";
+  const excelStatusDescription = isImportingExcel
+    ? "Importing rows and updating issue lists."
+    : "Building the workbook for download.";
   const columns = useMemo(
     () =>
       getIssueTableColumns({
@@ -125,6 +152,16 @@ export function IssueCollectionView({
     );
   };
 
+  function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+
+    if (file) {
+      onImportExcel(file);
+    }
+
+    event.currentTarget.value = "";
+  }
+
   return (
     <section className="space-y-3">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
@@ -133,20 +170,68 @@ export function IssueCollectionView({
           <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onExport}
-            disabled={isExporting}
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+          <input
+            ref={excelImportInputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={handleImportFileChange}
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isExcelBusy}
+              >
+                {isExcelBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {excelBusyLabel}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onSelect={onExport} disabled={isExcelBusy}>
+                <Download className="h-4 w-4" />
+                Export issues
+              </DropdownMenuItem>
+              {canEdit ? (
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    excelImportInputRef.current?.click();
+                  }}
+                  disabled={isExcelBusy}
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload workbook
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={onDownloadTemplate}
+                disabled={isExcelBusy}
+              >
+                <FileDown className="h-4 w-4" />
+                Download template
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {toolbarActions}
           <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
         </div>
       </div>
+
+      {isExcelBusy ? (
+        <ExcelOperationSkeleton
+          title={excelStatusTitle}
+          description={excelStatusDescription}
+        />
+      ) : null}
 
       {bulkActionBar ? <div className="mb-4">{bulkActionBar}</div> : null}
 
@@ -204,6 +289,35 @@ export function IssueCollectionView({
         />
       )}
     </section>
+  );
+}
+
+function ExcelOperationSkeleton({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground shadow-sm">
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </span>
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+          <span className="truncate text-sm font-medium">{title}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {description}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-1.5 w-24 rounded-full" />
+          <Skeleton className="h-1.5 flex-1 rounded-full" />
+          <Skeleton className="h-1.5 w-12 rounded-full" />
+        </div>
+      </div>
+    </div>
   );
 }
 

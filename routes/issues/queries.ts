@@ -38,6 +38,7 @@ import {
   DEVELOPMENT_STATUS_OPTIONS,
   EPIC_STATUS_OPTIONS,
   GENERAL_MODULE_FILTER_VALUE,
+  MAIN_MODULE_ISSUES_SHEET_NAME,
   ISSUE_ASSIGNMENT_GROUP_OPTIONS,
   ISSUE_PRIORITY_OPTIONS,
   ISSUE_STATUS_OPTIONS,
@@ -49,6 +50,7 @@ import {
   type EpicStatus,
   type IssueAssignmentGroup,
   type IssueExcelRow,
+  type IssueExcelSheet,
   type IssueExcelWorkbook,
   type IssueGroupCount,
   type IssueListItem,
@@ -1475,6 +1477,40 @@ export async function listProjectIssuesForExcelForUser(
   return projectIssues?.issues.map(toIssueExcelRow) ?? null;
 }
 
+function groupIssueRowsBySubModule(rows: IssueExcelRow[]): IssueExcelSheet[] {
+  const groupedRows = new Map<string, IssueExcelRow[]>();
+
+  for (const row of rows) {
+    const sheetName =
+      row.componentName?.trim() || MAIN_MODULE_ISSUES_SHEET_NAME;
+    const sheetRows = groupedRows.get(sheetName) ?? [];
+
+    sheetRows.push(row);
+    groupedRows.set(sheetName, sheetRows);
+  }
+
+  return Array.from(groupedRows.entries()).map(([sheetName, sheetRows]) => ({
+    sheetName,
+    rows: sheetRows,
+  }));
+}
+
+export async function listProjectIssueSheetsForExcelForUser(
+  userId: string,
+  teamId: string,
+  projectId: string,
+  input: ListProjectIssuesInput,
+) {
+  const rows = await listProjectIssuesForExcelForUser(
+    userId,
+    teamId,
+    projectId,
+    input,
+  );
+
+  return rows ? groupIssueRowsBySubModule(rows) : null;
+}
+
 export async function listProjectIssueWorkbookBundleForUser(
   userId: string,
   teamId: string,
@@ -1515,12 +1551,7 @@ export async function listProjectIssueWorkbookBundleForUser(
   return [
     {
       fileName: `${projectName || "project"}-issues.xlsx`,
-      sheets: [
-        {
-          sheetName: "Issues",
-          rows,
-        },
-      ],
+      sheets: groupIssueRowsBySubModule(rows),
     },
   ];
 }

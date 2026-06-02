@@ -14,6 +14,7 @@ import {
   projects,
   sprints,
   teamMemberRoles,
+  user,
   usersToTeams,
 } from "@/db/schema";
 import { RouteError } from "@/routes/errors";
@@ -39,6 +40,7 @@ import {
   ISSUE_PRIORITY_OPTIONS,
   ISSUE_STATUS_OPTIONS,
   ISSUE_TYPE_OPTIONS,
+  MAIN_MODULE_ISSUES_SHEET_NAME,
   RELEASE_STATUS_OPTIONS,
   SPRINT_STATUS_OPTIONS,
   type CreateIssueClassInput,
@@ -53,6 +55,7 @@ import {
   type EpicStatus,
   type IssueExcelImportResponse,
   type IssueAssignmentGroup,
+  type IssueExcelRow,
   type IssueExcelSheet,
   type IssueListItem,
   type IssuePriority,
@@ -100,6 +103,7 @@ interface ValidatedIssueFields {
   testedById: string | null;
   parentIssueId: string | null;
   remark: string | null;
+  fixedDate: Date | null;
   developmentStatus: DevelopmentStatus;
   deploymentStatus: DeploymentStatus;
 }
@@ -311,11 +315,18 @@ function isFixedWorkflowState(
 }
 
 function getAutomaticFixedDate(
-  fields: Pick<ValidatedIssueFields, "status" | "developmentStatus">,
+  fields: Pick<
+    ValidatedIssueFields,
+    "status" | "developmentStatus" | "fixedDate"
+  >,
   previousFixedDate?: string | Date | null,
 ) {
   if (!isFixedWorkflowState(fields.status, fields.developmentStatus)) {
     return null;
+  }
+
+  if (fields.fixedDate) {
+    return fields.fixedDate;
   }
 
   return previousFixedDate ? new Date(previousFixedDate) : new Date();
@@ -600,6 +611,7 @@ async function validateIssueFields(
   const releaseId = normalizeOptionalId(input.releaseId);
   const parentIssueId = normalizeOptionalId(input.parentIssueId);
   const remark = normalizeOptionalText(input.remark);
+  const fixedDate = normalizeOptionalDate(input.fixedDate);
   const developmentStatus = normalizeDevelopmentStatus(
     input.developmentStatus,
     input.development ? "fixed" : status,
@@ -660,6 +672,7 @@ async function validateIssueFields(
     testedById,
     parentIssueId,
     remark,
+    fixedDate,
     developmentStatus,
     deploymentStatus,
   };
@@ -1328,21 +1341,804 @@ export async function deleteIssue(
   return issue;
 }
 
-export async function importIssuesFromExcel(
-  _actor: IssueActor,
-  _teamId: string,
-  _projectId: string,
-  _mainModuleId: string,
-  _importedSheets: IssueExcelSheet[],
-): Promise<IssueExcelImportResponse> {
-  void _actor;
-  void _teamId;
-  void _projectId;
-  void _mainModuleId;
-  void _importedSheets;
+const IMPORT_DEFAULT_MODULE_NAME = "Imported";
 
-  throw new RouteError(
-    "Excel import needs the new column-mapping flow before it can be enabled.",
-    410,
+type ImportOptionAliases<T extends string> = Partial<Record<string, T>>;
+
+interface ImportModuleRecord {
+  id: string;
+  name: string;
+}
+
+interface ImportComponentRecord {
+  id: string;
+  moduleId: string;
+  name: string;
+}
+
+interface ImportReferenceRecord {
+  id: string;
+  name: string;
+}
+
+interface ImportTeamMemberRecord {
+  userId: string;
+  name: string;
+  email: string;
+  roles: Set<string>;
+}
+
+interface IssueImportLookupState {
+  mainModule: ImportModuleRecord | null;
+  modulesByName: Map<string, ImportModuleRecord>;
+  componentsByModuleAndName: Map<string, ImportComponentRecord>;
+  epicsByTitle: Map<string, ImportReferenceRecord>;
+  releasesByName: Map<string, ImportReferenceRecord>;
+  sprintsByName: Map<string, ImportReferenceRecord>;
+  membersByLookupKey: Map<string, ImportTeamMemberRecord>;
+}
+
+interface PreparedImportIssue {
+  fields: ValidatedIssueFields;
+  comments: string[];
+}
+
+function normalizeImportKey(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizeImportName(value: string | null | undefined) {
+  const normalizedValue = value?.trim() ?? "";
+  return normalizedValue || null;
+}
+
+function getImportOptionValue<T extends string>(
+  value: string | null | undefined,
+  options: readonly { value: T; label: string }[],
+  fallback: T,
+  aliases: ImportOptionAliases<T> = {},
+): T {
+  const key = normalizeImportKey(value);
+
+  if (!key) {
+    return fallback;
+  }
+
+  const alias = aliases[key];
+
+  if (alias) {
+    return alias;
+  }
+
+  return (
+    options.find(
+      (option) =>
+        normalizeImportKey(option.value) === key ||
+        normalizeImportKey(option.label) === key,
+    )?.value ?? fallback
   );
+}
+
+function isMainIssueSheet(sheetName: string) {
+  const key = normalizeImportKey(sheetName);
+
+  return (
+    key === normalizeImportKey(MAIN_MODULE_ISSUES_SHEET_NAME) ||
+    key === "imported issues"
+  );
+}
+
+function addImportWarning(warnings: Set<string>, message: string) {
+  warnings.add(message);
+}
+
+function getImportRowLabel(sheet: IssueExcelSheet, row: IssueExcelRow) {
+  return `${sheet.sheetName} row ${row.rowNumber ?? "?"}`;
+}
+
+async function loadIssueImportLookupState(
+  teamId: string,
+  projectId: string,
+  mainModuleId: string | null,
+): Promise<IssueImportLookupState> {
+  const [
+    moduleRows,
+    componentRows,
+    epicRows,
+    releaseRows,
+    sprintRows,
+    memberRows,
+  ] = await Promise.all([
+    db
+      .select({
+        id: projectModules.id,
+        name: projectModules.name,
+      })
+      .from(projectModules)
+      .where(eq(projectModules.projectId, projectId)),
+    db
+      .select({
+        id: projectComponents.id,
+        moduleId: projectComponents.moduleId,
+        name: projectComponents.name,
+      })
+      .from(projectComponents)
+      .where(eq(projectComponents.projectId, projectId)),
+    db
+      .select({
+        id: projectEpics.id,
+        name: projectEpics.title,
+      })
+      .from(projectEpics)
+      .where(eq(projectEpics.projectId, projectId)),
+    db
+      .select({
+        id: projectReleases.id,
+        name: projectReleases.name,
+      })
+      .from(projectReleases)
+      .where(eq(projectReleases.projectId, projectId)),
+    db
+      .select({
+        id: sprints.id,
+        name: sprints.name,
+      })
+      .from(sprints)
+      .where(eq(sprints.projectId, projectId)),
+    db
+      .select({
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        role: teamMemberRoles.role,
+      })
+      .from(usersToTeams)
+      .innerJoin(user, eq(usersToTeams.userId, user.id))
+      .leftJoin(
+        teamMemberRoles,
+        and(
+          eq(teamMemberRoles.teamId, usersToTeams.teamId),
+          eq(teamMemberRoles.userId, usersToTeams.userId),
+        ),
+      )
+      .where(
+        and(
+          eq(usersToTeams.teamId, teamId),
+          eq(usersToTeams.membershipStatus, "active"),
+        ),
+      ),
+  ]);
+  const modulesByName = new Map<string, ImportModuleRecord>();
+  const componentsByModuleAndName = new Map<string, ImportComponentRecord>();
+  const epicsByTitle = new Map<string, ImportReferenceRecord>();
+  const releasesByName = new Map<string, ImportReferenceRecord>();
+  const sprintsByName = new Map<string, ImportReferenceRecord>();
+  const membersByUserId = new Map<string, ImportTeamMemberRecord>();
+  const membersByLookupKey = new Map<string, ImportTeamMemberRecord>();
+
+  for (const row of moduleRows) {
+    modulesByName.set(normalizeImportKey(row.name), row);
+  }
+
+  for (const row of componentRows) {
+    componentsByModuleAndName.set(
+      `${row.moduleId}:${normalizeImportKey(row.name)}`,
+      row,
+    );
+  }
+
+  for (const row of epicRows) {
+    epicsByTitle.set(normalizeImportKey(row.name), row);
+  }
+
+  for (const row of releaseRows) {
+    releasesByName.set(normalizeImportKey(row.name), row);
+  }
+
+  for (const row of sprintRows) {
+    sprintsByName.set(normalizeImportKey(row.name), row);
+  }
+
+  for (const row of memberRows) {
+    let member = membersByUserId.get(row.userId);
+
+    if (!member) {
+      member = {
+        userId: row.userId,
+        name: row.name,
+        email: row.email,
+        roles: new Set<string>(),
+      };
+      membersByUserId.set(row.userId, member);
+    }
+
+    if (row.role) {
+      member.roles.add(row.role);
+    }
+  }
+
+  for (const member of membersByUserId.values()) {
+    for (const key of [
+      normalizeImportKey(member.name),
+      normalizeImportKey(member.email),
+    ]) {
+      if (key && !membersByLookupKey.has(key)) {
+        membersByLookupKey.set(key, member);
+      }
+    }
+  }
+
+  const mainModule = mainModuleId
+    ? (moduleRows.find((row) => row.id === mainModuleId) ?? null)
+    : null;
+
+  if (mainModuleId && !mainModule) {
+    throw new RouteError("Choose a valid main module for this import.");
+  }
+
+  return {
+    mainModule,
+    modulesByName,
+    componentsByModuleAndName,
+    epicsByTitle,
+    releasesByName,
+    sprintsByName,
+    membersByLookupKey,
+  };
+}
+
+async function ensureImportModule(
+  projectId: string,
+  state: IssueImportLookupState,
+  rawName: string,
+) {
+  const name = normalizeName(rawName, "Module name");
+  const key = normalizeImportKey(name);
+  const existingModule = state.modulesByName.get(key);
+
+  if (existingModule) {
+    return existingModule;
+  }
+
+  const [createdModule] = await db
+    .insert(projectModules)
+    .values({
+      projectId,
+      name,
+      description: null,
+      sortOrder: state.modulesByName.size + 1,
+    })
+    .returning({
+      id: projectModules.id,
+      name: projectModules.name,
+    });
+
+  state.modulesByName.set(key, createdModule);
+  return createdModule;
+}
+
+async function ensureImportComponent(
+  projectId: string,
+  state: IssueImportLookupState,
+  moduleId: string,
+  rawName: string,
+) {
+  const name = normalizeName(rawName, "Component name");
+  const key = `${moduleId}:${normalizeImportKey(name)}`;
+  const existingComponent = state.componentsByModuleAndName.get(key);
+
+  if (existingComponent) {
+    return existingComponent;
+  }
+
+  const [createdComponent] = await db
+    .insert(projectComponents)
+    .values({
+      projectId,
+      moduleId,
+      name,
+      description: null,
+      leadId: null,
+      sortOrder: state.componentsByModuleAndName.size + 1,
+    })
+    .returning({
+      id: projectComponents.id,
+      moduleId: projectComponents.moduleId,
+      name: projectComponents.name,
+    });
+
+  state.componentsByModuleAndName.set(key, createdComponent);
+  return createdComponent;
+}
+
+async function ensureImportEpic(
+  projectId: string,
+  state: IssueImportLookupState,
+  rawTitle: string,
+) {
+  const title = normalizeName(rawTitle, "Epic title", ISSUE_TITLE_MAX_LENGTH);
+  const key = normalizeImportKey(title);
+  const existingEpic = state.epicsByTitle.get(key);
+
+  if (existingEpic) {
+    return existingEpic;
+  }
+
+  const [createdEpic] = await db
+    .insert(projectEpics)
+    .values({
+      projectId,
+      title,
+      description: null,
+      status: "open",
+    })
+    .returning({
+      id: projectEpics.id,
+      name: projectEpics.title,
+    });
+
+  state.epicsByTitle.set(key, createdEpic);
+  return createdEpic;
+}
+
+async function ensureImportRelease(
+  projectId: string,
+  state: IssueImportLookupState,
+  rawName: string,
+) {
+  const name = normalizeName(rawName, "Release name");
+  const key = normalizeImportKey(name);
+  const existingRelease = state.releasesByName.get(key);
+
+  if (existingRelease) {
+    return existingRelease;
+  }
+
+  const [createdRelease] = await db
+    .insert(projectReleases)
+    .values({
+      projectId,
+      name,
+      description: null,
+      status: "planned",
+    })
+    .returning({
+      id: projectReleases.id,
+      name: projectReleases.name,
+    });
+
+  state.releasesByName.set(key, createdRelease);
+  return createdRelease;
+}
+
+async function ensureImportSprint(
+  projectId: string,
+  state: IssueImportLookupState,
+  rawName: string,
+) {
+  const name = normalizeName(rawName, "Sprint name");
+  const key = normalizeImportKey(name);
+  const existingSprint = state.sprintsByName.get(key);
+
+  if (existingSprint) {
+    return existingSprint;
+  }
+
+  const [createdSprint] = await db
+    .insert(sprints)
+    .values({
+      projectId,
+      name,
+      goal: null,
+      status: "planned",
+    })
+    .returning({
+      id: sprints.id,
+      name: sprints.name,
+    });
+
+  state.sprintsByName.set(key, createdSprint);
+  return createdSprint;
+}
+
+function resolveImportAssignee(
+  rawName: string | null,
+  role: "developer" | "tester",
+  state: IssueImportLookupState,
+  warnings: Set<string>,
+  rowLabel: string,
+): {
+  group: IssueAssignmentGroup | null;
+  userId: string | null;
+} | null {
+  const normalizedName = normalizeImportName(rawName);
+
+  if (!normalizedName) {
+    return null;
+  }
+
+  const key = normalizeImportKey(normalizedName);
+  const group = role === "developer" ? "development" : "testing";
+  const groupNames =
+    role === "developer"
+      ? new Set([
+          "dev",
+          "developer",
+          "developers",
+          "development",
+          "development team",
+        ])
+      : new Set(["qa", "test", "tester", "testers", "testing", "testing team"]);
+
+  if (groupNames.has(key)) {
+    return { group, userId: null };
+  }
+
+  const member = state.membersByLookupKey.get(key);
+
+  if (!member) {
+    addImportWarning(
+      warnings,
+      `${rowLabel}: ${role === "developer" ? "Developer" : "Tester"} "${normalizedName}" does not match an active team member.`,
+    );
+    return { group: null, userId: null };
+  }
+
+  if (!member.roles.has(role)) {
+    addImportWarning(
+      warnings,
+      `${rowLabel}: ${member.name} is not assigned to the ${role} role.`,
+    );
+    return { group: null, userId: null };
+  }
+
+  return { group, userId: member.userId };
+}
+
+async function resolveImportModuleAndComponent(
+  projectId: string,
+  state: IssueImportLookupState,
+  sheet: IssueExcelSheet,
+  row: IssueExcelRow,
+) {
+  const rowModuleName = normalizeImportName(row.moduleName);
+  const rowComponentName = normalizeImportName(row.componentName);
+  const sheetName =
+    normalizeImportName(sheet.sheetName) ?? IMPORT_DEFAULT_MODULE_NAME;
+  const sheetCanBecomeSubModule = !isMainIssueSheet(sheetName);
+  let moduleId: string | null = null;
+  let componentId: string | null = null;
+  let moduleRecord: ImportModuleRecord | null = null;
+
+  if (rowModuleName) {
+    moduleRecord = await ensureImportModule(projectId, state, rowModuleName);
+  } else if (state.mainModule) {
+    moduleRecord = state.mainModule;
+  } else if (rowComponentName) {
+    moduleRecord = await ensureImportModule(
+      projectId,
+      state,
+      sheetCanBecomeSubModule ? sheetName : IMPORT_DEFAULT_MODULE_NAME,
+    );
+  } else if (sheetCanBecomeSubModule) {
+    moduleRecord = await ensureImportModule(
+      projectId,
+      state,
+      IMPORT_DEFAULT_MODULE_NAME,
+    );
+  }
+
+  if (moduleRecord) {
+    moduleId = moduleRecord.id;
+  }
+
+  const componentName =
+    rowComponentName ?? (sheetCanBecomeSubModule ? sheetName : null);
+
+  if (componentName) {
+    const componentModule =
+      moduleRecord ??
+      (await ensureImportModule(projectId, state, IMPORT_DEFAULT_MODULE_NAME));
+    const component = await ensureImportComponent(
+      projectId,
+      state,
+      componentModule.id,
+      componentName,
+    );
+
+    moduleId = component.moduleId;
+    componentId = component.id;
+  }
+
+  return { moduleId, componentId };
+}
+
+async function buildImportIssuePayload(
+  actor: IssueActor,
+  projectId: string,
+  state: IssueImportLookupState,
+  sheet: IssueExcelSheet,
+  row: IssueExcelRow,
+  warnings: Set<string>,
+): Promise<PreparedImportIssue> {
+  const rowLabel = getImportRowLabel(sheet, row);
+  const title = normalizeName(
+    normalizeImportName(row.title) ?? "",
+    "Issue title",
+    ISSUE_TITLE_MAX_LENGTH,
+  );
+
+  const { moduleId, componentId } = await resolveImportModuleAndComponent(
+    projectId,
+    state,
+    sheet,
+    row,
+  );
+  const developerAssignment = resolveImportAssignee(
+    row.assignedToName,
+    "developer",
+    state,
+    warnings,
+    rowLabel,
+  );
+  const testerAssignment = resolveImportAssignee(
+    row.testerAssignedToName,
+    "tester",
+    state,
+    warnings,
+    rowLabel,
+  );
+  const fixedDate = normalizeOptionalDate(row.fixedDate);
+  const status = getImportOptionValue<IssueStatus>(
+    row.status,
+    ISSUE_STATUS_OPTIONS,
+    fixedDate ? "fixed" : "todo",
+    {
+      open: "todo",
+      todo: "todo",
+      "to do": "todo",
+      progress: "in_progress",
+      "in progress": "in_progress",
+      review: "review",
+      "in review": "review",
+      done: "fixed",
+      closed: "fixed",
+      fixed: "fixed",
+      resolved: "fixed",
+    },
+  );
+  const developmentStatus = row.developmentStatus
+    ? getImportOptionValue<DevelopmentStatus>(
+        row.developmentStatus,
+        DEVELOPMENT_STATUS_OPTIONS,
+        status === "fixed" ? "fixed" : "not_started",
+        {
+          done: "fixed",
+          fixed: "fixed",
+          development: "in_progress",
+          "in development": "in_progress",
+          progress: "in_progress",
+          "in progress": "in_progress",
+          "dev check": "developer_check",
+          "developer check": "developer_check",
+          "qa check": "tester_check",
+          "tester check": "tester_check",
+        },
+      )
+    : status === "fixed"
+      ? "fixed"
+      : "not_started";
+  const deploymentStatus = getImportOptionValue<DeploymentStatus>(
+    row.deploymentStatus,
+    DEPLOYMENT_STATUS_OPTIONS,
+    "not_deployed",
+    {
+      deployed: "deployed",
+      "not deployed": "not_deployed",
+      queued: "queued",
+      "queued for deployment": "queued",
+      verified: "verified",
+      "tester check": "tester_check",
+      "qa check": "tester_check",
+    },
+  );
+  const epic = row.epicTitle
+    ? await ensureImportEpic(projectId, state, row.epicTitle)
+    : null;
+  const sprint = row.sprintName
+    ? await ensureImportSprint(projectId, state, row.sprintName)
+    : null;
+  const release = row.releaseName
+    ? await ensureImportRelease(projectId, state, row.releaseName)
+    : null;
+
+  return {
+    fields: {
+      title,
+      description: null,
+      issueType: "bug",
+      status,
+      priority: getImportOptionValue<IssuePriority>(
+        row.priority,
+        ISSUE_PRIORITY_OPTIONS,
+        "medium",
+        {
+          blocker: "critical",
+          urgent: "critical",
+        },
+      ),
+      moduleId,
+      componentId,
+      epicId: epic?.id ?? null,
+      sprintId: sprint?.id ?? null,
+      releaseId: release?.id ?? null,
+      assigneeGroup: developerAssignment?.group ?? null,
+      assigneeId: developerAssignment?.userId ?? null,
+      testerAssigneeGroup: testerAssignment?.group ?? null,
+      testerAssigneeId: testerAssignment?.userId ?? null,
+      reporterId: actor.id,
+      testedById: null,
+      parentIssueId: null,
+      remark: normalizeOptionalText(row.remark, "Remark"),
+      fixedDate,
+      developmentStatus,
+      deploymentStatus,
+    },
+    comments: normalizeTextItems(row.comments, "Comments"),
+  };
+}
+
+async function allocateIssueKeys(projectId: string, count: number) {
+  if (count <= 0) {
+    return [];
+  }
+
+  const [projectCounter] = await db
+    .update(projects)
+    .set({
+      nextIssueNumber: sql`${projects.nextIssueNumber} + ${count}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(projects.id, projectId))
+    .returning({
+      keyPrefix: projects.keyPrefix,
+      nextIssueNumber: projects.nextIssueNumber,
+    });
+
+  if (!projectCounter) {
+    throw new RouteError("Project not found.", 404);
+  }
+
+  const firstSequence = Number(projectCounter.nextIssueNumber) - count;
+
+  return Array.from({ length: count }, (_, index) => {
+    const sequence = firstSequence + index;
+
+    return {
+      sequence,
+      key: `${projectCounter.keyPrefix}-${sequence}`,
+    };
+  });
+}
+
+async function createImportedIssues(
+  actor: IssueActor,
+  projectId: string,
+  preparedIssues: PreparedImportIssue[],
+) {
+  if (preparedIssues.length === 0) {
+    return;
+  }
+
+  await db.transaction(async () => {
+    const keyFields = await allocateIssueKeys(projectId, preparedIssues.length);
+    const createdIssues = await db
+      .insert(issues)
+      .values(
+        preparedIssues.map((preparedIssue, index) => ({
+          projectId,
+          ...keyFields[index],
+          ...preparedIssue.fields,
+          fixedDate: getAutomaticFixedDate(preparedIssue.fields),
+        })),
+      )
+      .returning({
+        id: issues.id,
+        key: issues.key,
+      });
+
+    await db.insert(issueActivity).values(
+      createdIssues.map((createdIssue) => ({
+        projectId,
+        issueId: createdIssue.id,
+        actorId: actor.id,
+        action: "created",
+        toValue: createdIssue.key,
+      })),
+    );
+
+    const commentRows = preparedIssues.flatMap((preparedIssue, index) =>
+      preparedIssue.comments.map((body) => ({
+        projectId,
+        issueId: createdIssues[index].id,
+        authorId: actor.id,
+        body,
+      })),
+    );
+
+    if (commentRows.length > 0) {
+      await db.insert(issueComments).values(commentRows);
+    }
+  });
+}
+
+export async function importIssuesFromExcel(
+  actor: IssueActor,
+  teamId: string,
+  projectId: string,
+  mainModuleId: string | null,
+  importedSheets: IssueExcelSheet[],
+): Promise<IssueExcelImportResponse> {
+  await requireEditableProjectForUser(actor, teamId, projectId);
+
+  const warnings = new Set<string>();
+  const state = await loadIssueImportLookupState(
+    teamId,
+    projectId,
+    mainModuleId,
+  );
+  let createdCount = 0;
+  let skippedCount = 0;
+  const preparedIssues: PreparedImportIssue[] = [];
+
+  for (const sheet of importedSheets) {
+    for (const row of sheet.rows) {
+      const rowLabel = getImportRowLabel(sheet, row);
+
+      if (!normalizeImportName(row.title)) {
+        skippedCount += 1;
+        addImportWarning(warnings, `${rowLabel}: Issue title is required.`);
+        continue;
+      }
+
+      try {
+        const preparedIssue = await buildImportIssuePayload(
+          actor,
+          projectId,
+          state,
+          sheet,
+          row,
+          warnings,
+        );
+
+        preparedIssues.push(preparedIssue);
+        createdCount += 1;
+      } catch (error) {
+        skippedCount += 1;
+        addImportWarning(
+          warnings,
+          `${rowLabel}: ${
+            error instanceof Error ? error.message : "Could not import row."
+          }`,
+        );
+      }
+    }
+  }
+
+  await createImportedIssues(actor, projectId, preparedIssues);
+
+  return {
+    createdCount,
+    updatedCount: 0,
+    skippedCount,
+    warnings: Array.from(warnings),
+    message:
+      createdCount > 0
+        ? `Imported ${createdCount} issue${createdCount === 1 ? "" : "s"}.`
+        : "No issues were imported.",
+  };
 }

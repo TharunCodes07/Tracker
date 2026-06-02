@@ -3,7 +3,14 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { format } from "date-fns";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays, ListPlus, Plus, Search } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  ListPlus,
+  Plus,
+  Search,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,7 +44,10 @@ interface PlanningIssueViewProps {
   onEditIssue: (issue: IssueListItem) => void;
   onDeleteIssue: (issue: IssueListItem) => void;
   onExport: () => void;
+  onDownloadTemplate: () => void;
+  onImportExcel: (file: File) => void;
   isExporting: boolean;
+  isImportingExcel: boolean;
   totalIssueCount: number;
   selectedIssueIds: string[];
   onSelectedIssueIdsChange: (issueIds: string[]) => void;
@@ -183,7 +193,8 @@ function PlanningDirectoryView<TStatus extends string>({
   const filteredItems = useMemo(
     () =>
       items.filter((item) => {
-        const matchesStatus = statusFilter === "all" || item.status === statusFilter;
+        const matchesStatus =
+          statusFilter === "all" || item.status === statusFilter;
         const searchableText = [
           item.name,
           item.description,
@@ -194,9 +205,12 @@ function PlanningDirectoryView<TStatus extends string>({
           .join(" ")
           .toLowerCase();
 
-        return matchesStatus && (!normalizedSearch || searchableText.includes(normalizedSearch));
+        return (
+          matchesStatus &&
+          (!normalizedSearch || searchableText.includes(normalizedSearch))
+        );
       }),
-    [items, normalizedSearch, statusFilter, statusOptions]
+    [items, normalizedSearch, statusFilter, statusOptions],
   );
 
   return (
@@ -204,7 +218,9 @@ function PlanningDirectoryView<TStatus extends string>({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            {description}
+          </p>
         </div>
         {canEdit ? (
           <Button type="button" onClick={onCreate} className="w-full sm:w-fit">
@@ -225,7 +241,10 @@ function PlanningDirectoryView<TStatus extends string>({
           />
         </div>
         <div className="tracker-thin-scrollbar flex gap-1 overflow-x-auto">
-          <StatusFilterButton active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
+          <StatusFilterButton
+            active={statusFilter === "all"}
+            onClick={() => setStatusFilter("all")}
+          >
             All
           </StatusFilterButton>
           {statusOptions.map((option) => (
@@ -255,7 +274,8 @@ function PlanningDirectoryView<TStatus extends string>({
             const doneCount = count?.doneCount ?? 0;
             const progress = getIssueCompletion(issueCount, doneCount);
             const statusLabel =
-              statusOptions.find((option) => option.value === item.status)?.label ?? item.status;
+              statusOptions.find((option) => option.value === item.status)
+                ?.label ?? item.status;
 
             return (
               <Link
@@ -281,16 +301,22 @@ function PlanningDirectoryView<TStatus extends string>({
 
                 <div className="mt-auto pt-5">
                   <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
-                    <span>{doneCount}/{issueCount} done</span>
+                    <span>
+                      {doneCount}/{issueCount} done
+                    </span>
                     <span>{progress}%</span>
                   </div>
                   <ProgressBar value={progress} />
 
                   <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                    <span>{issueCount} {issueCount === 1 ? "issue" : "issues"}</span>
+                    <span>
+                      {issueCount} {issueCount === 1 ? "issue" : "issues"}
+                    </span>
                     <span className="inline-flex min-w-0 items-center gap-1">
                       <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{formatPlanningDates(item)}</span>
+                      <span className="truncate">
+                        {formatPlanningDates(item)}
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -357,11 +383,16 @@ export function PlanningDetailView({
             {entityName}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Issues assigned to this {collectionLabel.slice(0, -1).toLowerCase()}.
+            Issues assigned to this {collectionLabel.slice(0, -1).toLowerCase()}
+            .
           </p>
         </div>
         {canEdit ? (
-          <Button type="button" onClick={onAssignIssues} className="w-full sm:w-fit">
+          <Button
+            type="button"
+            onClick={onAssignIssues}
+            className="w-full sm:w-fit"
+          >
             <ListPlus className="h-4 w-4" />
             Assign issues
           </Button>

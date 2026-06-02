@@ -12,7 +12,7 @@ import { importIssuesFromExcel } from "@/routes/issues/mutations";
 import {
   getProjectIssuesWorkspaceForUser,
   listProjectIssueWorkbookBundleForUser,
-  listProjectIssuesForExcelForUser,
+  listProjectIssueSheetsForExcelForUser,
 } from "@/routes/issues/queries";
 import { MAIN_MODULE_ISSUES_SHEET_NAME } from "@/routes/issues/types";
 import type { IssueExcelImportResponse } from "@/routes/issues/types";
@@ -33,21 +33,30 @@ function slugifyFileNamePart(value: string) {
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ teamId: string; projectId: string }> }
+  context: { params: Promise<{ teamId: string; projectId: string }> },
 ) {
   try {
     return await withRouteOrganization(request, async (actor) => {
       const { teamId, projectId } = await context.params;
-      const exportMode = parseExportMode(request.nextUrl.searchParams.get("mode"));
+      const exportMode = parseExportMode(
+        request.nextUrl.searchParams.get("mode"),
+      );
       const projectLabel = slugifyFileNamePart(
-        request.nextUrl.searchParams.get("project") ?? projectId
+        request.nextUrl.searchParams.get("project") ?? projectId,
       );
 
       if (exportMode === "template") {
-        const workspace = await getProjectIssuesWorkspaceForUser(actor.id, teamId, projectId);
+        const workspace = await getProjectIssuesWorkspaceForUser(
+          actor.id,
+          teamId,
+          projectId,
+        );
 
         if (!workspace) {
-          return NextResponse.json({ message: "Project not found." }, { status: 404 });
+          return NextResponse.json(
+            { message: "Project not found." },
+            { status: 404 },
+          );
         }
 
         const workbook = await buildIssueWorkbook([
@@ -77,11 +86,14 @@ export async function GET(
           actor.id,
           teamId,
           projectId,
-          request.nextUrl.searchParams.get("project") ?? projectId
+          request.nextUrl.searchParams.get("project") ?? projectId,
         );
 
         if (!workbooks) {
-          return NextResponse.json({ message: "Project not found." }, { status: 404 });
+          return NextResponse.json(
+            { message: "Project not found." },
+            { status: 404 },
+          );
         }
 
         const bundle = await buildIssueWorkbookBundle(workbooks);
@@ -100,13 +112,21 @@ export async function GET(
         defaultPageSize: 2147483647,
         maxPageSize: 2147483647,
       });
-      const issues = await listProjectIssuesForExcelForUser(actor.id, teamId, projectId, listInput);
+      const sheets = await listProjectIssueSheetsForExcelForUser(
+        actor.id,
+        teamId,
+        projectId,
+        listInput,
+      );
 
-      if (!issues) {
-        return NextResponse.json({ message: "Project not found." }, { status: 404 });
+      if (!sheets) {
+        return NextResponse.json(
+          { message: "Project not found." },
+          { status: 404 },
+        );
       }
 
-      const workbook = await buildIssueWorkbook(issues);
+      const workbook = await buildIssueWorkbook(sheets);
       const fileName = `${projectLabel || "project"}-issues.xlsx`;
 
       return new NextResponse(workbook, {
@@ -119,39 +139,51 @@ export async function GET(
       });
     });
   } catch (error) {
-    return handleRouteError(error, "Something went wrong while exporting the Excel file.");
+    return handleRouteError(
+      error,
+      "Something went wrong while exporting the Excel file.",
+    );
   }
 }
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ teamId: string; projectId: string }> }
+  context: { params: Promise<{ teamId: string; projectId: string }> },
 ) {
   try {
     return await withRouteOrganization(request, async (actor) => {
       const { teamId, projectId } = await context.params;
       const formData = await request.formData();
       const file = formData.get("file");
-      const mainModuleId = String(formData.get("mainModuleId") ?? "").trim();
+      const mainModuleId =
+        String(formData.get("mainModuleId") ?? "").trim() || null;
 
       if (!(file instanceof File)) {
-        return NextResponse.json({ message: "Choose an Excel file to import." }, { status: 400 });
+        return NextResponse.json(
+          { message: "Choose an Excel file to import." },
+          { status: 400 },
+        );
       }
 
-      if (!mainModuleId) {
-        return NextResponse.json({ message: "Choose a main module for this import." }, { status: 400 });
+      if (!file.name.toLowerCase().endsWith(".xlsx")) {
+        return NextResponse.json(
+          { message: "Upload an .xlsx Excel file." },
+          { status: 400 },
+        );
       }
 
       let workbookRows;
 
       try {
-        workbookRows = await readIssueWorkbook(Buffer.from(await file.arrayBuffer()));
+        workbookRows = await readIssueWorkbook(
+          Buffer.from(await file.arrayBuffer()),
+        );
       } catch (error) {
         throw new RouteError(
           error instanceof Error
             ? error.message
             : "The uploaded Excel file could not be read.",
-          400
+          400,
         );
       }
 
@@ -160,12 +192,15 @@ export async function POST(
         teamId,
         projectId,
         mainModuleId,
-        workbookRows
+        workbookRows,
       );
 
       return NextResponse.json<IssueExcelImportResponse>(result);
     });
   } catch (error) {
-    return handleRouteError(error, "Something went wrong while importing the Excel file.");
+    return handleRouteError(
+      error,
+      "Something went wrong while importing the Excel file.",
+    );
   }
 }

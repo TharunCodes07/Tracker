@@ -23,6 +23,7 @@ import {
   type EpicStatus,
   type IssueAssigneeFilterValue,
   type IssueListItem,
+  type IssueExcelImportResponse,
   type IssueMediaType,
   type IssueMediaUploadResponse,
   type IssueMutationResponse,
@@ -232,6 +233,7 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
   const [isSavingIssue, startIssueTransition] = useTransition();
   const [isDeletingIssue, startDeleteTransition] = useTransition();
   const [isExporting, startExportTransition] = useTransition();
+  const [isImportingExcel, startImportTransition] = useTransition();
   const entityDialogs = useWorkflowEntityDialogs({
     teamId,
     projectId,
@@ -961,6 +963,36 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     });
   }
 
+  async function downloadResponseFile(
+    response: Response,
+    fallbackFileName: string,
+  ) {
+    const errorPayload = !response.ok
+      ? ((await response.json().catch(() => null)) as {
+          message?: string;
+        } | null)
+      : null;
+
+    if (!response.ok) {
+      throw new Error(errorPayload?.message ?? "Could not download the file.");
+    }
+
+    const blob = await response.blob();
+    const contentDisposition =
+      response.headers.get("content-disposition") ?? "";
+    const fileNameMatch = /filename="([^"]+)"/i.exec(contentDisposition);
+    const fileName = fileNameMatch?.[1] ?? fallbackFileName;
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  }
+
   function handleExportIssuesToExcel() {
     if (!teamId || !projectId || !workspace) return;
 
@@ -1014,39 +1046,101 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           `/api/teams/${teamId}/projects/${projectId}/issues/excel?${searchParams.toString()}`,
           { cache: "no-store" },
         );
-        const errorPayload = !response.ok
-          ? ((await response.json().catch(() => null)) as {
-              message?: string;
-            } | null)
-          : null;
-
-        if (!response.ok) {
-          throw new Error(
-            errorPayload?.message ?? "Could not export the issues.",
-          );
-        }
-
-        const blob = await response.blob();
-        const contentDisposition =
-          response.headers.get("content-disposition") ?? "";
-        const fileNameMatch = /filename="([^"]+)"/i.exec(contentDisposition);
-        const fileName =
-          fileNameMatch?.[1] ?? `${workspace.project.name}-issues.xlsx`;
-        const objectUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-
-        link.href = objectUrl;
-        link.download = fileName;
-        document.body.append(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(objectUrl);
+        await downloadResponseFile(
+          response,
+          `${workspace.project.name}-issues.xlsx`,
+        );
         toast.success("Issues exported to Excel.");
       } catch (error) {
         toast.error(
           error instanceof Error
             ? error.message
             : "Could not export the issues.",
+        );
+      }
+    });
+  }
+
+  function handleDownloadIssueTemplate() {
+    if (!teamId || !projectId || !workspace) return;
+
+    startExportTransition(async () => {
+      try {
+        const searchParams = new URLSearchParams({
+          mode: "template",
+          project: workspace.project.name,
+        });
+        const response = await fetch(
+          `/api/teams/${teamId}/projects/${projectId}/issues/excel?${searchParams.toString()}`,
+          { cache: "no-store" },
+        );
+
+        await downloadResponseFile(
+          response,
+          `${workspace.project.name}-issues-template.xlsx`,
+        );
+        toast.success("Issue template downloaded.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not download the issue template.",
+        );
+      }
+    });
+  }
+
+  function handleImportIssuesFromExcel(file: File) {
+    if (!teamId || !projectId) return;
+
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      toast.error("Upload an .xlsx Excel file.");
+      return;
+    }
+
+    startImportTransition(async () => {
+      try {
+        const formData = new FormData();
+
+        formData.append("file", file);
+
+        const response = await fetch(
+          `/api/teams/${teamId}/projects/${projectId}/issues/excel`,
+          {
+            method: "POST",
+            body: formData,
+          },
+        );
+        const result = (await response.json().catch(() => null)) as
+          | IssueExcelImportResponse
+          | {
+              message?: string;
+            }
+          | null;
+
+        if (!response.ok) {
+          const message =
+            result && "message" in result ? result.message : undefined;
+          throw new Error(message ?? "Could not import the Excel file.");
+        }
+
+        const importResult = result as IssueExcelImportResponse;
+
+        setSelectedIssueIds([]);
+        setPageIndex(0);
+        refresh();
+        toast.success(importResult.message);
+
+        if (importResult.warnings.length > 0) {
+          toast.warning(`${importResult.warnings.length} import warnings`, {
+            description: importResult.warnings.slice(0, 2).join("\n"),
+          });
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Could not import the Excel file.",
         );
       }
     });
@@ -1149,7 +1243,10 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     onEditIssue: openEditIssueDialog,
     onDeleteIssue: setIssueToDelete,
     onExport: handleExportIssuesToExcel,
+    onDownloadTemplate: handleDownloadIssueTemplate,
+    onImportExcel: handleImportIssuesFromExcel,
     isExporting,
+    isImportingExcel,
     totalIssueCount: pagination?.totalItems ?? issues.length,
     selectedIssueIds,
     onSelectedIssueIdsChange: setSelectedIssueIds,

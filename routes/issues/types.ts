@@ -519,6 +519,7 @@ export interface CreateIssueInput {
   testedById?: string | null;
   parentIssueId?: string | null;
   remark?: string | null;
+  fixedDate?: string | null;
   developmentStatus?: DevelopmentStatus;
   deploymentStatus?: DeploymentStatus;
   media?: UploadedIssueMediaInput[];
