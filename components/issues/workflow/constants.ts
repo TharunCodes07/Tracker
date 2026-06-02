@@ -13,11 +13,27 @@ import {
   Settings,
 } from "lucide-react";
 
+import type { IssueStatus } from "@/routes/issues/types";
+
 import type { ProjectWorkflowView } from "./types";
 
 export const NONE_VALUE = "__none__";
 export const ALL_VALUE = "__all__";
 export const DEFAULT_SORTING: SortingState = [{ id: "updatedAt", desc: true }];
+export const DEFAULT_VISIBLE_ISSUE_STATUS_FILTERS: IssueStatus[] = [
+  "todo",
+  "in_progress",
+  "review",
+];
+export const DEFAULT_BOARD_STATUS_FILTERS: IssueStatus[] = [];
+
+export function getDefaultStatusFiltersForView(
+  view: ProjectWorkflowView,
+): IssueStatus[] {
+  return view === "board"
+    ? DEFAULT_BOARD_STATUS_FILTERS
+    : DEFAULT_VISIBLE_ISSUE_STATUS_FILTERS;
+}
 
 export const VIEW_NAVIGATION: {
   value: Exclude<ProjectWorkflowView, "issue" | "reports" | "components">;

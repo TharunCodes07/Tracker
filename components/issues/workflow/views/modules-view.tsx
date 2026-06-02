@@ -13,8 +13,13 @@ import type {
   ProjectIssuesListResponse,
   ProjectModuleListItem,
 } from "@/routes/issues/types";
+import type {
+  IssueClaimMember,
+  IssueClaimRole,
+} from "@/components/issues/shared/issue-claim";
 
 import { EmptyState, getIssueCompletion, ProgressBar } from "../ui";
+import { IssueCollectionView } from "./issue-collection-view";
 
 type ModulesViewProps = {
   modules: ProjectModuleListItem[];
@@ -26,6 +31,10 @@ type ModulesViewProps = {
   onOpenIssue: (issue: IssueListItem) => void;
   onCreateModule: () => void;
   onCreateComponent: (moduleId: string) => void;
+  activeModuleFilters: string[];
+  activeComponentFilters: string[];
+  onApplyModuleFilter: (moduleId: string) => void;
+  onApplyComponentFilter: (component: ProjectComponentListItem) => void;
   viewMode: ViewMode;
   setViewMode: (viewMode: ViewMode) => void;
   isLoading: boolean;
@@ -39,11 +48,17 @@ type ModulesViewProps = {
   onEditIssue: (issue: IssueListItem) => void;
   onDeleteIssue: (issue: IssueListItem) => void;
   onExport: () => void;
+  onDownloadTemplate: () => void;
+  onImportExcel: (file: File) => void;
   isExporting: boolean;
+  isImportingExcel: boolean;
   totalIssueCount: number;
   selectedIssueIds: string[];
   onSelectedIssueIdsChange: (issueIds: string[]) => void;
   bulkActionBar?: ReactNode;
+  currentMember?: IssueClaimMember | null;
+  onClaimIssue?: (issue: IssueListItem, role: IssueClaimRole) => void;
+  claimActionPending?: boolean;
 };
 
 export function ModulesView({
@@ -51,27 +66,49 @@ export function ModulesView({
   components,
   moduleCounts,
   componentCounts,
+  issues,
   canEdit,
+  onOpenIssue,
   onCreateModule,
   onCreateComponent,
+  activeModuleFilters,
+  activeComponentFilters,
+  onApplyModuleFilter,
+  onApplyComponentFilter,
+  ...issueViewProps
 }: ModulesViewProps) {
-  const [openModuleIds, setOpenModuleIds] = useState<Record<string, boolean>>({});
+  const [openModuleIds, setOpenModuleIds] = useState<Record<string, boolean>>(
+    {},
+  );
+  const hasActiveModuleScope =
+    activeModuleFilters.length > 0 || activeComponentFilters.length > 0;
+  const activeScopeTitle = getActiveScopeTitle(
+    modules,
+    components,
+    activeModuleFilters,
+    activeComponentFilters,
+  );
   const moduleById = useMemo(
     () => new Map(modules.map((moduleItem) => [moduleItem.id, moduleItem])),
-    [modules]
+    [modules],
   );
   const rootModules = useMemo(
     () =>
       modules.filter(
-        (moduleItem) => !moduleItem.parentModuleId || !moduleById.has(moduleItem.parentModuleId)
+        (moduleItem) =>
+          !moduleItem.parentModuleId ||
+          !moduleById.has(moduleItem.parentModuleId),
       ),
-    [moduleById, modules]
+    [moduleById, modules],
   );
   const modulesByParent = useMemo(() => {
     const groupedModules = new Map<string, ProjectModuleListItem[]>();
 
     for (const moduleItem of modules) {
-      if (!moduleItem.parentModuleId || !moduleById.has(moduleItem.parentModuleId)) {
+      if (
+        !moduleItem.parentModuleId ||
+        !moduleById.has(moduleItem.parentModuleId)
+      ) {
         continue;
       }
 
@@ -121,7 +158,7 @@ export function ModulesView({
     <div className="space-y-4">
       <ModulesHeader canEdit={canEdit} onCreateModule={onCreateModule} />
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-3">
         {rootModules.map((moduleItem, index) => (
           <ModulePanel
             key={moduleItem.id}
@@ -131,14 +168,29 @@ export function ModulesView({
             modulesByParent={modulesByParent}
             componentsByModule={componentsByModule}
             canEdit={canEdit}
+            activeModuleFilters={activeModuleFilters}
+            activeComponentFilters={activeComponentFilters}
             openModuleIds={openModuleIds}
             defaultOpen={index === 0}
             onToggleModule={toggleModule}
             onCreateComponent={onCreateComponent}
+            onApplyModuleFilter={onApplyModuleFilter}
+            onApplyComponentFilter={onApplyComponentFilter}
             isModuleOpen={isModuleOpen}
           />
         ))}
       </div>
+
+      {hasActiveModuleScope ? (
+        <IssueCollectionView
+          title={activeScopeTitle}
+          description="Issues matching the selected module scope."
+          issues={issues}
+          canEdit={canEdit}
+          onOpenIssue={onOpenIssue}
+          {...issueViewProps}
+        />
+      ) : null}
     </div>
   );
 }
@@ -155,11 +207,16 @@ function ModulesHeader({
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight">Modules</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Product areas as folders, with submodules and component files nested underneath.
+          Product areas as folders, with submodules and component files nested
+          underneath.
         </p>
       </div>
       {canEdit ? (
-        <Button type="button" onClick={onCreateModule} className="w-full sm:w-fit">
+        <Button
+          type="button"
+          onClick={onCreateModule}
+          className="w-full sm:w-fit"
+        >
           <Plus className="h-4 w-4" />
           Module
         </Button>
@@ -175,9 +232,13 @@ function ModulePanel({
   modulesByParent,
   componentsByModule,
   canEdit,
+  activeModuleFilters,
+  activeComponentFilters,
   defaultOpen,
   onToggleModule,
   onCreateComponent,
+  onApplyModuleFilter,
+  onApplyComponentFilter,
   isModuleOpen,
 }: {
   moduleItem: ProjectModuleListItem;
@@ -186,10 +247,14 @@ function ModulePanel({
   modulesByParent: Map<string, ProjectModuleListItem[]>;
   componentsByModule: Map<string, ProjectComponentListItem[]>;
   canEdit: boolean;
+  activeModuleFilters: string[];
+  activeComponentFilters: string[];
   openModuleIds: Record<string, boolean>;
   defaultOpen?: boolean;
   onToggleModule: (moduleId: string, fallbackOpen?: boolean) => void;
   onCreateComponent: (moduleId: string) => void;
+  onApplyModuleFilter: (moduleId: string) => void;
+  onApplyComponentFilter: (component: ProjectComponentListItem) => void;
   isModuleOpen: (moduleId: string, fallbackOpen?: boolean) => boolean;
 }) {
   const childModules = modulesByParent.get(moduleItem.id) ?? [];
@@ -197,24 +262,39 @@ function ModulePanel({
   const hasChildren = childModules.length > 0 || moduleComponents.length > 0;
   const isOpen = isModuleOpen(moduleItem.id, defaultOpen);
   const count = moduleCounts.find((item) => item.id === moduleItem.id);
-  const progress = getIssueCompletion(count?.issueCount ?? 0, count?.doneCount ?? 0);
+  const progress = getIssueCompletion(
+    count?.issueCount ?? 0,
+    count?.doneCount ?? 0,
+  );
+  const isActive =
+    activeModuleFilters.includes(moduleItem.id) &&
+    activeComponentFilters.length === 0;
 
   return (
-    <section className="relative overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+    <section
+      className={cn(
+        "relative overflow-hidden rounded-lg border bg-card shadow-sm",
+        isActive ? "border-emerald-500/50" : "border-border/70",
+      )}
+    >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-emerald-400/70 to-cyan-400/70" />
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <button
             type="button"
-            onClick={() => hasChildren && onToggleModule(moduleItem.id, defaultOpen)}
-            className="flex min-w-0 flex-1 items-start gap-3 text-left"
-            aria-expanded={hasChildren ? isOpen : undefined}
+            onClick={() => onApplyModuleFilter(moduleItem.id)}
+            className={cn(
+              "flex min-w-0 flex-1 items-start gap-3 rounded-lg text-left transition-colors hover:text-emerald-700 dark:hover:text-emerald-300",
+              isActive && "text-emerald-700 dark:text-emerald-300",
+            )}
           >
             <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
               <Folder className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="line-clamp-2 break-words font-semibold">{moduleItem.name}</h2>
+              <h2 className="line-clamp-2 break-words font-semibold">
+                {moduleItem.name}
+              </h2>
               <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">
                 {moduleItem.description ?? "No description."}
               </p>
@@ -245,7 +325,10 @@ function ModulePanel({
                 aria-label={`${isOpen ? "Collapse" : "Expand"} ${moduleItem.name}`}
               >
                 <ChevronDown
-                  className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")}
+                  className={cn(
+                    "h-4 w-4 transition-transform",
+                    isOpen && "rotate-180",
+                  )}
                 />
               </Button>
             ) : null}
@@ -273,8 +356,12 @@ function ModulePanel({
               modulesByParent={modulesByParent}
               componentsByModule={componentsByModule}
               canEdit={canEdit}
+              activeModuleFilters={activeModuleFilters}
+              activeComponentFilters={activeComponentFilters}
               onToggleModule={onToggleModule}
               onCreateComponent={onCreateComponent}
+              onApplyModuleFilter={onApplyModuleFilter}
+              onApplyComponentFilter={onApplyComponentFilter}
               isModuleOpen={isModuleOpen}
             />
           ))}
@@ -283,12 +370,19 @@ function ModulePanel({
             <ComponentRow
               key={component.id}
               component={component}
-              count={componentCounts.find((item) => item.id === component.id)?.issueCount ?? 0}
+              count={
+                componentCounts.find((item) => item.id === component.id)
+                  ?.issueCount ?? 0
+              }
               depth={1}
+              active={activeComponentFilters.includes(component.id)}
+              onApplyComponentFilter={onApplyComponentFilter}
             />
           ))}
 
-          {childModules.length === 0 && moduleComponents.length === 0 && !canEdit ? (
+          {childModules.length === 0 &&
+          moduleComponents.length === 0 &&
+          !canEdit ? (
             <div className="px-4 py-5 text-sm text-muted-foreground">
               Nothing inside this module yet.
             </div>
@@ -307,8 +401,12 @@ function ModuleTreeNode({
   modulesByParent,
   componentsByModule,
   canEdit,
+  activeModuleFilters,
+  activeComponentFilters,
   onToggleModule,
   onCreateComponent,
+  onApplyModuleFilter,
+  onApplyComponentFilter,
   isModuleOpen,
 }: {
   moduleItem: ProjectModuleListItem;
@@ -318,40 +416,63 @@ function ModuleTreeNode({
   modulesByParent: Map<string, ProjectModuleListItem[]>;
   componentsByModule: Map<string, ProjectComponentListItem[]>;
   canEdit: boolean;
+  activeModuleFilters: string[];
+  activeComponentFilters: string[];
   onToggleModule: (moduleId: string, fallbackOpen?: boolean) => void;
   onCreateComponent: (moduleId: string) => void;
+  onApplyModuleFilter: (moduleId: string) => void;
+  onApplyComponentFilter: (component: ProjectComponentListItem) => void;
   isModuleOpen: (moduleId: string, fallbackOpen?: boolean) => boolean;
 }) {
   const childModules = modulesByParent.get(moduleItem.id) ?? [];
   const moduleComponents = componentsByModule.get(moduleItem.id) ?? [];
   const isOpen = isModuleOpen(moduleItem.id, false);
-  const count = moduleCounts.find((item) => item.id === moduleItem.id)?.issueCount ?? 0;
+  const count =
+    moduleCounts.find((item) => item.id === moduleItem.id)?.issueCount ?? 0;
   const hasChildren = childModules.length > 0 || moduleComponents.length > 0;
+  const isActive =
+    activeModuleFilters.includes(moduleItem.id) &&
+    activeComponentFilters.length === 0;
 
   return (
     <div>
       <div
-        className="flex w-full min-w-0 items-center gap-2 border-b border-border/60 px-4 py-3 hover:bg-muted/30"
+        className={cn(
+          "flex w-full min-w-0 items-center gap-2 border-b border-border/60 px-4 py-3 hover:bg-muted/30",
+          isActive && "bg-emerald-500/10",
+        )}
         style={{ paddingLeft: `${1 + depth * 1.25}rem` }}
       >
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-3 text-left"
-          onClick={() => hasChildren && onToggleModule(moduleItem.id)}
-          aria-expanded={hasChildren ? isOpen : undefined}
-        >
-          {hasChildren ? (
+        {hasChildren ? (
+          <button
+            type="button"
+            className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+            onClick={() => onToggleModule(moduleItem.id)}
+            aria-label={`${isOpen ? "Collapse" : "Expand"} ${moduleItem.name}`}
+            aria-expanded={isOpen}
+          >
             <ChevronDown
               className={cn(
-                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                isOpen && "rotate-180"
+                "h-4 w-4 transition-transform",
+                isOpen && "rotate-180",
               )}
             />
-          ) : (
-            <span className="h-4 w-4 shrink-0" />
+          </button>
+        ) : (
+          <span className="h-6 w-6 shrink-0" />
+        )}
+        <button
+          type="button"
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-3 text-left transition-colors hover:text-emerald-700 dark:hover:text-emerald-300",
+            isActive && "text-emerald-700 dark:text-emerald-300",
           )}
+          onClick={() => onApplyModuleFilter(moduleItem.id)}
+        >
           <Folder className="h-4 w-4 shrink-0 text-cyan-600 dark:text-cyan-300" />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{moduleItem.name}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {moduleItem.name}
+          </span>
         </button>
         <Badge variant="secondary" className="shrink-0">
           {count}
@@ -382,8 +503,12 @@ function ModuleTreeNode({
               modulesByParent={modulesByParent}
               componentsByModule={componentsByModule}
               canEdit={canEdit}
+              activeModuleFilters={activeModuleFilters}
+              activeComponentFilters={activeComponentFilters}
               onToggleModule={onToggleModule}
               onCreateComponent={onCreateComponent}
+              onApplyModuleFilter={onApplyModuleFilter}
+              onApplyComponentFilter={onApplyComponentFilter}
               isModuleOpen={isModuleOpen}
             />
           ))}
@@ -391,8 +516,13 @@ function ModuleTreeNode({
             <ComponentRow
               key={component.id}
               component={component}
-              count={componentCounts.find((item) => item.id === component.id)?.issueCount ?? 0}
+              count={
+                componentCounts.find((item) => item.id === component.id)
+                  ?.issueCount ?? 0
+              }
               depth={depth + 1}
+              active={activeComponentFilters.includes(component.id)}
+              onApplyComponentFilter={onApplyComponentFilter}
             />
           ))}
         </div>
@@ -405,19 +535,30 @@ function ComponentRow({
   component,
   count,
   depth,
+  active,
+  onApplyComponentFilter,
 }: {
   component: ProjectComponentListItem;
   count: number;
   depth: number;
+  active: boolean;
+  onApplyComponentFilter: (component: ProjectComponentListItem) => void;
 }) {
   return (
-    <div
-      className="flex min-w-0 items-start gap-3 border-b border-border/60 px-4 py-3"
+    <button
+      type="button"
+      className={cn(
+        "flex w-full min-w-0 items-start gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-muted/30 hover:text-emerald-700 dark:hover:text-emerald-300",
+        active && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      )}
       style={{ paddingLeft: `${1 + depth * 1.25}rem` }}
+      onClick={() => onApplyComponentFilter(component)}
     >
       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
-        <div className="line-clamp-1 break-words text-sm font-medium">{component.name}</div>
+        <div className="line-clamp-1 break-words text-sm font-medium">
+          {component.name}
+        </div>
         <p className="mt-0.5 line-clamp-2 break-words text-xs text-muted-foreground">
           {component.description ?? "No description."}
         </p>
@@ -425,6 +566,31 @@ function ComponentRow({
       <Badge variant="secondary" className="shrink-0">
         {count}
       </Badge>
-    </div>
+    </button>
   );
+}
+
+function getActiveScopeTitle(
+  modules: ProjectModuleListItem[],
+  components: ProjectComponentListItem[],
+  activeModuleFilters: string[],
+  activeComponentFilters: string[],
+) {
+  const activeComponents = components.filter((component) =>
+    activeComponentFilters.includes(component.id),
+  );
+
+  if (activeComponents.length === 1) {
+    return `${activeComponents[0].name} issues`;
+  }
+
+  if (activeComponents.length > 1) {
+    return `${activeComponents.length} selected components`;
+  }
+
+  const activeModule = modules.find((moduleItem) =>
+    activeModuleFilters.includes(moduleItem.id),
+  );
+
+  return activeModule ? `${activeModule.name} issues` : "Filtered issues";
 }

@@ -30,6 +30,7 @@ import {
   type IssuePriority,
   type IssueStatus,
   type IssueType,
+  type ProjectComponentListItem,
   type ProjectEpicMutationResponse,
   type ProjectIssuesListResponse,
   type ProjectIssuesWorkspaceResponse,
@@ -38,7 +39,11 @@ import {
   type UploadedIssueMediaInput,
 } from "@/routes/issues/types";
 
-import { DEFAULT_SORTING, NONE_VALUE } from "./constants";
+import {
+  DEFAULT_SORTING,
+  getDefaultStatusFiltersForView,
+  NONE_VALUE,
+} from "./constants";
 import { WorkflowDialogStack } from "./dialogs/workflow-dialog-stack";
 import {
   PlanningAssignmentDialog,
@@ -202,7 +207,12 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
 
   const [search, setSearch] = useState("");
   const [typeFilters, setTypeFilters] = useState<IssueType[]>([]);
-  const [statusFilters, setStatusFilters] = useState<IssueStatus[]>([]);
+  const [statusFiltersByView, setStatusFiltersByView] = useState<
+    Partial<Record<ProjectWorkflowView, IssueStatus[]>>
+  >({});
+  const statusFilters =
+    statusFiltersByView[activeView] ??
+    getDefaultStatusFiltersForView(activeView);
   const [moduleFilters, setModuleFilters] = useState<string[]>([]);
   const [componentFilters, setComponentFilters] = useState<string[]>([]);
   const [epicFilters, setEpicFilters] = useState<string[]>([]);
@@ -475,10 +485,17 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     setReloadKey((currentValue) => currentValue + 1);
   }
 
+  function setStatusFilters(values: IssueStatus[]) {
+    setStatusFiltersByView((currentFiltersByView) => ({
+      ...currentFiltersByView,
+      [activeView]: values,
+    }));
+  }
+
   function clearFilters() {
     setSearch("");
     setTypeFilters([]);
-    setStatusFilters([]);
+    setStatusFilters(getDefaultStatusFiltersForView(activeView));
     setModuleFilters([]);
     setComponentFilters([]);
     setEpicFilters([]);
@@ -486,6 +503,39 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
     setSprintFilters([]);
     setPriorityFilters([]);
     setAssignmentFilter("all");
+    setPageIndex(0);
+  }
+
+  function applyModuleScopeFilter(moduleId: string) {
+    setModuleFilters([moduleId]);
+    setComponentFilters([]);
+    setPageIndex(0);
+  }
+
+  function applyComponentScopeFilter(component: ProjectComponentListItem) {
+    const componentIds = new Set(componentFilters);
+
+    if (componentIds.has(component.id)) {
+      componentIds.delete(component.id);
+    } else {
+      componentIds.add(component.id);
+    }
+
+    const nextComponentFilters = Array.from(componentIds);
+    const moduleIdsForSelectedComponents = new Set(
+      (workspace?.components ?? [])
+        .filter((workspaceComponent) =>
+          nextComponentFilters.includes(workspaceComponent.id),
+        )
+        .map((workspaceComponent) => workspaceComponent.moduleId),
+    );
+
+    setComponentFilters(nextComponentFilters);
+    setModuleFilters(
+      nextComponentFilters.length > 0
+        ? Array.from(moduleIdsForSelectedComponents)
+        : [],
+    );
     setPageIndex(0);
   }
 
@@ -1400,6 +1450,10 @@ export function ProjectWorkflow({ view }: { view: ProjectWorkflowView }) {
           onOpenIssue={openIssue}
           onCreateModule={() => entityDialogs.setIsModuleDialogOpen(true)}
           onCreateComponent={entityDialogs.openComponentDialog}
+          activeModuleFilters={moduleFilters}
+          activeComponentFilters={componentFilters}
+          onApplyModuleFilter={applyModuleScopeFilter}
+          onApplyComponentFilter={applyComponentScopeFilter}
           {...sharedIssueViewProps}
         />
       ) : null}
@@ -1593,7 +1647,7 @@ function ProjectWorkflowLoading({ view }: { view: ProjectWorkflowView }) {
     return (
       <div className="space-y-4">
         <PageHeadingSkeleton />
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-4 xl:grid-cols-3">
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={index}
